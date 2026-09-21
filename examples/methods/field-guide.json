@@ -1,0 +1,48 @@
+{
+  "schema_version": "1",
+  "family": "field-guides",
+  "id": "community-garden-visit",
+  "version": "1.0",
+  "description": "Turn a garden visit into a practical volunteer field guide using independent site and plant readings followed by a dependent synthesis.",
+  "applicability": {
+    "contexts": ["A volunteer team has separate site and plant observations and needs a short guide."],
+    "exclusions": ["Do not use as a substitute for a safety inspection or local horticultural expertise."],
+    "limits": ["This method does not verify observations beyond the supplied task."]
+  },
+  "resources": {
+    "workers": 3,
+    "lanes": {"reading": 2, "editorial": 1}
+  },
+  "nodes": [
+    {
+      "id": "site-read",
+      "role": "Site reader",
+      "instructions": "Identify access, shade, water, and physical constraints from the site notes. State uncertainty.",
+      "lane": "reading",
+      "depends_on": [],
+      "task_keys": ["site_notes"],
+      "expected_shape": {"finding": "str"},
+      "input": {"focus": "site conditions"}
+    },
+    {
+      "id": "plant-read",
+      "role": "Plant reader",
+      "instructions": "Group the observed plants by volunteer maintenance needs. State uncertainty.",
+      "lane": "reading",
+      "depends_on": [],
+      "task_keys": ["plant_notes"],
+      "expected_shape": {"finding": "str"},
+      "input": {"focus": "plant maintenance"}
+    },
+    {
+      "id": "guide",
+      "role": "Guide editor",
+      "instructions": "Write a concise guide joining the site and plant findings; identify unresolved observations.",
+      "lane": "editorial",
+      "depends_on": ["site-read", "plant-read"],
+      "task_keys": ["audience"],
+      "expected_shape": {"guide": "str", "audience": "str"},
+      "input": {"form": "volunteer field guide"}
+    }
+  ]
+}

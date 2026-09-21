@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#10141c" />
+    <meta name="theme-color" content="#f5f2ec" />
     <meta
       name="description"
-      content="Lamina turns source material into traceable learning outputs through reusable procedures."
+      content="Lamina turns source material into useful work, with inspectable decisions and a method you can carry forward."
     />
-    <title>Lamina Studio · Learning production workspace</title>
+    <title>Lamina · Turn source material into useful work</title>
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="inspector.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -18,104 +18,101 @@
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <header class="site-header">
-      <a class="brand" href="./" aria-label="Lamina Studio home"
-        ><img src="assets/mark.svg" alt="" width="32" height="32" /><span
-          >LAMINA<span class="brand-light"> / STUDIO</span></span
-        ></a
+      <a class="brand" href="./" aria-label="Lamina home"
+        ><img src="assets/mark.svg" alt="" width="32" height="32" /><span>LAMINA</span></a
       >
-      <div class="project-switch">
-        <span class="project-glyph">R</span
-        ><span
-          ><strong>Resilient workflows</strong
-          ><small>Original example collection</small></span
-        >
-      </div>
-      <div class="sidebar-label">PROJECT</div>
       <nav class="nav" aria-label="Primary">
         <button
           type="button"
           class="nav-link is-active"
-          data-view="studio"
+          data-view="overview"
           aria-current="page"
         >
-          <span aria-hidden="true">⌘</span> Workspace
-        </button>
-        <button type="button" class="nav-link" data-view="procedures">
-          <span aria-hidden="true">▤</span> Procedures
+          Overview
         </button>
         <button type="button" class="nav-link" data-view="examples">
-          <span aria-hidden="true">◫</span> Examples
+          Examples
+        </button>
+        <button type="button" class="nav-link" data-view="studio">
+          Build
+        </button>
+        <button type="button" class="nav-link" data-view="procedures">
+          Procedures
         </button>
         <button type="button" class="nav-link" data-view="method">
-          <span aria-hidden="true">◇</span> Architecture
+          How it works
         </button>
       </nav>
-      <div class="sidebar-label resources-label">RESOURCES</div>
-      <a class="header-link" href="workbench/"
-        >Open study reader <span aria-hidden="true">↗</span></a
-      ><a
+      <a
         class="header-link"
         href="https://github.com/FadiBahodi/lamina"
         rel="noopener noreferrer"
-        >Source repository <span aria-hidden="true">↗</span></a
+        >View source <span aria-hidden="true">↗</span></a
       >
     </header>
 
     <main id="main">
-      <section class="intro" aria-labelledby="page-title">
-        <div class="eyebrow">
-          <span class="eyebrow-rule"></span> PROJECTS / RESILIENT WORKFLOWS
-          <span class="version-tag">v0.2</span>
-        </div>
-        <div class="intro-row">
-          <div>
-            <h1 id="page-title">From source to system.</h1>
-            <p class="intro-copy">
-              Inspect how source passages become concepts, a curriculum, and
-              learning artifacts. Reuse the production procedure with your own
-              material in local Studio.
-            </p>
+      <section class="view is-active overview-view" id="view-overview" aria-labelledby="page-title">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <span class="eyebrow"><span class="eyebrow-rule"></span> LAMINA / OPEN SOURCE</span>
+            <h1 id="page-title">Turn source material into useful work. <em>Keep the method.</em></h1>
+            <p class="intro-copy">Give Lamina a collection and choose the kind of result you need. Its current engine organizes source passages, writes connected learning material, and lets you inspect how each result was made. Save the steps as a reusable method, then adapt and rerun them for a new project.</p>
+            <div class="hero-actions">
+              <button type="button" class="button button-primary" data-view="examples">Explore real outputs <span aria-hidden="true">↗</span></button>
+              <button type="button" class="button button-secondary" data-view="method">How the engine works</button>
+            </div>
+            <p class="hero-boundary">Current release: source-to-guide, decision practice, oral case, and listening script. Audio generation and automatic method adaptation are not included.</p>
           </div>
-          <div class="intro-aside">
-            <span class="mode-pill" id="mode-pill">Checking local studio…</span>
-            <p id="mode-description">
-              The public example is ready to explore. Local production requires
-              a configured adapter.
-            </p>
+          <div class="hero-visual" aria-label="Original source and output illustration">
+            <div class="hero-art-head"><span>01 / ORIGINAL EXAMPLE</span><span>LEASES &amp; RECOVERY</span></div>
+            <img src="assets/experience-leases.svg" alt="Illustrated handoff: source notes about lease expiry become a lesson and a decision question about a late worker." />
+            <div class="hero-art-caption"><strong>A stopped report job is reclaimed.</strong><span>What happens if the first worker finishes late?</span></div>
           </div>
         </div>
+        <div class="overview-rule"><span>FROM A REAL, INSPECTABLE BUILD</span><span>SOURCE → JUDGMENT → OUTPUT</span></div>
+        <div class="transformation-intro"><span class="section-index">THE WORK, MADE VISIBLE</span><h2>One source collection. Several useful forms.</h2><p>These examples come from Lamina’s original resilient-workflows material. Open each result to inspect the source, the decisions, and the published artifact.</p></div>
+        <div class="experience-grid">
+          <article class="experience-card experience-card-guide">
+            <div class="experience-card-top"><span>01 / ILLUSTRATED GUIDE</span><span>ORIGINAL ENGINEERING MATERIAL</span></div>
+            <div class="experience-art"><div class="paper-source"><small>01-leases.md · SOURCE</small><strong>Leases make stalled work recoverable</strong><p>“Expiry means ownership is uncertain, not that the first worker stopped.”</p></div><div class="paper-output"><small>LESSON 01 · PUBLISHED EXCERPT</small><strong>Recover a stalled job without trusting the clock</strong><p>A lease makes work reclaimable; an owner token makes stale completion harmless.</p><span>WHY IT MATTERS →</span><p>A late worker can finish after a replacement claims the job. The completion check decides which result may publish.</p></div></div>
+            <h3>From source note to teachable guide</h3><p>Connected explanations, a source trail, and questions that test the distinction.</p><button type="button" class="card-link" data-example="engineering">Inspect the guide <span aria-hidden="true">↗</span></button>
+          </article>
+          <article class="experience-card experience-card-decision">
+            <div class="experience-card-top"><span>02 / DECISION PRACTICE</span><span>SEPARATE PUBLISHED EXAMPLE</span></div>
+            <div class="decision-art"><div class="decision-case"><small>CASE / PROGRESSIVE REVEAL</small><strong>The report worker returns after timeout.</strong><p>A replacement has claimed the job. The original worker now finishes. What should happen to its result?</p></div><div class="decision-answer"><small>ANSWER POINT</small><strong>Check the current owner token.</strong><p>Lease expiry permits a new claim; it does not prove the first worker stopped.</p></div></div>
+            <h3>From material to a decision</h3><p>Information arrives in steps, with an answer sheet and source-linked marking points.</p><button type="button" class="card-link" data-example="samp">Try decision practice <span aria-hidden="true">↗</span></button>
+          </article>
+        </div>
+        <div class="overview-detail"><div><span class="section-index">WHY KEEP THE METHOD?</span><h2>Make the next run easier to understand.</h2></div><div><p>The guide keeps source locations, intermediate choices, and the finished result together. The command-line method runner adds explicit dependencies, worker context, selective reruns, and observations you can retrieve later. An agent can use these to adapt its work; automatic method selection and improvement remain research goals.</p><button type="button" class="text-button" data-view="method">See the present engine and the open work →</button></div></div>
       </section>
 
       <section
-        class="view is-active"
+        class="view"
         id="view-studio"
         aria-labelledby="studio-title"
+        hidden
       >
         <div class="section-heading">
           <div>
-            <span class="section-index">WORKSPACE / PUBLISHED BUILD TRACE</span>
-            <h2 id="studio-title">Decompose the example.</h2>
+            <span class="section-index">BUILD / LOCAL PRODUCTION</span>
+            <h2 id="studio-title">Bring your material. Choose a result.</h2>
           </div>
           <p>
-            Follow an original source through extraction, merge, lesson
-            planning, and output. Select a stage to inspect the evidence.
+            Start with a published example or run your own collection locally.
+            Inspect the published build trace under How it works.
           </p>
-        </div>
-        <div class="inspector-shell">
-          <div id="runtime-inspector">
-            <p class="loading">Loading the published build trace…</p>
-          </div>
         </div>
         <div class="section-heading production-heading">
           <div>
             <span class="section-index"
               >PRODUCTION / SOURCE → PROCEDURE → ARTIFACT</span
             >
-            <h2>Run a production procedure.</h2>
+            <h2>Run a procedure.</h2>
           </div>
           <p>
-            Hosted mode is a published example. Local Studio runs the selected
-            procedure through a server-side adapter.
+            <span class="mode-pill" id="mode-pill">Checking local mode…</span>
+            <span id="mode-description">The public example is ready to explore. Local production requires a configured adapter.</span>
           </p>
         </div>
         <div class="desk-grid">
@@ -184,7 +181,7 @@
                 >
                   Store sources locally</button
                 ><span class="inline-note" id="sources-note"
-                  >Uploads require the local Studio server.</span
+                  >Uploads require the local server.</span
                 >
               </div>
             </section>
@@ -259,7 +256,7 @@
           </div>
           <aside class="desk-aside" aria-labelledby="output-title">
             <div class="aside-top">
-              <span class="section-index">ARTIFACT / ACTUAL EXCERPT</span>
+              <span class="section-index">OUTPUT / ACTUAL EXCERPT</span>
               <h3 id="output-title">Traceable output</h3>
               <p id="output-description"></p>
             </div>
@@ -278,7 +275,7 @@
             <div class="aside-foot">
               <span class="small-label">EVIDENCE BOUNDARY</span>
               <p>
-                Exact source quotes, concept assignments, and review scope
+                Source passages, assignment decisions, and the review's scope
                 remain inspectable.
               </p>
             </div>
@@ -297,7 +294,7 @@
             <span class="section-index"
               >PROCEDURES / PORTABLE CONFIGURATION</span
             >
-            <h2 id="procedures-title">Define the procedure, keep the trace.</h2>
+            <h2 id="procedures-title">Set the job, keep the instructions.</h2>
           </div>
           <p>
             Import, edit, validate, and export declarative procedures. Browser
@@ -337,7 +334,7 @@
             <h2 id="examples-title">Inspect the output.</h2>
           </div>
           <p>
-            Original engineering material and a separate SAMP-format assessment.
+            Original engineering material and a separate short-answer exercise.
             Both are published examples, not live generation.
           </p>
         </div>
@@ -357,7 +354,7 @@
             aria-controls="example-samp"
             aria-selected="false"
           >
-            SAMP assessment
+            Decision practice
           </button>
         </div>
         <div
@@ -375,7 +372,7 @@
           aria-labelledby="example-samp-tab"
           hidden
         >
-          <p class="loading">Loading the SAMP example…</p>
+          <p class="loading">Loading decision practice…</p>
         </div>
       </section>
 
@@ -387,30 +384,27 @@
       >
         <div class="section-heading">
           <div>
-            <span class="section-index"
-              >ARCHITECTURE / EXECUTED & PROPOSED</span
-            >
+            <span class="section-index">HOW IT WORKS / CURRENT &amp; NEXT</span>
             <h2 id="method-title">
-              A production pipeline with a research frontier.
+              The work has a shape. The evidence has limits.
             </h2>
           </div>
           <p>
-            The current engine builds traceable artifacts. Reusable learning
-            methods and persistent memory are directions for evaluation, not
-            deployed capabilities.
+            Follow what the current engine does, where it can be checked, and
+            what still needs to be built.
           </p>
         </div>
         <div class="architecture-strip">
-          <span>EXECUTED PIPELINE</span>
+          <span>CURRENT BUILD</span>
           <div>
-            Source units <b>→</b> extracted ideas <b>→</b> semantic merge
-            <b>→</b> curriculum <b>→</b> authored output <b>→</b> review
+            Source passages <b>→</b> proposed ideas <b>→</b> related ideas joined
+            <b>→</b> lesson route <b>→</b> written output <b>→</b> review
           </div>
         </div>
         <div class="method-steps">
           <article>
             <span>01 / INPUT</span>
-            <h3>Address source units</h3>
+            <h3>Keep a route to the source</h3>
             <p>
               Filename, heading, locator, and original passage stay available.
               PDF text extraction is limited by figures and layout.
@@ -418,7 +412,7 @@
           </article>
           <article>
             <span>02 / SEMANTICS</span>
-            <h3>Ground concepts</h3>
+            <h3>Check what was quoted</h3>
             <p>
               Exact quotes are validated against source units. They establish
               provenance, while interpretation still needs evaluation.
@@ -426,34 +420,42 @@
           </article>
           <article>
             <span>03 / CURRICULUM</span>
-            <h3>Assign or defer</h3>
+            <h3>Show what was chosen</h3>
             <p>
-              Extracted concepts enter a lesson plan or an explicit deferral.
-              Coverage describes assigned extraction, not complete
-              understanding.
+              Proposed ideas enter a lesson plan or an explicit deferral. This
+              accounts for what extraction found; it cannot prove that the
+              source was fully understood or that every idea belongs in the output.
             </p>
           </article>
           <article>
             <span>04 / DELIVERY</span>
             <h3>Publish forms</h3>
             <p>
-              Study guide, progressive assessment, oral scenario, and audio
-              script share a base lesson bundle.
+              Guide, decision practice, oral scenario, and listening script
+              share a base lesson bundle. The script is text, not a podcast.
             </p>
           </article>
         </div>
+        <div class="mechanism-detail">
+          <div><span class="section-index">A WORKER'S VIEW</span><h3>Small source packet, clear ownership</h3><p>Each reading task sees one passage and a short stretch of its neighbors. The worker must quote its own passage for any proposed idea. That keeps source links checkable, but adjacent text alone cannot tell a writer how the entire finished guide should connect.</p></div>
+          <div><span class="section-index">A DEPENDENCY &amp; RECOVERY</span><h3>Parallel where possible; pause at shared decisions</h3><p>Source passages can be read in parallel. Joining related ideas and planning lessons are currently whole-collection steps. Lessons then run in parallel. Results are cached by their inputs and procedure revision; a failed review blocks export, while completed steps can be reused on retry. A cache entry records a prior response, not its quality.</p></div>
+          <div><span class="section-index">RESOURCE REALITY</span><h3>Speed requires a real workload</h3><p>The published benchmark measures local queue and cache mechanics with timed placeholders. It does not measure model calls, audio generation, teaching quality, or total time to a usable result. Larger collections still hit global context limits; model input, retries, review, and memory use must be measured on real jobs.</p></div>
+        </div>
+        <div class="inspector-shell method-inspector">
+          <div class="section-heading"><div><span class="section-index">PUBLISHED BUILD TRACE</span><h2>Inspect each handoff.</h2></div><p>Select a stage to see what entered, what came out, and what the check actually established.</p></div>
+          <div id="runtime-inspector"><p class="loading">Loading the published build trace…</p></div>
+        </div>
         <div class="research-boundary">
           <div>
-            <span class="section-index">PROPOSED / NOT CURRENT RUNTIME</span>
-            <h3>Reusable methods + retained experience</h3>
+            <span class="section-index">AVAILABLE IN THE COMMAND LINE</span>
+            <h3>Methods that can be tested and reused</h3>
           </div>
           <p>
-            A future agent could retrieve a method's applicability,
-            decomposition principles, and observed failures; adapt it to a new
-            task; then test and retain a revision. This release provides the
-            execution and evidence foundation. Method selection,
-            experience-driven revision, and transfer across projects remain to
-            be implemented and evaluated.
+            A separate command-line method runtime now supports declared jobs,
+            resource lanes, scoped cached reruns, and retained human observations.
+            This browser still runs the fixed guide-building flow. Neither
+            surface automatically selects a method, learns from the result, or
+            offers a visual method designer yet.
           </p>
         </div>
         <p class="architecture-links">
@@ -471,12 +473,18 @@
             href="https://github.com/FadiBahodi/lamina/blob/main/docs/benchmarks.md"
             >Reproducible benchmarks</a
           >
+          ·
+          <a href="https://github.com/FadiBahodi/lamina/blob/main/docs/design-constraints.md">Design constraints</a>
+          ·
+          <a href="https://github.com/FadiBahodi/lamina/blob/main/docs/measurement.md">What to measure</a>
+          ·
+          <a href="https://github.com/FadiBahodi/lamina/blob/main/docs/comparison.md">Comparison</a>
         </p>
       </section>
     </main>
     <footer class="footer">
       <div class="footer-brand">
-        Lamina <span>/ source-grounded learning</span>
+        Lamina <span>/ work from source</span>
       </div>
       <div>
         <a href="workbench/">Study reader</a
@@ -485,14 +493,13 @@
           rel="noopener noreferrer"
           >Source on GitHub</a
         ><a
-          href="https://github.com/FadiBahodi/lamina#run-the-production-studio"
+          href="https://github.com/FadiBahodi/lamina#run-lamina-locally"
           rel="noopener noreferrer"
           >Run locally</a
         >
       </div>
       <p>
-        Original public examples. Procedures are reusable; claims remain open to
-        inspection.
+          Original public examples. Inspect the work, the result, and the limits of each check.
       </p>
     </footer>
   </body>

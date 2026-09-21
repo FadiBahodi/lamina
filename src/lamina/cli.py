@@ -17,7 +17,7 @@ from .store import Workspace
 
 
 def parser() -> argparse.ArgumentParser:
-    cli = argparse.ArgumentParser(prog="lamina", description="From source material to deliberate learning.")
+    cli = argparse.ArgumentParser(prog="lamina", description="Turn source material into useful work. Keep the method.")
     cli.add_argument("--version", action="version", version=__version__)
     commands = cli.add_subparsers(dest="command", required=True)
     ingest = commands.add_parser("ingest", help="Import user-owned documents with stable provenance")
@@ -47,7 +47,26 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--adapter-version", help="Cache identity for your model/config revision")
     run.add_argument("--timeout", type=float, default=120)
     run.add_argument("--output", type=Path, default=Path("site"))
-    studio = commands.add_parser("studio", help="Open the local Studio with an optional startup adapter")
+    method = commands.add_parser("method", help="Inspect and execute a reusable method with explicit dependencies")
+    actions = method.add_subparsers(dest="method_action", required=True)
+    method_validate = actions.add_parser("validate", help="Check a method's graph and resource limits")
+    method_validate.add_argument("path", type=Path)
+    method_run = actions.add_parser("run", help="Execute through an operator-configured adapter")
+    method_run.add_argument("--method", type=Path, required=True)
+    method_run.add_argument("--task", type=Path, required=True)
+    method_run.add_argument("--workspace", type=Path, default=Path(".lamina"))
+    method_run.add_argument("--adapter", required=True)
+    method_run.add_argument("--adapter-version")
+    method_run.add_argument("--timeout", type=float, default=120)
+    method_run.add_argument("--output", type=Path, help="Also save the run receipt as JSON")
+    method_observe = actions.add_parser("observe", help="Retain an attributed observation for later method selection")
+    method_observe.add_argument("path", type=Path, help="Observation JSON; this does not automatically change a method")
+    method_observe.add_argument("--workspace", type=Path, default=Path(".lamina"))
+    method_experience = actions.add_parser("experience", help="Retrieve observations for one method family")
+    method_experience.add_argument("--family", required=True)
+    method_experience.add_argument("--limit", type=int, default=20)
+    method_experience.add_argument("--workspace", type=Path, default=Path(".lamina"))
+    studio = commands.add_parser("app", aliases=["studio"], help="Open the local Lamina app with an optional startup adapter")
     studio.add_argument("--workspace", type=Path, default=Path(".lamina"))
     studio.add_argument("--port", type=int, default=8048)
     studio.add_argument("--adapter", help="Startup-only JSON command adapter; no credentials in browser")
@@ -124,11 +143,38 @@ def main(argv: list[str] | None = None) -> int:
             result = run_procedure(workspace, provider, procedure, args.output)
             result = {"output": str(args.output), "procedure": procedure["id"], **result,
                       "workspace": workspace.stats()}
-        elif args.command == "studio":
+        elif args.command == "method":
+            from .methods import validate_method
+            from .method_runtime import run_method, record_observation, list_experience
+            if args.method_action == "validate":
+                result = validate_method(json.loads(args.path.read_text(encoding="utf-8")))
+            elif args.method_action == "run":
+                from .studio_server import make_provider
+                definition = json.loads(args.method.read_text(encoding="utf-8"))
+                task = json.loads(args.task.read_text(encoding="utf-8"))
+                provider = make_provider(args.adapter, version=args.adapter_version, timeout=args.timeout)
+                result = run_method(Workspace(args.workspace), provider, definition, task)
+                if args.output:
+                    args.output.parent.mkdir(parents=True, exist_ok=True)
+                    args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                if result.get("status") == "failed":
+                    print(json.dumps(result, indent=2, ensure_ascii=False))
+                    return 1
+            elif args.method_action == "observe":
+                observation = json.loads(args.path.read_text(encoding="utf-8"))
+                if not isinstance(observation, dict):
+                    raise ValueError("observation must be a JSON object")
+                required = {"family", "method_id", "method_version", "task_digest", "outcome", "applicability"}
+                if not required <= observation.keys() or observation.keys() - required - {"failure", "note"}:
+                    raise ValueError("observation requires family, method_id, method_version, task_digest, outcome, applicability; optional failure and note")
+                result = record_observation(Workspace(args.workspace), **observation)
+            else:
+                result = list_experience(Workspace(args.workspace), args.family, limit=args.limit)
+        elif args.command in {"app", "studio"}:
             from .studio_server import StudioServer
             server = StudioServer(args.workspace, port=args.port, adapter=args.adapter,
                                   adapter_version=args.adapter_version, timeout=args.timeout)
-            print(f"Lamina Studio at http://127.0.0.1:{server.server_port} · Ctrl-C to stop", flush=True)
+            print(f"Lamina at http://127.0.0.1:{server.server_port} · Ctrl-C to stop", flush=True)
             try:
                 server.serve_forever()
             except KeyboardInterrupt:

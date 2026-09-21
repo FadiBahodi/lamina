@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from .store import Workspace
 
 
-PIPELINE_REVISION = "lamina-pipeline-2"
+PIPELINE_REVISION = "lamina-pipeline-3"
 HALO_CHARS = 450
 
 
@@ -105,6 +105,15 @@ def build(workspace: Workspace, provider, workers: int = 4, procedure: dict | No
                                                  "source_titles": [s["title"] for s in sources]},
                   lambda raw: validation.validate_plan(raw, concepts))
 
+    # A shared route is a specification, not a claim that parallel writers have
+    # seen one another's completed prose. Restore exact prerequisite evidence
+    # for callbacks instead of asking a writer to infer it from lesson titles.
+    shared_route = [{"id": row["id"], "title": row["title"],
+                     "prerequisite_ids": row["prerequisite_ids"],
+                     "ideas": [{"id": cid, "title": concept_by_id[cid]["title"]}
+                               for cid in row["concept_ids"]]}
+                    for row in plan["lessons"]]
+
     def write(planned: dict) -> dict:
         assigned = [concept_by_id[cid] for cid in planned["concept_ids"]]
         unit_ids = {e["unit_id"] for c in assigned for e in c["evidence"]}
@@ -112,10 +121,20 @@ def build(workspace: Workspace, provider, workers: int = 4, procedure: dict | No
         evidence_source_ids = {u["source_id"] for u in evidence_units}
         assigned_manifest = [{"filename": s["filename"], "sha256": s["sha256"]}
                              for s in sources if s["id"] in evidence_source_ids]
+        prior_lessons = []
+        for row in plan["lessons"]:
+            if row["id"] not in planned["prerequisite_ids"]:
+                continue
+            prior_concepts = [concept_by_id[cid] for cid in row["concept_ids"]]
+            prior_unit_ids = {e["unit_id"] for c in prior_concepts for e in c["evidence"]}
+            prior_lessons.append({"id": row["id"], "title": row["title"],
+                                  "concepts": prior_concepts,
+                                  "units": [u for u in units if u["id"] in prior_unit_ids]})
         payload = {"source_manifest": assigned_manifest,
                    "lesson": planned, "concepts": assigned, "units": evidence_units,
-                   "earlier_lessons": [{"id": x["id"], "title": x["title"]}
-                                       for x in plan["lessons"] if x["id"] in planned["prerequisite_ids"]]}
+                   "shared_route": shared_route,
+                   "earlier_lessons": prior_lessons,
+                   "context_scope": "Shared plan and exact prerequisite evidence; not completed earlier prose. Prerequisite context does not change ownership of this lesson's assigned concepts."}
         authored = stage("author", payload,
                           lambda raw: validation.validate_lesson(raw, planned, concept_by_id, units_by_id))
         review_payload = {"source_manifest": assigned_manifest,

@@ -123,11 +123,12 @@ class LessonTests(unittest.TestCase):
     def test_valid_lesson_has_all_three_modes(self) -> None:
         self.assertEqual(validate_lesson(self.lesson, self.planned, {"c1": CONCEPTS[0]}, TEACHING)["id"], "l1")
 
-    def test_missing_apply_mode_fails(self) -> None:
+    def test_practice_forms_are_optional(self) -> None:
         lesson = copy.deepcopy(self.lesson)
         lesson["questions"] = [q for q in lesson["questions"] if q["kind"] != "apply"]
-        with self.assertRaisesRegex(ValidationError, "recall, contrast, and apply"):
-            validate_lesson(lesson, self.planned, {"c1": CONCEPTS[0]}, TEACHING)
+        validate_lesson(lesson, self.planned, {"c1": CONCEPTS[0]}, TEACHING)
+        lesson["questions"] = []
+        validate_lesson(lesson, self.planned, {"c1": CONCEPTS[0]}, TEACHING)
 
     def test_lesson_must_cover_its_concept_evidence(self) -> None:
         lesson = copy.deepcopy(self.lesson)

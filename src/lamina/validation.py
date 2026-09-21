@@ -176,7 +176,6 @@ def validate_lesson(result: object, planned: dict, concepts_by_id: dict[str, dic
         for ev in check_lesson_evidence(section.get("evidence"), "section.evidence"):
             anchored.add((ev["unit_id"], ev["quote"]))
     questions = _list(lesson.get("questions"), "lesson.questions")
-    kinds: set[str] = set()
     qids: set[str] = set()
     for i, raw in enumerate(questions):
         row = _object(raw, f"question {i+1}")
@@ -189,7 +188,6 @@ def validate_lesson(result: object, planned: dict, concepts_by_id: dict[str, dic
         kind = row.get("kind")
         if kind not in {"recall", "contrast", "apply"}:
             raise ValidationError(f"invalid question kind {kind}")
-        kinds.add(kind)
         for key in ("prompt", "answer", "rationale"):
             _text(row.get(key), f"question.{key}")
         refs = _list(row.get("concept_ids"), "question.concept_ids")
@@ -197,8 +195,6 @@ def validate_lesson(result: object, planned: dict, concepts_by_id: dict[str, dic
             raise ValidationError(f"question {qid} references unassigned concept")
         for ev in check_lesson_evidence(row.get("evidence"), "question.evidence"):
             anchored.add((ev["unit_id"], ev["quote"]))
-    if kinds != {"recall", "contrast", "apply"}:
-        raise ValidationError("lesson needs recall, contrast, and apply questions")
     for cid in cids:
         if not any((e["unit_id"], e["quote"]) in anchored for e in concepts_by_id[cid]["evidence"]):
             raise ValidationError(f"lesson misses grounded coverage of objective {cid}")

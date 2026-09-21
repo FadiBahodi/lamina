@@ -33,7 +33,7 @@ The JSON schemas in the installed package are authoritative for exact request en
 }
 ```
 
-The quote must occur exactly in a known teaching unit. Unit IDs and concept IDs must resolve within the current request or workspace. Reconciliation must include each raw concept exactly once and preserve all of its evidence. The planner then assigns or defers every canonical concept. An authored lesson must cover its planned concepts and include all three question modes. A review result of `revise` blocks publication.
+The quote must occur exactly in a known teaching unit. Unit IDs and concept IDs must resolve within the current request or workspace. Reconciliation must include each raw concept exactly once and preserve all of its evidence. The planner then assigns or defers every canonical concept. An authored lesson must cover its planned concepts and use only supported question modes when practice is useful; no mode or question quota is imposed. A review result of `revise` blocks publication.
 
 ## Assessment holdout
 

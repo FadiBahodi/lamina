@@ -6,7 +6,7 @@ an API vendor or claim that model review proves truth or learning effectiveness.
 from __future__ import annotations
 
 
-REVISION = "lamina-prompts-2"
+REVISION = "lamina-prompts-3"
 
 STAGES = {
     "extract": (
@@ -35,8 +35,12 @@ STAGES = {
     "author": (
         "Write one finished lesson for the assigned concepts. Start with the model the "
         "learner needs, explain how the ideas connect, then test after attention has moved "
-        "on. Include three answerable modes: recall an exact structure, contrast two "
-        "conditions, and apply the model in a changed situation. Answers and rationales "
+        "on. Choose useful practice forms for this material: recall an exact structure, "
+        "contrast conditions, or apply an idea in a changed situation. Do not force all "
+        "three forms or a fixed question count; omit practice when it would be artificial. "
+        "Use the shared route and exact prerequisite evidence to connect this lesson to "
+        "the others without repeating their entire explanations. Earlier lesson context "
+        "is planned teaching, not observed completed prose. Answers and rationales "
         "are separate from prompts. Cite exact source-unit quotes for every section and "
         "question. When the material supports it, add one operational scenario with a "
         "minimal candidate brief, findings revealed on request, an initial decision, "

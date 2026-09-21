@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 620" role="img" aria-labelledby="title desc">
+  <title id="title">A source becomes a useful lesson</title>
+  <desc id="desc">A source page about temporary job ownership connects to a timeline of two overlapping workers and a decision about which result may publish.</desc>
+  <defs>
+    <pattern id="grain" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".45" fill="#6c655b" opacity=".15"/></pattern>
+    <filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#34302b" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8" fill="none" stroke="#a75b45" stroke-width="1.6"/></marker>
+  </defs>
+  <rect width="760" height="620" fill="#e8e3d8"/>
+  <rect width="760" height="620" fill="url(#grain)"/>
+  <path d="M0 486C166 440 234 565 384 531c112-25 219-105 376-74v163H0Z" fill="#d5ddd3"/>
+  <text x="48" y="56" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="3" fill="#8f614d">SOURCE NOTE</text>
+  <g filter="url(#shadow)">
+    <rect x="48" y="78" width="302" height="382" rx="5" fill="#fffdf7" stroke="#c9c1b5"/>
+    <rect x="48" y="78" width="302" height="9" fill="#ae674f"/>
+    <text x="75" y="123" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="1.8" fill="#8b8b7e">01 — LEASES.MD</text>
+    <text x="75" y="166" font-family="Georgia,serif" font-size="29" fill="#243331">Leases make</text>
+    <text x="75" y="201" font-family="Georgia,serif" font-size="29" fill="#243331">stalled work</text>
+    <text x="75" y="236" font-family="Georgia,serif" font-size="29" fill="#243331">recoverable.</text>
+    <path d="M75 264h243" stroke="#d9d3c7"/>
+    <text x="75" y="298" font-family="Arial,sans-serif" font-size="16" fill="#465653">Expiry permits another worker</text>
+    <text x="75" y="322" font-family="Arial,sans-serif" font-size="16" fill="#465653">to claim the job.</text>
+    <rect x="69" y="344" width="258" height="65" rx="3" fill="#f3e7d6"/>
+    <text x="79" y="370" font-family="Arial,sans-serif" font-size="16" font-weight="700" fill="#85523d">But the first worker may</text>
+    <text x="79" y="392" font-family="Arial,sans-serif" font-size="16" font-weight="700" fill="#85523d">still finish late.</text>
+    <path d="M318 438h-75" stroke="#c7bfb3"/>
+  </g>
+  <path d="M374 276h57" stroke="#a75b45" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="390" y="246" font-family="Arial,sans-serif" font-size="10" font-weight="700" letter-spacing="2" fill="#9b6550">TURN INTO</text>
+  <g filter="url(#shadow)">
+    <rect x="451" y="110" width="260" height="305" rx="7" fill="#263633"/>
+    <text x="478" y="151" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="2" fill="#b8d0bb">LESSON 01</text>
+    <text x="478" y="193" font-family="Georgia,serif" font-size="27" fill="#fffaf0">Who may publish</text>
+    <text x="478" y="226" font-family="Georgia,serif" font-size="27" fill="#fffaf0">the result?</text>
+    <path d="M478 252h206" stroke="#60716d"/>
+    <text x="478" y="284" font-family="Arial,sans-serif" font-size="15" fill="#e6e6d9">A's lease expires</text>
+    <path d="M478 299h180" stroke="#8fa198" stroke-width="5" stroke-linecap="round"/>
+    <text x="478" y="329" font-family="Arial,sans-serif" font-size="15" fill="#e6e6d9">B claims the job</text>
+    <path d="M535 344h150" stroke="#bb795c" stroke-width="5" stroke-linecap="round"/>
+    <text x="478" y="384" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#f7c1a2">A finishes late. Check its token.</text>
+  </g>
+  <g>
+    <circle cx="92" cy="526" r="21" fill="#ab694e"/>
+    <text x="84" y="534" font-family="Georgia,serif" font-size="24" fill="#fffaf0">?</text>
+    <text x="126" y="520" font-family="Georgia,serif" font-size="20" fill="#283834">Why a lease alone is insufficient</text>
+    <text x="126" y="548" font-family="Arial,sans-serif" font-size="15" fill="#5c6862">The learner must explain the late-worker case.</text>
+  </g>
+</svg>

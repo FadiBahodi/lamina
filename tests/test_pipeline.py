@@ -83,6 +83,48 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "Clarify the comparison"):
             build(MemoryWorkspace(), SpyProvider(revise=True), workers=2)
 
+    def test_material_can_choose_one_practice_form(self) -> None:
+        class RecallOnly(SpyProvider):
+            def call(self, stage, request):
+                result = super().call(stage, request)
+                if stage == "author":
+                    result["questions"] = result["questions"][:1]
+                return result
+        bundle = build(MemoryWorkspace(), RecallOnly(), workers=2)
+        self.assertEqual([q["kind"] for q in bundle["lessons"][0]["questions"]], ["recall"])
+
+    def test_parallel_writers_receive_route_and_exact_prerequisite_evidence(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from lamina.ingest import ingest_paths
+        from lamina.providers import DemoProvider
+        from lamina.store import Workspace
+        class Capture(DemoProvider):
+            def __init__(self):
+                super().__init__()
+                self.authors = []
+            def call(self, stage, request):
+                if stage == "author":
+                    self.authors.append(request["input"])
+                return super().call(stage, request)
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Workspace(Path(folder))
+            import lamina
+            ingest_paths([Path(lamina.__file__).parent / "demo" / "sources"], workspace)
+            provider = Capture()
+            bundle = build(workspace, provider, workers=3)
+            by_id = {row["lesson"]["id"]: row for row in provider.authors}
+            plan = bundle["plan"]["lessons"]
+            for lesson in plan:
+                request = by_id[lesson["id"]]
+                self.assertEqual([row["id"] for row in request["shared_route"]], [row["id"] for row in plan])
+                self.assertEqual([row["id"] for row in request["earlier_lessons"]], lesson["prerequisite_ids"])
+                for previous in request["earlier_lessons"]:
+                    units = {row["id"]: row["text"] for row in previous["units"]}
+                    for concept in previous["concepts"]:
+                        for evidence in concept["evidence"]:
+                            self.assertIn(evidence["quote"], units[evidence["unit_id"]])
+
 
 if __name__ == "__main__":
     unittest.main()

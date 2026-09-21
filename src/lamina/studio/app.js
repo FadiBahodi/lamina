@@ -1,4 +1,4 @@
-/* Lamina Studio: a browser client for the local production API and a read-only public showcase. */
+/* Lamina: a browser client for the local production API and a read-only public showcase. */
 (() => {
   "use strict";
 
@@ -6,7 +6,7 @@
   const OUTPUTS = ["study-guide", "samp", "oral-case", "audio-script"];
   const OUTPUT_LABELS = {
     "study-guide": "Study guide",
-    samp: "SAMP assessment",
+    samp: "Decision practice",
     "oral-case": "Oral scenario",
     "audio-script": "Audio script",
   };
@@ -32,7 +32,7 @@
     {
       schema_version: "1",
       id: "samp-assessment",
-      name: "SAMP assessment",
+      name: "Decision practice",
       description:
         "Write progressive short-answer problems with staged information, marking points, and source evidence.",
       audience: "Candidates and examiners",
@@ -67,7 +67,7 @@
     },
   ];
   const state = {
-    view: "studio",
+    view: "overview",
     mode: "hosted",
     adapter: false,
     serverSources: [],
@@ -113,6 +113,9 @@
       state.procedures[0]
     );
   }
+  function displayProcedureName(p) {
+    return /samp/i.test(p.name) ? "Decision practice" : p.name;
+  }
   function linkFor(path) {
     if (
       typeof path !== "string" ||
@@ -142,7 +145,7 @@
 
   function showView(view) {
     state.view = view;
-    document.body.classList.toggle("subview", view !== "studio");
+    document.body.classList.toggle("subview", view !== "overview");
     $$(".nav-link").forEach((b) => {
       const yes = b.dataset.view === view;
       b.classList.toggle("is-active", yes);
@@ -269,11 +272,11 @@
       choice.type = "button";
       choice.setAttribute("role", "radio");
       choice.setAttribute("aria-checked", String(active));
-      choice.setAttribute("aria-label", p.name);
+      choice.setAttribute("aria-label", displayProcedureName(p));
       add(
         choice,
         node("span", "choice-glyph", GLYPHS[output] || "◇"),
-        node("strong", "", p.name),
+        node("strong", "", displayProcedureName(p)),
       );
       choice.addEventListener("click", () => selectProcedure(p.id));
       choices.appendChild(choice);
@@ -284,7 +287,7 @@
         node("span", "library-glyph", GLYPHS[output] || "◇"),
         add(
           node("span"),
-          node("strong", "", p.name),
+          node("strong", "", displayProcedureName(p)),
           node("small", "", trim(p.description, 94)),
         ),
       );
@@ -295,7 +298,7 @@
     clear($("#selected-procedure"));
     add(
       $("#selected-procedure"),
-      node("strong", "", p.name),
+      node("strong", "", displayProcedureName(p)),
       node("p", "", p.description),
       node(
         "div",
@@ -434,7 +437,7 @@
     add(
       box,
       node("span", "section-index", "PROCEDURE / PORTABLE JSON"),
-      node("h3", "", p.name),
+      node("h3", "", displayProcedureName(p)),
       node("p", "", p.description),
     );
     const grid = node("div", "inspector-grid");
@@ -457,7 +460,7 @@
     );
     const actions = node("div", "source-actions"),
       download = node("button", "button button-secondary", "Download JSON ↓"),
-      use = node("button", "text-button", "Use in Studio →");
+      use = node("button", "text-button", "Use in Build →");
     download.type = use.type = "button";
     download.addEventListener("click", () =>
       procedureDownload(currentProcedure()),
@@ -550,7 +553,7 @@
     const local = state.mode === "local",
       pill = $("#mode-pill");
     pill.textContent = local
-      ? "Local production studio"
+      ? "Local build available"
       : "Public example · explore only";
     pill.classList.toggle("local", local);
     $("#mode-description").textContent = local
@@ -569,7 +572,7 @@
       : ".md,.txt,text/plain,text/markdown";
     $("#source-hint").textContent = local
       ? "Choose or drop .md, .txt, or .pdf files"
-      : "Choose or drop .md and .txt files · PDF import requires local Studio";
+      : "Choose or drop .md and .txt files · PDF import requires the local server";
     updateRunControl();
   }
   function updateRunControl() {
@@ -585,7 +588,7 @@
       b.textContent = "Configure adapter to run";
       b.disabled = true;
       g.textContent =
-        'Start the local server with lamina studio --adapter "your-command". Credentials and adapter code stay off this page.';
+        'Start the local server with lamina app --adapter "your-command". Credentials and adapter code stay off this page.';
       return;
     }
     if (!state.serverSources.length) {
@@ -679,7 +682,7 @@
       const pdf = /\.pdf$/i.test(file.name);
       if (pdf && state.mode !== "local") {
         errors.push(
-          "PDF import requires local Studio; use the local server or CLI.",
+          "PDF import requires the local server or CLI.",
         );
         continue;
       }
@@ -1026,7 +1029,7 @@
         node(
           "p",
           "error-note",
-          "The SAMP example is not available from this build.",
+          "The decision-practice example is not available from this build.",
         ),
       );
       return;
@@ -1044,11 +1047,11 @@
           "section-index",
           "SEPARATE OUTPUT / PROGRESSIVE ASSESSMENT",
         ),
-        node("h3", "", s.title || "SAMP assessment"),
+        node("h3", "", "Decision practice"),
         node(
           "p",
           "",
-          s.scope_note ||
+          s.scope_note?.replace(/SAMP-style(?: short-answer)?/gi, "progressive short-answer") ||
             "An inspectable original example with candidate prompts and examiner marking notes.",
         ),
       ),
@@ -1237,7 +1240,7 @@
     const link = node(
       "a",
       "example-link",
-      "Inspect the complete SAMP artifact →",
+      "Inspect the complete exercise data →",
     );
     link.href = new URL("examples/samp/samp.json", ROOT);
     root.appendChild(link);
@@ -1245,6 +1248,12 @@
   async function initialize() {
     $$(".nav-link,[data-view]").forEach((b) =>
       b.addEventListener("click", () => showView(b.dataset.view)),
+    );
+    $$("[data-example]").forEach((b) =>
+      b.addEventListener("click", () => {
+        showExample(b.dataset.example);
+        showView("examples");
+      }),
     );
     $("#example-engineering-tab").addEventListener("click", () =>
       showExample("engineering"),

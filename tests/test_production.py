@@ -172,7 +172,22 @@ class FixtureProvider:
 
 def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
     ws = workspace(tmp_path)
-    provider = FixtureProvider(delay=0.025)
+    class ConcurrentFixture(FixtureProvider):
+        def __init__(self):
+            super().__init__()
+            self.barriers = {
+                "production_read": threading.Barrier(4),
+                "production_write": threading.Barrier(4),
+            }
+
+        def call(self, stage, payload):
+            # Require real overlap rather than hoping a short sleep outlasts
+            # SQLite setup and scheduling delays on a shared CI runner.
+            if stage in self.barriers:
+                self.barriers[stage].wait(timeout=15)
+            return super().call(stage, payload)
+
+    provider = ConcurrentFixture()
     receipt = build_production(
         ws,
         provider,

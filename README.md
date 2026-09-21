@@ -1,12 +1,45 @@
 # Lamina
 
-[**Live workbench**](https://fadibahodi.github.io/lamina/) · [Architecture](docs/architecture.md) · [Design study](docs/design.md) · [Evaluation](docs/evaluation.md) · [MIT license](LICENSE)
+[**Open Studio**](https://fadibahodi.github.io/lamina/) · [Runtime](docs/architecture.md) · [Methods & memory](docs/methods.md) · [Design](docs/design.md) · [Evaluation](docs/evaluation.md)
 
-**From documents to a study system you can inspect.** Lamina extracts source-grounded ideas, consolidates overlaps, plans a learning route, and produces lessons, recall/contrast/apply practice, local cases, listen scripts, and printable handouts. The same validated bundle powers each output.
+**An open runtime and workspace for knowledge production.** Decompose a source collection, inspect how its ideas were reconciled, and run reusable LLM procedures to produce reference guides, short-answer assessments, local oral cases, and teaching scripts. Source evidence stays attached through the transformations.
 
-![Lamina study workbench](docs/preview.png)
+![Lamina production Studio](docs/studio-preview.png)
 
 Lamina separates the jobs that often get blurred together. Code owns source identity, cache keys, coverage accounting, evidence checks, and export. A configured content adapter interprets the material and reviews the result. You can follow a generated claim back to an exact source passage.
+
+The longer-term design is **reusable methods with memory**: retain a method's applicability, decomposition principles, executable stages, and consequential experience so a future model can adapt it to a different project. The working release provides the source, execution, and inspection foundation; learned method selection, cross-project adaptation, and experience-driven revision are proposed in [Methods & memory](docs/methods.md).
+
+The **[public Studio](https://fadibahodi.github.io/lamina/)** is an interactive, original example collection and a portable procedure editor. The **local Studio** imports your documents and runs the engine through your configured adapter. The public site does not send uploaded documents to a generation service.
+
+| Explore the example | What to inspect |
+| --- | --- |
+| Source collection | Original passages, a lease timeline, and the evidence behind a consolidated idea |
+| Study guide | Connected explanations, hidden-answer practice, and PDF/Markdown exports |
+| SAMP-style assessment | A short incident stem, progressive questions, answer limits, independent marking points, and a separate examiner sheet |
+| Production procedure | Editable audience and instructions, output selection, and an importable/exportable JSON contract |
+
+The examples use original engineering material. SAMP denotes short-answer management problems; the example is not an official or clinically validated examination. Audio output is a speakable script, and oral cases currently use a local staged-reveal interface.
+
+## Run the production Studio
+
+```bash
+git clone https://github.com/FadiBahodi/lamina.git
+cd lamina
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[pdf]'
+lamina studio --workspace .lamina --port 8048
+```
+
+Open `http://127.0.0.1:8048`. Add a configured adapter to enable generation:
+
+```bash
+lamina studio --workspace .lamina --port 8048 \
+  --adapter 'python examples/adapter/http_chat.py'
+```
+
+Configure the adapter as described in [Adapters](docs/adapters.md). Credentials and executable selection stay in the local process configuration. A production procedure is data; importing it does not install or execute code. See [Procedures and operating modes](docs/procedures.md).
 
 ## The engineering problem
 
@@ -90,8 +123,8 @@ Lamina was created by **Fadi Bahodi**. It is released under the [MIT License](LI
 ## Development
 
 ```bash
-python -m pip install -e '.[pdf]'
-python -m unittest discover -s tests -v
+python -m pip install -e '.[pdf,test]'
+python -m pytest tests -q
 ```
 
 The test suite exercises failure recovery, concurrent cache claims, source holdout, evidence-conserving merges, malformed exports, adapter requests, and clean end-to-end artifact generation. [CI](https://github.com/FadiBahodi/lamina/actions/workflows/ci.yml) checks Python 3.11–3.13. No credentials are required to run the tests.

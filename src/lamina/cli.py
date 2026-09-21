@@ -40,6 +40,19 @@ def parser() -> argparse.ArgumentParser:
     build.add_argument("--timeout", type=float, default=120)
     build.add_argument("--adapter-version", help="Cache identity for your model/config revision (or LAMINA_ADAPTER_VERSION)")
     build.add_argument("--pdf", action="store_true", help="Include a print-ready study book (requires the pdf extra)")
+    run = commands.add_parser("run", help="Run a validated teaching procedure with a configured adapter")
+    run.add_argument("--procedure", required=True, type=Path, help="Data-only procedure JSON v1")
+    run.add_argument("--workspace", type=Path, default=Path(".lamina"))
+    run.add_argument("--adapter", required=True, help="Executable and arguments; invoked without a shell")
+    run.add_argument("--adapter-version", help="Cache identity for your model/config revision")
+    run.add_argument("--timeout", type=float, default=120)
+    run.add_argument("--output", type=Path, default=Path("site"))
+    studio = commands.add_parser("studio", help="Open the local Studio with an optional startup adapter")
+    studio.add_argument("--workspace", type=Path, default=Path(".lamina"))
+    studio.add_argument("--port", type=int, default=8048)
+    studio.add_argument("--adapter", help="Startup-only JSON command adapter; no credentials in browser")
+    studio.add_argument("--adapter-version", help="Cache identity for your model/config revision")
+    studio.add_argument("--timeout", type=float, default=120)
     demo = commands.add_parser("demo", help="Run the original curated fixture, offline, with no credentials")
     demo.add_argument("--output", type=Path, default=Path("demo"))
     demo.add_argument("--workspace", type=Path, default=Path(".lamina-demo"))
@@ -102,6 +115,27 @@ def main(argv: list[str] | None = None) -> int:
             result = {"output": str(args.output), "title": bundle["title"],
                       "lessons": len(bundle["lessons"]), "workspace": workspace.stats(),
                       "next": f"lamina serve {shlex.quote(str(args.output))}"}
+        elif args.command == "run":
+            from .procedures import validate_procedure
+            from .studio_server import make_provider, run_procedure
+            procedure = validate_procedure(json.loads(args.procedure.read_text(encoding="utf-8")))
+            provider = make_provider(args.adapter, version=args.adapter_version, timeout=args.timeout)
+            workspace = Workspace(args.workspace)
+            result = run_procedure(workspace, provider, procedure, args.output)
+            result = {"output": str(args.output), "procedure": procedure["id"], **result,
+                      "workspace": workspace.stats()}
+        elif args.command == "studio":
+            from .studio_server import StudioServer
+            server = StudioServer(args.workspace, port=args.port, adapter=args.adapter,
+                                  adapter_version=args.adapter_version, timeout=args.timeout)
+            print(f"Lamina Studio at http://127.0.0.1:{server.server_port} · Ctrl-C to stop", flush=True)
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass
+            finally:
+                server.server_close()
+            return 0
         elif args.command == "export":
             from .validation import validate_bundle
             bundle = json.loads(args.bundle.read_text(encoding="utf-8"))

@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10141c" />
+    <meta
+      name="description"
+      content="Lamina turns source material into traceable learning outputs through reusable procedures."
+    />
+    <title>Lamina Studio · Learning production workspace</title>
+    <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="inspector.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="inspector.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="Lamina Studio home"
+        ><img src="assets/mark.svg" alt="" width="32" height="32" /><span
+          >LAMINA<span class="brand-light"> / STUDIO</span></span
+        ></a
+      >
+      <div class="project-switch">
+        <span class="project-glyph">R</span
+        ><span
+          ><strong>Resilient workflows</strong
+          ><small>Original example collection</small></span
+        >
+      </div>
+      <div class="sidebar-label">PROJECT</div>
+      <nav class="nav" aria-label="Primary">
+        <button
+          type="button"
+          class="nav-link is-active"
+          data-view="studio"
+          aria-current="page"
+        >
+          <span aria-hidden="true">⌘</span> Workspace
+        </button>
+        <button type="button" class="nav-link" data-view="procedures">
+          <span aria-hidden="true">▤</span> Procedures
+        </button>
+        <button type="button" class="nav-link" data-view="examples">
+          <span aria-hidden="true">◫</span> Examples
+        </button>
+        <button type="button" class="nav-link" data-view="method">
+          <span aria-hidden="true">◇</span> Architecture
+        </button>
+      </nav>
+      <div class="sidebar-label resources-label">RESOURCES</div>
+      <a class="header-link" href="workbench/"
+        >Open study reader <span aria-hidden="true">↗</span></a
+      ><a
+        class="header-link"
+        href="https://github.com/FadiBahodi/lamina"
+        rel="noopener noreferrer"
+        >Source repository <span aria-hidden="true">↗</span></a
+      >
+    </header>
+
+    <main id="main">
+      <section class="intro" aria-labelledby="page-title">
+        <div class="eyebrow">
+          <span class="eyebrow-rule"></span> PROJECTS / RESILIENT WORKFLOWS
+          <span class="version-tag">v0.2</span>
+        </div>
+        <div class="intro-row">
+          <div>
+            <h1 id="page-title">From source to system.</h1>
+            <p class="intro-copy">
+              Inspect how source passages become concepts, a curriculum, and
+              learning artifacts. Reuse the production procedure with your own
+              material in local Studio.
+            </p>
+          </div>
+          <div class="intro-aside">
+            <span class="mode-pill" id="mode-pill">Checking local studio…</span>
+            <p id="mode-description">
+              The public example is ready to explore. Local production requires
+              a configured adapter.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="view is-active"
+        id="view-studio"
+        aria-labelledby="studio-title"
+      >
+        <div class="section-heading">
+          <div>
+            <span class="section-index">WORKSPACE / PUBLISHED BUILD TRACE</span>
+            <h2 id="studio-title">Decompose the example.</h2>
+          </div>
+          <p>
+            Follow an original source through extraction, merge, lesson
+            planning, and output. Select a stage to inspect the evidence.
+          </p>
+        </div>
+        <div class="inspector-shell">
+          <div id="runtime-inspector">
+            <p class="loading">Loading the published build trace…</p>
+          </div>
+        </div>
+        <div class="section-heading production-heading">
+          <div>
+            <span class="section-index"
+              >PRODUCTION / SOURCE → PROCEDURE → ARTIFACT</span
+            >
+            <h2>Run a production procedure.</h2>
+          </div>
+          <p>
+            Hosted mode is a published example. Local Studio runs the selected
+            procedure through a server-side adapter.
+          </p>
+        </div>
+        <div class="desk-grid">
+          <div class="desk-main">
+            <section class="desk-block" aria-labelledby="sources-title">
+              <div class="block-heading">
+                <span class="step-number">01</span>
+                <div>
+                  <h3 id="sources-title">Sources</h3>
+                  <p>
+                    Start with the published example or bring your own material.
+                  </p>
+                </div>
+              </div>
+              <div
+                class="example-collection"
+                id="example-collection"
+                aria-label="Published example source collection"
+              >
+                <div class="collection-head">
+                  <div>
+                    <span class="small-label">PUBLISHED EXAMPLE COLLECTION</span
+                    ><strong>Resilient workflow engineering</strong
+                    ><span
+                      >3 original source notes · 7 extracted ideas · 3
+                      lessons</span
+                    >
+                  </div>
+                  <button
+                    type="button"
+                    class="text-button"
+                    data-view="examples"
+                  >
+                    Inspect source →
+                  </button>
+                </div>
+                <div class="collection-files" id="collection-files">
+                  <span>01 · Leases &amp; owner tokens</span
+                  ><span>02 · Idempotency &amp; effects</span
+                  ><span>03 · Evidence &amp; release</span>
+                </div>
+              </div>
+              <div class="source-divider"><span>YOUR COLLECTION</span></div>
+              <label class="dropzone" id="dropzone" for="source-input"
+                ><span class="drop-icon" aria-hidden="true">＋</span
+                ><strong>Add source files</strong
+                ><span id="source-hint">Choose or drop .md and .txt files</span
+                ><input
+                  id="source-input"
+                  type="file"
+                  accept=".md,.txt,text/plain,text/markdown"
+                  multiple
+              /></label>
+              <div class="source-list" id="source-list" aria-live="polite">
+                <p class="empty-small">
+                  No local files selected. Browse the original example below to
+                  see the complete workflow.
+                </p>
+              </div>
+              <div class="source-actions">
+                <button
+                  class="button button-secondary"
+                  type="button"
+                  id="submit-sources"
+                  disabled
+                >
+                  Store sources locally</button
+                ><span class="inline-note" id="sources-note"
+                  >Uploads require the local Studio server.</span
+                >
+              </div>
+            </section>
+            <section class="desk-block" aria-labelledby="procedure-title">
+              <div class="block-heading">
+                <span class="step-number">02</span>
+                <div>
+                  <h3 id="procedure-title">Procedure</h3>
+                  <p>Portable instructions and output selection.</p>
+                </div>
+              </div>
+              <div
+                class="procedure-choices"
+                id="procedure-choices"
+                role="radiogroup"
+                aria-label="Choose a procedure"
+              ></div>
+              <div class="selected-procedure" id="selected-procedure"></div>
+              <div class="source-actions">
+                <button
+                  class="button button-secondary"
+                  type="button"
+                  id="download-selected"
+                >
+                  Download procedure JSON
+                  <span aria-hidden="true">↓</span></button
+                ><button
+                  class="text-button"
+                  type="button"
+                  data-view="procedures"
+                >
+                  Inspect &amp; import procedures
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+            </section>
+            <section class="desk-block run-block" aria-labelledby="run-title">
+              <div class="block-heading">
+                <span class="step-number">03</span>
+                <div>
+                  <h3 id="run-title">Production run</h3>
+                  <p>
+                    The local server reports actual job state and export links.
+                  </p>
+                </div>
+              </div>
+              <div class="run-track" aria-label="Workflow stages">
+                <span>Read sources</span><i aria-hidden="true"></i
+                ><span>Extract ideas</span><i aria-hidden="true"></i
+                ><span>Compose</span><i aria-hidden="true"></i
+                ><span>Review &amp; export</span>
+              </div>
+              <div class="run-controls">
+                <button
+                  class="button button-primary"
+                  type="button"
+                  id="run-button"
+                >
+                  Explore the example <span aria-hidden="true">↗</span>
+                </button>
+                <p id="run-guidance">
+                  Static showcase. No generation is running here.
+                </p>
+              </div>
+              <div
+                id="run-status"
+                class="run-status"
+                aria-live="polite"
+                hidden
+              ></div>
+            </section>
+          </div>
+          <aside class="desk-aside" aria-labelledby="output-title">
+            <div class="aside-top">
+              <span class="section-index">ARTIFACT / ACTUAL EXCERPT</span>
+              <h3 id="output-title">Traceable output</h3>
+              <p id="output-description"></p>
+            </div>
+            <div id="output-preview" class="output-preview" aria-live="polite">
+              <span class="small-label">PUBLISHED BUILD</span>
+              <p>Loading source-grounded example…</p>
+            </div>
+            <button
+              type="button"
+              class="aside-example-link"
+              data-view="examples"
+            >
+              Inspect complete artifact <span aria-hidden="true">↗</span>
+            </button>
+            <div id="output-list" class="output-list"></div>
+            <div class="aside-foot">
+              <span class="small-label">EVIDENCE BOUNDARY</span>
+              <p>
+                Exact source quotes, concept assignments, and review scope
+                remain inspectable.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section
+        class="view"
+        id="view-procedures"
+        aria-labelledby="procedures-title"
+        hidden
+      >
+        <div class="section-heading">
+          <div>
+            <span class="section-index"
+              >PROCEDURES / PORTABLE CONFIGURATION</span
+            >
+            <h2 id="procedures-title">Define the procedure, keep the trace.</h2>
+          </div>
+          <p>
+            Import, edit, validate, and export declarative procedures. Browser
+            edits stay local until you start a run.
+          </p>
+        </div>
+        <div class="procedure-page">
+          <div>
+            <div id="procedure-library" class="procedure-library"></div>
+            <label class="import-box" for="procedure-input"
+              ><span class="small-label">PORTABLE CONTRACT / JSON</span
+              ><strong>Import a procedure</strong
+              ><span>Schema-checked and browser-local.</span
+              ><input
+                id="procedure-input"
+                type="file"
+                accept="application/json,.json"
+            /></label>
+            <p class="inline-note" id="import-note" aria-live="polite"></p>
+          </div>
+          <article
+            class="procedure-inspector"
+            id="procedure-inspector"
+          ></article>
+        </div>
+      </section>
+
+      <section
+        class="view"
+        id="view-examples"
+        aria-labelledby="examples-title"
+        hidden
+      >
+        <div class="section-heading">
+          <div>
+            <span class="section-index">EXAMPLES / PUBLISHED ARTIFACTS</span>
+            <h2 id="examples-title">Inspect the output.</h2>
+          </div>
+          <p>
+            Original engineering material and a separate SAMP-format assessment.
+            Both are published examples, not live generation.
+          </p>
+        </div>
+        <div class="example-switch" role="tablist" aria-label="Example output">
+          <button
+            type="button"
+            role="tab"
+            id="example-engineering-tab"
+            aria-controls="example-engineering"
+            aria-selected="true"
+          >
+            Engineering field guide</button
+          ><button
+            type="button"
+            role="tab"
+            id="example-samp-tab"
+            aria-controls="example-samp"
+            aria-selected="false"
+          >
+            SAMP assessment
+          </button>
+        </div>
+        <div
+          id="example-engineering"
+          class="example-panel"
+          role="tabpanel"
+          aria-labelledby="example-engineering-tab"
+        >
+          <p class="loading">Loading the inspectable example…</p>
+        </div>
+        <div
+          id="example-samp"
+          class="example-panel"
+          role="tabpanel"
+          aria-labelledby="example-samp-tab"
+          hidden
+        >
+          <p class="loading">Loading the SAMP example…</p>
+        </div>
+      </section>
+
+      <section
+        class="view"
+        id="view-method"
+        aria-labelledby="method-title"
+        hidden
+      >
+        <div class="section-heading">
+          <div>
+            <span class="section-index"
+              >ARCHITECTURE / EXECUTED & PROPOSED</span
+            >
+            <h2 id="method-title">
+              A production pipeline with a research frontier.
+            </h2>
+          </div>
+          <p>
+            The current engine builds traceable artifacts. Reusable learning
+            methods and persistent memory are directions for evaluation, not
+            deployed capabilities.
+          </p>
+        </div>
+        <div class="architecture-strip">
+          <span>EXECUTED PIPELINE</span>
+          <div>
+            Source units <b>→</b> extracted ideas <b>→</b> semantic merge
+            <b>→</b> curriculum <b>→</b> authored output <b>→</b> review
+          </div>
+        </div>
+        <div class="method-steps">
+          <article>
+            <span>01 / INPUT</span>
+            <h3>Address source units</h3>
+            <p>
+              Filename, heading, locator, and original passage stay available.
+              PDF text extraction is limited by figures and layout.
+            </p>
+          </article>
+          <article>
+            <span>02 / SEMANTICS</span>
+            <h3>Ground concepts</h3>
+            <p>
+              Exact quotes are validated against source units. They establish
+              provenance, while interpretation still needs evaluation.
+            </p>
+          </article>
+          <article>
+            <span>03 / CURRICULUM</span>
+            <h3>Assign or defer</h3>
+            <p>
+              Extracted concepts enter a lesson plan or an explicit deferral.
+              Coverage describes assigned extraction, not complete
+              understanding.
+            </p>
+          </article>
+          <article>
+            <span>04 / DELIVERY</span>
+            <h3>Publish forms</h3>
+            <p>
+              Study guide, progressive assessment, oral scenario, and audio
+              script share a base lesson bundle.
+            </p>
+          </article>
+        </div>
+        <div class="research-boundary">
+          <div>
+            <span class="section-index">PROPOSED / NOT CURRENT RUNTIME</span>
+            <h3>Reusable methods + learner memory</h3>
+          </div>
+          <p>
+            A future layer could compare procedures across collections, track
+            learner evidence over time, and adapt sequencing. This release does
+            not persist a learner model or demonstrate transfer. The published
+            build supports inspecting the transformations and evaluating where
+            that layer would connect.
+          </p>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="footer-brand">
+        Lamina <span>/ source-grounded learning</span>
+      </div>
+      <div>
+        <a href="workbench/">Study reader</a
+        ><a
+          href="https://github.com/FadiBahodi/lamina"
+          rel="noopener noreferrer"
+          >Source on GitHub</a
+        ><a
+          href="https://github.com/FadiBahodi/lamina#run-the-production-studio"
+          rel="noopener noreferrer"
+          >Run locally</a
+        >
+      </div>
+      <p>
+        Original public examples. Procedures are reusable; claims remain open to
+        inspection.
+      </p>
+    </footer>
+  </body>
+</html>

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lamina-engine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Evidence-preserving document pipelines for deliberate learning."
 requires-python = ">=3.11"
 license = "MIT"
@@ -15,6 +15,7 @@ dependencies = []
 
 [project.optional-dependencies]
 pdf = ["pypdf>=5,<7", "reportlab>=4,<5"]
+test = ["pytest>=8,<10"]
 
 [project.scripts]
 lamina = "lamina.cli:main"
@@ -27,4 +28,4 @@ Documentation = "https://github.com/FadiBahodi/lamina/tree/main/docs"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lamina = ["web/*", "web/assets/*", "demo/*", "demo/**/*"]
+lamina = ["web/*", "web/assets/*", "demo/*", "demo/**/*", "studio/*", "studio/assets/*"]

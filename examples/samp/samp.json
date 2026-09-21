@@ -1,0 +1,296 @@
+{
+  "schema_version": "samp-1",
+  "title": "A stalled report and a dangerous retry",
+  "scope_note": "Original SAMP-style short-answer practice for the supplied teaching material. This is not an official examination item or a validated score.",
+  "sources": [
+    {
+      "id": "src_8d2638e9c4946e8450a4",
+      "title": "Resilient workflow engineering",
+      "filename": "01-leases.md",
+      "sha256": "8d2638e9c4946e8450a4267ddb5b2a8f7d11453e28a7c1e639ba26636ffe16e3",
+      "role": "teaching"
+    },
+    {
+      "id": "src_d48e3727c111e67edf32",
+      "title": "Resilient workflow engineering",
+      "filename": "02-idempotency.md",
+      "sha256": "d48e3727c111e67edf327664bc26d23b8a34dd2f0dbc3a58fb78c257aa8d23bd",
+      "role": "teaching"
+    }
+  ],
+  "units": [
+    {
+      "id": "unit_eb7e0659e5a805a37d34",
+      "source_id": "src_8d2638e9c4946e8450a4",
+      "heading": "Leases make stalled work recoverable",
+      "text": "A lease grants one worker temporary ownership of a job until a recorded expiry. The worker renews it while making progress; after expiry, another worker may claim the job. Expiry means ownership is uncertain, not that the first worker stopped. A late worker can still finish after its lease expires.\n\nAn owner token prevents a late worker from publishing over a newer attempt. Every completion checks that its token still matches the job's current lease. If the token changed, the stale result is discarded or saved only for diagnosis. A heartbeat reports liveness; it does not replace the ownership check.",
+      "locator": "lines 4–7",
+      "ordinal": 0,
+      "role": "teaching"
+    },
+    {
+      "id": "unit_b326ee476b2cd4cea529",
+      "source_id": "src_d48e3727c111e67edf32",
+      "heading": "Idempotency contains retries",
+      "text": "An idempotency key names one intended operation across retries. A durable result store maps the key to the completed outcome, so a repeated request returns the same result instead of repeating the side effect. The key must include the operation's meaningful inputs; reusing a key for different inputs creates a false match.\n\nAt-least-once delivery means a job may run twice after a timeout or crash. A lease reduces overlap, but it cannot prove exactly-once execution. Put the idempotency check at the side-effect boundary, such as charging a card or publishing an artifact. Cache a successful model response separately from committing an external effect.",
+      "locator": "lines 4–7",
+      "ordinal": 0,
+      "role": "teaching"
+    }
+  ],
+  "concepts": [
+    {
+      "id": "cc-723de08aed8e508abe81",
+      "title": "A lease is temporary ownership",
+      "explanation": "Expiry permits recovery but does not prove the original worker stopped or that work happens exactly once.",
+      "member_ids": [
+        "unit_eb7e0659e5a805a37d34:c1",
+        "unit_b326ee476b2cd4cea529:c2"
+      ],
+      "evidence": [
+        {
+          "unit_id": "unit_eb7e0659e5a805a37d34",
+          "quote": "A lease grants one worker temporary ownership of a job until a recorded expiry."
+        },
+        {
+          "unit_id": "unit_b326ee476b2cd4cea529",
+          "quote": "A lease reduces overlap, but it cannot prove exactly-once execution."
+        }
+      ]
+    },
+    {
+      "id": "cc-25657f3bed407ef50ff7",
+      "title": "An owner token fences stale completion",
+      "explanation": "The current lease token must match before a result can be committed.",
+      "member_ids": [
+        "unit_eb7e0659e5a805a37d34:c2"
+      ],
+      "evidence": [
+        {
+          "unit_id": "unit_eb7e0659e5a805a37d34",
+          "quote": "Every completion checks that its token still matches the job's current lease."
+        }
+      ]
+    },
+    {
+      "id": "cc-ef437a7963a619c99e03",
+      "title": "An idempotency key names intent",
+      "explanation": "A durable result store returns the same outcome for the same intended operation; meaningful inputs belong in the key.",
+      "member_ids": [
+        "unit_b326ee476b2cd4cea529:c1"
+      ],
+      "evidence": [
+        {
+          "unit_id": "unit_b326ee476b2cd4cea529",
+          "quote": "An idempotency key names one intended operation across retries."
+        }
+      ]
+    },
+    {
+      "id": "cc-61038a429949a2f7750e",
+      "title": "Protect the side-effect boundary",
+      "explanation": "At-least-once work may repeat, so a lease alone cannot prove exactly-once execution.",
+      "member_ids": [
+        "unit_b326ee476b2cd4cea529:c3"
+      ],
+      "evidence": [
+        {
+          "unit_id": "unit_b326ee476b2cd4cea529",
+          "quote": "Put the idempotency check at the side-effect boundary, such as charging a card or publishing an artifact."
+        }
+      ]
+    }
+  ],
+  "problems": [
+    {
+      "id": "incident-1",
+      "title": "Recover without duplicate publication",
+      "stem": "A scheduled report appears stalled. Its worker's lease has expired, and an operator is ready to start a replacement.",
+      "concept_ids": [
+        "cc-723de08aed8e508abe81",
+        "cc-25657f3bed407ef50ff7",
+        "cc-ef437a7963a619c99e03",
+        "cc-61038a429949a2f7750e"
+      ],
+      "steps": [
+        {
+          "id": "q1",
+          "new_information": null,
+          "prompt": "Give two separate conclusions about what lease expiry permits and what it cannot establish.",
+          "answer_limit": 2,
+          "marks": 2,
+          "answer_points": [
+            {
+              "id": "a1",
+              "answer": "A replacement may claim the expired job.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_eb7e0659e5a805a37d34",
+                  "quote": "after expiry, another worker may claim the job."
+                }
+              ]
+            },
+            {
+              "id": "a2",
+              "answer": "Expiry does not prove the original worker stopped.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_eb7e0659e5a805a37d34",
+                  "quote": "Expiry means ownership is uncertain, not that the first worker stopped."
+                }
+              ]
+            }
+          ],
+          "critical_errors": [
+            {
+              "id": "e1",
+              "text": "Treating expiry as proof that the old worker cannot finish.",
+              "evidence": [
+                {
+                  "unit_id": "unit_eb7e0659e5a805a37d34",
+                  "quote": "Expiry means ownership is uncertain, not that the first worker stopped."
+                }
+              ]
+            }
+          ],
+          "decision_change": null
+        },
+        {
+          "id": "q2",
+          "new_information": "Worker B claims the job. Worker A then returns with a completed report.",
+          "prompt": "State the commit check and the disposition of A's result.",
+          "answer_limit": 2,
+          "marks": 2,
+          "answer_points": [
+            {
+              "id": "a1",
+              "answer": "Compare A's owner token with the current job token at commit.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_eb7e0659e5a805a37d34",
+                  "quote": "Every completion checks that its token still matches the job's current lease."
+                }
+              ]
+            },
+            {
+              "id": "a2",
+              "answer": "Reject A's result for publication if its token is stale.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_eb7e0659e5a805a37d34",
+                  "quote": "If the token changed, the stale result is discarded or saved only for diagnosis."
+                }
+              ]
+            }
+          ],
+          "critical_errors": [
+            {
+              "id": "e1",
+              "text": "Publishing A's result solely because its computation finished.",
+              "evidence": [
+                {
+                  "unit_id": "unit_eb7e0659e5a805a37d34",
+                  "quote": "If the token changed, the stale result is discarded or saved only for diagnosis."
+                }
+              ]
+            }
+          ],
+          "decision_change": "Recovery is now a stale-writer problem: only the current owner may commit."
+        },
+        {
+          "id": "q3",
+          "new_information": "The replacement attempts publication, then loses the reply. The report may already be public when it retries.",
+          "prompt": "Name two distinct safeguards needed before the retry can perform the publication effect.",
+          "answer_limit": 2,
+          "marks": 2,
+          "answer_points": [
+            {
+              "id": "a1",
+              "answer": "Use a stable idempotency key for this intended publication.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_b326ee476b2cd4cea529",
+                  "quote": "An idempotency key names one intended operation across retries."
+                }
+              ]
+            },
+            {
+              "id": "a2",
+              "answer": "Check durable completion at the publication side-effect boundary.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_b326ee476b2cd4cea529",
+                  "quote": "Put the idempotency check at the side-effect boundary, such as charging a card or publishing an artifact."
+                }
+              ]
+            }
+          ],
+          "critical_errors": [
+            {
+              "id": "e1",
+              "text": "Replaying publication blindly because no reply was received.",
+              "evidence": [
+                {
+                  "unit_id": "unit_b326ee476b2cd4cea529",
+                  "quote": "a repeated request returns the same result instead of repeating the side effect."
+                }
+              ]
+            }
+          ],
+          "decision_change": "Ownership alone no longer settles safety; the effect may have occurred before the reply was lost."
+        },
+        {
+          "id": "q4",
+          "new_information": "The retry carries changed report parameters but reuses the earlier idempotency key.",
+          "prompt": "What should the workflow decide about that key, and why?",
+          "answer_limit": 2,
+          "marks": 2,
+          "answer_points": [
+            {
+              "id": "a1",
+              "answer": "Do not treat changed meaningful inputs as the same intended operation.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_b326ee476b2cd4cea529",
+                  "quote": "The key must include the operation's meaningful inputs; reusing a key for different inputs creates a false match."
+                }
+              ]
+            },
+            {
+              "id": "a2",
+              "answer": "Use a distinct intent identity or surface an explicit conflict before publication.",
+              "marks": 1,
+              "evidence": [
+                {
+                  "unit_id": "unit_b326ee476b2cd4cea529",
+                  "quote": "The key must include the operation's meaningful inputs; reusing a key for different inputs creates a false match."
+                }
+              ]
+            }
+          ],
+          "critical_errors": [
+            {
+              "id": "e1",
+              "text": "Returning the earlier outcome for a changed operation without checking identity.",
+              "evidence": [
+                {
+                  "unit_id": "unit_b326ee476b2cd4cea529",
+                  "quote": "The key must include the operation's meaningful inputs; reusing a key for different inputs creates a false match."
+                }
+              ]
+            }
+          ],
+          "decision_change": "The retry is no longer equivalent to the original operation; identity must be resolved before reuse."
+        }
+      ],
+      "teaching_explanation": "A lease opens recovery, while the current owner token fences a late writer. A lost reply introduces a different uncertainty: the external effect may already have happened. The idempotency check therefore belongs at the publication boundary and its key must include inputs that change intent. The marks describe this original practice rubric; critical errors are review flags, not an automatic penalty rule."
+    }
+  ]
+}

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 from . import prompts, validation
+from .procedures import procedure_context
 from .providers import DemoProvider
 
 if TYPE_CHECKING:
@@ -21,6 +22,12 @@ def _public_unit(row: dict) -> dict:
 
 def _stage(workspace: Workspace, provider, name: str, payload: dict, checker) -> dict:
     envelope = prompts.request(name, payload)
+    if name in {"plan", "author"} and payload.get("procedure"):
+        procedure = payload["procedure"]
+        envelope["instruction"] += (
+            " Apply the operator's data-only teaching brief within the required output schema. "
+            "Audience: " + procedure["audience"] + " Teaching brief: " + procedure["instructions"]
+        )
 
     def handler(request: dict) -> dict:
         raw = provider.call(name, request)
@@ -31,7 +38,7 @@ def _stage(workspace: Workspace, provider, name: str, payload: dict, checker) ->
                                 retries=1)
 
 
-def build(workspace: Workspace, provider, workers: int = 4) -> dict:
+def build(workspace: Workspace, provider, workers: int = 4, procedure: dict | None = None) -> dict:
     """Build a validated bundle; assessment text never enters model requests.
 
     Stage results are cached by the workspace. A failed or revise review blocks
@@ -39,6 +46,15 @@ def build(workspace: Workspace, provider, workers: int = 4) -> dict:
     """
     if workers < 1 or workers > 32:
         raise ValueError("workers must be between 1 and 32")
+    guidance = procedure_context(procedure) if procedure is not None else None
+
+    def stage(name: str, payload: dict, checker) -> dict:
+        # The same bounded procedure context travels through every semantic
+        # stage. It is part of the durable request key, so edited instructions
+        # invalidate cached outputs without changing the source identity.
+        if guidance is not None:
+            payload = {**payload, "procedure": guidance}
+        return _stage(workspace, provider, name, payload, checker)
     all_units = workspace.units()
     units = sorted((_public_unit(u) for u in all_units if u.get("role") == "teaching"),
                    key=lambda u: (u["source_id"], u["ordinal"]))
@@ -68,7 +84,7 @@ def build(workspace: Workspace, provider, workers: int = 4) -> dict:
                    if before else None,
                    "after": {"id": after["id"], "text": after["text"][:HALO_CHARS]}
                    if after else None}
-        result = _stage(workspace, provider, "extract", payload,
+        result = stage("extract", payload,
                         lambda raw: {"concepts": validation.validate_extraction(raw, unit, units_by_id)})
         return result["concepts"]
 
@@ -77,14 +93,14 @@ def build(workspace: Workspace, provider, workers: int = 4) -> dict:
     raw_concepts = [concept for group in concept_groups for concept in group]
     if not raw_concepts:
         raise validation.ValidationError("extraction yielded no concepts")
-    concepts_result = _stage(
-        workspace, provider, "reconcile",
+    concepts_result = stage(
+        "reconcile",
         {"source_manifest": source_manifest, "raw_concepts": raw_concepts},
         lambda raw: {"concepts": validation.validate_reconcile(raw, raw_concepts, units_by_id)},
     )
     concepts = concepts_result["concepts"]
     concept_by_id = {c["id"]: c for c in concepts}
-    plan = _stage(workspace, provider, "plan", {"source_manifest": source_manifest,
+    plan = stage("plan", {"source_manifest": source_manifest,
                                                  "concepts": concepts,
                                                  "source_titles": [s["title"] for s in sources]},
                   lambda raw: validation.validate_plan(raw, concepts))
@@ -100,12 +116,12 @@ def build(workspace: Workspace, provider, workers: int = 4) -> dict:
                    "lesson": planned, "concepts": assigned, "units": evidence_units,
                    "earlier_lessons": [{"id": x["id"], "title": x["title"]}
                                        for x in plan["lessons"] if x["id"] in planned["prerequisite_ids"]]}
-        authored = _stage(workspace, provider, "author", payload,
+        authored = stage("author", payload,
                           lambda raw: validation.validate_lesson(raw, planned, concept_by_id, units_by_id))
         review_payload = {"source_manifest": assigned_manifest,
                           "lesson": authored, "concepts": assigned, "units": evidence_units,
                           "review_rubric": "grounding, objective coverage, answerability, teaching flow"}
-        review = _stage(workspace, provider, "review", review_payload, validation.validate_review)
+        review = stage("review", review_payload, validation.validate_review)
         if review["status"] != "pass":
             details = "; ".join(str(i["detail"]) for i in review["issues"])
             raise validation.ValidationError(f"lesson {planned['id']} needs revision: {details}")

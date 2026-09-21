@@ -287,7 +287,7 @@
     add(
       host,
       hero(
-        "A STUDY SPACE WITH A SOURCE",
+        "GENERATED GUIDE",
         bundle.title || "Learn with the grain of the source.",
         intro,
         `${lessons().length} ${lessons().length === 1 ? "lesson" : "lessons"}`,

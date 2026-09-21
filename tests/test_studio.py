@@ -1,8 +1,10 @@
 import base64
+import copy
 import io
 import json
 import threading
 import time
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -41,6 +43,45 @@ def call(server, path, *, body=None, headers=None):
         return error.code, error.headers, error.read()
 
 
+def method_definition():
+    return json.loads((Path(__file__).parents[1] / "examples/methods/field-guide.json").read_text())
+
+
+class MethodFixtureProvider:
+    identity = "studio-method-fixture-v1"
+
+    def __init__(self):
+        self.calls = []
+
+    def call(self, stage, payload):
+        assert stage == payload["stage"] == "method_node"
+        self.calls.append(copy.deepcopy(payload))
+        data = payload["input"]
+        node = data["node"]["id"]
+        if node == "site-read":
+            return {"finding": "site: " + data["task"]["site_notes"]}
+        if node == "plant-read":
+            return {"finding": "plants: " + data["task"]["plant_notes"]}
+        return {"guide": " | ".join([data["dependencies"]["site-read"]["finding"],
+                                      data["dependencies"]["plant-read"]["finding"],
+                                      *[item["observation"]["note"] for item in data["experience"]]])}
+
+
+def finished_run(server, run_id):
+    for _ in range(100):
+        status = json.loads(call(server, f"/api/runs/{run_id}")[2])
+        if status["status"] in {"ready", "failed"}:
+            return status
+        time.sleep(0.01)
+    raise AssertionError("background method did not finish")
+
+
+def start_method(server, method, task):
+    code, _, raw = call(server, "/api/method-runs", body={"method": method, "task": task})
+    assert code == 202, raw
+    return finished_run(server, json.loads(raw)["id"])
+
+
 def test_studio_status_upload_and_no_adapter(studio):
     code, _, raw = call(studio, "/api/status")
     assert code == 200
@@ -57,6 +98,131 @@ def test_studio_status_upload_and_no_adapter(studio):
     assert all("text" not in s for s in status["sources"])
     code, _, raw = call(studio, "/api/runs", body={"procedure": BUILTINS[0]})
     assert code == 409 and "adapter" in json.loads(raw)["error"].lower()
+    code, _, raw = call(studio, "/api/method-runs", body={"method": method_definition(), "task": {}})
+    assert code == 409 and "adapter" in json.loads(raw)["error"].lower()
+
+
+def test_method_http_validate_import_run_cache_change_and_observation(studio):
+    method = method_definition()
+    code, _, raw = call(studio, "/api/methods/validate", body={"method": method})
+    assert code == 200
+    canonical = json.loads(raw)["method"]
+    assert canonical["nodes"][0]["observation_ids"] == []
+    assert canonical["nodes"][0]["task_keys"] == ["site_notes"]
+    studio.provider = MethodFixtureProvider()
+    code, _, raw = call(studio, "/api/sources", body={"files": [
+        {"name": "garden.md", "role": "teaching", "text": "# Site\n\nMorning shade, one tap."}]})
+    assert code == 201
+    task = {"site_notes": "Morning shade, one tap.", "plant_notes": "Mint", "audience": "Volunteers"}
+    first = start_method(studio, method, task)
+    assert first["kind"] == "method" and first["status"] == "ready"
+    assert [first["receipt"]["nodes"][node]["status"] for node in ("site-read", "plant-read", "guide")] == ["executed"] * 3
+    assert len(studio.provider.calls) == 3
+    output = first["outputs"]["receipt"]
+    code, headers, raw = call(studio, output)
+    assert code == 200 and "application/json" in headers["Content-Type"]
+    assert json.loads(raw)["run_id"] == first["receipt"]["run_id"]
+    second = start_method(studio, method, task)
+    assert [second["receipt"]["nodes"][node]["status"] for node in ("site-read", "plant-read", "guide")] == ["cached"] * 3
+    assert len(studio.provider.calls) == 3
+    code, _, _ = call(studio, "/api/sources", body={"files": [
+        {"name": "garden-revised.md", "role": "teaching", "text": "# Site\n\nAfternoon shade, one tap."}]})
+    assert code == 201
+    changed = {**task, "site_notes": "Afternoon shade, one tap."}
+    third = start_method(studio, method, changed)
+    assert [third["receipt"]["nodes"][node]["status"] for node in ("site-read", "plant-read", "guide")] == ["executed", "cached", "executed"]
+    assert len(studio.provider.calls) == 5
+    assert "Afternoon shade" in third["receipt"]["results"]["guide"]["guide"]
+    observation_body = {"run_id": third["id"], "node_id": "guide", "note": "Mention the western entrance.",
+                        "outcome": "needs clarification", "applicability": "afternoon site note"}
+    code, _, raw = call(studio, "/api/method-observations", body=observation_body)
+    assert code == 201
+    recorded = json.loads(raw)
+    assert recorded["observation"]["family"] == "field-guides"
+    assert recorded["observation"]["task_digest"] == third["receipt"]["task_digest"]
+    guided = copy.deepcopy(method)
+    guided["version"] = "1.1"
+    guided["nodes"][2]["observation_ids"] = [recorded["observation_id"]]
+    fourth = start_method(studio, guided, changed)
+    assert [fourth["receipt"]["nodes"][node]["status"] for node in ("site-read", "plant-read", "guide")] == ["cached", "cached", "executed"]
+    assert "western entrance" in fourth["receipt"]["results"]["guide"]["guide"]
+    assert studio.provider.calls[-1]["input"]["experience"][0]["observation"]["observation_id"] == recorded["observation_id"]
+
+
+def test_method_http_rejects_malformed_foreign_origin_and_unfinished_observation(studio):
+    method = method_definition()
+    assert call(studio, "/api/methods/validate", body={"method": method, "adapter": "arbitrary"})[0] == 400
+    malformed = copy.deepcopy(method)
+    malformed["nodes"][0]["depends_on"] = ["missing"]
+    assert call(studio, "/api/methods/validate", body={"method": malformed})[0] == 400
+    studio.provider = MethodFixtureProvider()
+    assert call(studio, "/api/method-runs", body={"method": method, "task": {}, "path": "../private"})[0] == 400
+    assert call(studio, "/api/method-runs", body={"method": method, "task": []})[0] == 400
+    assert call(studio, "/api/method-runs", body={"method": method, "task": {"irrelevant": "x"}})[0] == 400
+    assert call(studio, "/api/method-runs", body={"method": method, "task": {}},
+                headers={"Origin": "http://evil.example"})[0] == 403
+    assert call(studio, "/api/methods/validate", body={"method": method},
+                headers={"Host": "evil.example"})[0] == 403
+    assert call(studio, "/api/method-observations", body={"run_id": "f" * 32, "node_id": "guide",
+                "note": "n", "outcome": "o", "applicability": "a"})[0] == 404
+    task = {"site_notes": "shade", "plant_notes": "mint", "audience": "volunteers"}
+    finished = start_method(studio, method, task)
+    assert call(studio, "/api/method-observations", body={"run_id": finished["id"], "node_id": "unknown",
+                "note": "n", "outcome": "o", "applicability": "a"})[0] == 400
+    assert call(studio, "/api/method-observations", body={"run_id": finished["id"], "node_id": "guide",
+                "note": "n", "outcome": "o", "applicability": "a", "adapter": "ignored"})[0] == 400
+    assert call(studio, "/api/method-observations", body={"run_id": finished["id"], "node_id": "guide",
+                "note": "n", "outcome": "o", "applicability": "a"},
+                headers={"Origin": "http://evil.example"})[0] == 403
+
+
+def test_method_and_guide_share_one_active_run_limit(studio):
+    entered, release = threading.Event(), threading.Event()
+
+    class WaitingProvider(MethodFixtureProvider):
+        def call(self, stage, payload):
+            entered.set()
+            assert release.wait(timeout=2)
+            return super().call(stage, payload)
+
+    studio.provider = WaitingProvider()
+    method = method_definition()
+    task = {"site_notes": "shade", "plant_notes": "mint", "audience": "volunteers"}
+    code, _, raw = call(studio, "/api/method-runs", body={"method": method, "task": task})
+    assert code == 202
+    run_id = json.loads(raw)["id"]
+    try:
+        assert entered.wait(timeout=1)
+        assert call(studio, "/api/method-runs", body={"method": method, "task": task})[0] == 409
+        assert call(studio, "/api/runs", body={"procedure": BUILTINS[0]})[0] == 409
+    finally:
+        release.set()
+    assert finished_run(studio, run_id)["status"] == "ready"
+
+
+def test_failed_method_receipt_is_inspectable_without_adapter_error_leak(studio, capsys):
+    class FailingProvider:
+        identity = "failing-fixture"
+
+        def call(self, stage, payload):
+            raise RuntimeError("secret-token and /Users/private/source.txt in adapter stderr")
+
+    studio.provider = FailingProvider()
+    method = method_definition()
+    task = {"site_notes": "shade", "plant_notes": "mint", "audience": "volunteers"}
+    failed = start_method(studio, method, task)
+    assert failed["status"] == "failed"
+    assert failed["receipt"]["status"] == "failed"
+    assert failed["receipt"]["nodes"]["guide"]["status"] == "skipped"
+    visible = json.dumps(failed)
+    assert "secret-token" not in visible and "/Users/private" not in visible
+    assert all(node["error"] == "Node failed; see the local Studio console"
+               for node in failed["receipt"]["nodes"].values() if node["status"] == "failed")
+    code, _, raw = call(studio, failed["outputs"]["receipt"])
+    assert code == 200
+    assert b"secret-token" not in raw and b"/Users/private" not in raw
+    assert json.loads(raw)["status"] == "failed"
+    assert "secret-token" in capsys.readouterr().out
 
 
 def test_studio_rejects_origin_paths_and_non_json(studio):

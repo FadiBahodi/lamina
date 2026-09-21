@@ -13,6 +13,7 @@ def prepare_studio(output: Path, with_pdf: bool = False) -> Path:
     All semantic output here is the bundled curated fixture. This helper never
     calls a remote model and never reads an operator's working collection.
     """
+    from .method_example import method_demo
     from .export import export_bundle
     from .ingest import ingest_paths
     from .pipeline import build
@@ -41,6 +42,7 @@ def prepare_studio(output: Path, with_pdf: bool = False) -> Path:
             bundle["downloads"]["pdf"] = "study-guide.pdf"
         export_bundle(bundle, reader)
         export_samp(generate_samp(bundle, provider, workspace), output / "examples" / "samp")
+    (output / "method-example.json").write_text(json.dumps(method_demo(), indent=2) + "\n", encoding="utf-8")
     return output
 
 

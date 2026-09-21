@@ -11,6 +11,7 @@ from .store import canonical
 
 _ID = re.compile(r"[a-z][a-z0-9-]{0,63}\Z")
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
+_OBSERVATION_ID = re.compile(r"[0-9a-f]{32}\Z")
 
 
 def _text(value: object, name: str, maximum: int = 4000) -> str:
@@ -72,8 +73,8 @@ def validate_method(value: dict) -> dict:
     clean_nodes, seen = [], set()
     for raw in nodes:
         required = {"id", "role", "instructions", "lane", "depends_on", "input"}
-        if not isinstance(raw, dict) or not required <= set(raw) or set(raw) - required - {"task_keys", "expected_shape"}:
-            raise ValueError("each node needs id, role, instructions, lane, depends_on, input; task_keys and expected_shape are optional")
+        if not isinstance(raw, dict) or not required <= set(raw) or set(raw) - required - {"task_keys", "expected_shape", "observation_ids"}:
+            raise ValueError("each node needs id, role, instructions, lane, depends_on, input; task_keys, expected_shape, and observation_ids are optional")
         nid = _id(raw["id"], "node.id")
         if nid in seen:
             raise ValueError(f"duplicate node id: {nid}")
@@ -96,10 +97,16 @@ def validate_method(value: dict) -> dict:
             raise ValueError(f"{nid}.task_keys must be a unique list of top-level task keys")
         if task_keys is not None and len(task_keys) != len(set(task_keys)):
             raise ValueError(f"{nid}.task_keys has duplicates")
+        observation_ids = raw.get("observation_ids", [])
+        if (not isinstance(observation_ids, list) or len(observation_ids) > 20 or
+            any(not isinstance(oid, str) or not _OBSERVATION_ID.fullmatch(oid) for oid in observation_ids) or
+            len(observation_ids) != len(set(observation_ids))):
+            raise ValueError(f"{nid}.observation_ids must be unique local observation IDs (at most 20)")
         clean_nodes.append({"id": nid, "role": _text(raw["role"], f"{nid}.role", 160),
                             "instructions": _text(raw["instructions"], f"{nid}.instructions"),
                             "lane": lane, "depends_on": deps, "input": raw["input"],
-                            "task_keys": task_keys, "expected_shape": expected_shape})
+                            "task_keys": task_keys, "expected_shape": expected_shape,
+                            "observation_ids": observation_ids})
     for node in clean_nodes:
         if any(dep not in seen for dep in node["depends_on"]):
             raise ValueError(f"{node['id']} has an unknown dependency")

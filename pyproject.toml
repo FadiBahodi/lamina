@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lamina-engine"
-version = "0.3.0"
-description = "Evidence-preserving document pipelines for deliberate learning."
+version = "0.4.0"
+description = "Reusable model workflows with explicit context, parallel execution, and selective revision."
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Fadi Bahodi"}]

@@ -1,32 +1,20 @@
 # Lamina
 
-[**Explore the examples**](https://fadibahodi.github.io/lamina/) · [Run locally](#run-lamina-locally) · [Reusable methods](docs/methods.md) · [Design constraints](docs/design-constraints.md) · [Measurement](docs/measurement.md)
+[Design paper (PDF)](https://fadibahodi.github.io/lamina/assets/lamina-technical-paper.pdf) · [Interactive design and workbench](https://fadibahodi.github.io/lamina/) · [Download v0.4](https://github.com/FadiBahodi/lamina/releases/tag/v0.4.0)
 
-**Turn source material into useful work. Keep the method that made it.**
+Lamina is an open-source Python engine for document production workflows. You give it source material and an adapter to a model. The model reads, plans, and writes. Lamina defines what each call receives, schedules independent jobs, and reuses completed results when their inputs have not changed. Its guide pipeline also carries source references into the finished work.
 
-Lamina is an open engine and local app for turning documents into connected guides, decision practice, teaching scripts, and reusable production methods. A model does the interpretation and writing. Lamina coordinates the work, carries evidence between steps, remembers completed results, and makes changes inspectable.
+The first working application turns documents into a source-linked guide with optional practice questions, a local reader, and print exports. A method workbench imports and runs custom graphs of jobs from JSON, displays each node’s result, and attaches review notes to later runs. They share the adapter and SQLite workspace, but the guide builder does not yet run on a user-defined method graph. [Architecture status](docs/architecture-status.md) maps that boundary and the next integration choices.
 
-![Lamina: original source material, connected explanation, and decision practice](docs/overview.png)
+![Sources, guide, and method execution in Lamina](docs/overview.png)
 
-Start with the [interactive example](https://fadibahodi.github.io/lamina/). Read a source passage about worker leases, inspect the illustrated explanation it supports, then try an incident that changes as new evidence arrives. Download the guide as PDF or Markdown. The example is original, curated material: it demonstrates the product and its execution contract, not model performance on unseen documents.
+This matters most when the source collection or the brief changes. A team may need to update a guide after one policy page changes, reuse the rest of the work, and see which passages support the new output. Lamina keeps stage results and source locations so the team can inspect that revision. It does not currently decide whether every important source fact was found or whether the finished guide is effective.
 
-## What someone can do with it
+## Run it locally
 
-| Starting point | Result |
-| --- | --- |
-| A collection of overlapping notes | A connected guide with source passages, explicit deferrals, and practice suited to the material |
-| A source-backed operational problem | Progressive decision questions, answer limits, and a separate marking sheet |
-| A process worth reusing | An importable method defining the jobs, their dependencies, worker context, and resource limits |
-| A changed source or instruction | A new run that can reuse unchanged work, with a record of what executed again |
-| An observation about what worked or failed | A local, scoped experience record that a later operator or agent can retrieve |
+Python 3.11 or newer is required. The local app includes a curated offline example. To process your own documents, start it with an adapter that you configure outside the browser.
 
-The browser runs the document-to-guide pipeline. The command line also runs custom method graphs. Both use your configured adapter; importing a method does not install code or choose a model service. The public site is a read-only example and procedure editor. To process your documents, run the local app.
-
-## Run Lamina locally
-
-Requires Python 3.11 or newer.
-
-```bash
+```sh
 git clone https://github.com/FadiBahodi/lamina.git
 cd lamina
 python3 -m venv .venv
@@ -35,71 +23,21 @@ python -m pip install -e '.[pdf]'
 lamina app --workspace .lamina --port 8048
 ```
 
-Open `http://127.0.0.1:8048`. On Windows, activate with `.venv\Scripts\activate`. The app includes the offline example. Enable generation with an adapter configured as described in [Adapters](docs/adapters.md):
+Open `http://127.0.0.1:8048`. On Windows, activate the environment with `.venv\Scripts\activate`. For model-backed generation, configure the example [JSON command adapter](examples/adapter/README.md), then start the app with it:
 
-```bash
+```sh
 lamina app --workspace .lamina --port 8048 \
   --adapter 'python examples/adapter/http_chat.py'
 ```
 
-Endpoint, model, credentials, and executable selection stay in local process configuration. `lamina studio` remains an alias for compatibility. See [operating modes](docs/procedures.md) for import and output details.
+The public [interactive example](https://fadibahodi.github.io/lamina/) includes a method editor and recorded executions; actual model calls run in the downloaded local application. It uses original engineering material and curated output, so it shows the reader and inspection path without claiming that arbitrary uploads were generated on the hosted site. The local app accepts Markdown, text, and PDFs with extractable text. It keeps model credentials in the adapter's process configuration.
 
-## Give a new agent a method it can run
+## Build a guide from documents
 
-A method explains when it applies and defines a graph of jobs. Each job has instructions, a resource lane, explicit prerequisites, and selected task fields. A writer can receive the completed work it depends on without inheriting every unrelated source or another worker's unfinished output.
+The command line exposes the same guide pipeline. `ingest` stores source hashes, locators, and text units. `build` asks the configured adapter to extract ideas, reconcile overlaps, plan lessons, write them, and review them. `export` renders the validated bundle.
 
-```mermaid
-flowchart LR
-  A[Site notes] --> B[Read site constraints]
-  C[Plant notes] --> D[Read plant needs]
-  B --> E[Write volunteer guide]
-  D --> E
-  F[Audience] --> E
-```
-
-Run the small, offline mechanism demonstration:
-
-```bash
-python examples/methods/demo.py
-lamina method validate examples/methods/field-guide.json
-```
-
-It executes two independent readings and a dependent guide. Changing only the site notes reuses the plant reading and reruns the affected work. A different task uses the same method. The adapter in this example is a deterministic fixture; no account or model call is needed.
-
-For real generation, provide a task JSON object and your adapter:
-
-```bash
-lamina method run --method examples/methods/field-guide.json \
-  --task my-visit.json --workspace .lamina \
-  --adapter 'python examples/adapter/http_chat.py' --output run.json
-lamina method experience --family field-guides --workspace .lamina
-```
-
-[Methods and memory](docs/methods.md) defines the task schema, recording observations, cache behavior, and failure recovery. Selection and revision are currently explicit operator or agent decisions. Lamina does not automatically turn a critique into a new rule or claim that retained text is learned expertise.
-
-## The engineering underneath
-
-**Dependencies govern parallelism.** Ready jobs execute within global worker and per-lane concurrency limits. Synthesis waits for its prerequisites. A failed dependency blocks its descendants while independent work can finish.
-
-**Context is an explicit input.** Custom jobs receive selected task fields and direct prerequisite results. Guide authors receive a shared lesson route and exact prerequisite evidence. That is planned context; it is not a claim that every writer has read the other writers' finished prose.
-
-**Reuse follows meaning, not just a version label.** Custom-node cache identity includes instructions, selected task data, dependency results, runtime revision, and adapter identity. Changing an unrelated branch or the method's descriptive version does not discard valid cached work. Change the adapter revision when its model or configuration changes.
-
-**Evidence checks have a defined scope.** The guide pipeline tracks source units, reconciled ideas, assignments, and exact quotations. Its validators reject missing memberships and invented quotes. They do not prove that every important idea was extracted or that an interpretation is true. Generic method jobs return JSON objects; domain validation must be supplied by the adapter or a dependent job.
-
-**Experience stays inspectable.** SQLite stores completed node results, final run receipts, and explicitly recorded observations. Receipts report executed/cached/failed/skipped nodes, context bytes, and elapsed time. There is no claim of automatic method selection, distributed scheduling, token billing, or autonomous improvement.
-
-For total service work \(W\), longest dependency path \(D\), and \(p\) workers, an ideal lower bound is:
-
-$$T \geq \max(W/p, D)$$
-
-More workers cannot remove a serial dependency. With separate resource lanes, lane demand and capacity impose additional bounds. Real latency also includes queues, provider limits, retries, and review. [Design constraints](docs/design-constraints.md) develops the cost, context, and repair model; [Measurement](docs/measurement.md) defines how to evaluate it. These equations are accounting tools, not measured speed claims.
-
-## Build and export from the command line
-
-```bash
+```sh
 lamina ingest ./notes --workspace .lamina
-lamina ingest ./held-out-questions.md --workspace .lamina --role assessment
 lamina search 'worker leases' --workspace .lamina
 lamina build --workspace .lamina \
   --adapter 'python examples/adapter/http_chat.py' --output ./site
@@ -107,25 +45,52 @@ lamina export ./site/bundle.json --format pdf --output ./guide.pdf
 lamina export ./site/bundle.json --format markdown --output ./guide.md
 ```
 
-Markdown and text are supported directly; PDF text extraction and PDF export require the optional PDF dependencies. Scanned pages need OCR outside this release. Assessment sources are held out of authoring and public export. Listen output is a script, with optional browser speech; synthesized podcasts and audio delivery QA are not included.
+Use `lamina ingest ./questions.md --workspace .lamina --role assessment` to keep evaluation material out of authoring and the public bundle. This is a source-role boundary, not an automatic exam-validity check. PDF import extracts text and rejects image-only pages; it does not interpret diagrams or table layout. The PDF export in the example requires the `pdf` installation extra.
 
-For an entirely offline guide build, use `lamina demo --output ./demo --pdf`, then `lamina serve ./demo --port 8000`. This uses the repository's curated engineering fixture.
+For a build with no model account, run `lamina demo --output ./demo`, then `lamina serve ./demo --port 8000`. That demo is a fixture for the bundled field guide. [Pipeline architecture](docs/architecture.md) explains the stages and the exact checks applied to their outputs.
 
-## What we intend to measure
+## Run a reusable method
 
-Parallel agents, citations, and reusable skills already exist elsewhere. Lamina's question is more specific: **can an unfamiliar operator reuse a production method, understand its editorial decisions, and repair a local defect with less repeated work at comparable quality?**
+A method file declares jobs, their dependencies, selected task fields, and limits on concurrent work. A job sees its own assignment and the completed results of its stated prerequisites. The method runner saves a receipt showing which jobs ran, used a cached result, failed, or were skipped. Changing one branch of a task can leave an unrelated branch cached.
 
-The [comparison](docs/comparison.md) records existing capabilities in Manus, NotebookLM, and graph runtimes. The [evaluation plan](docs/evaluation.md) separates structural checks from content quality and learning outcomes. The [systems benchmark](docs/benchmarks.md) measures local cache and queue mechanics with synthetic work. No quality-matched competitive benchmark has been completed.
+```sh
+lamina method validate examples/methods/field-guide.json
+python examples/methods/demo.py
+```
 
-The current scheduler is local, and the guide's global reconciliation and planning still have whole-collection context limits. Active browser-run tracking is in memory; durable stage results survive restart, but the browser does not automatically resume an interrupted run. A custom graph's final receipt is written when the run finishes; an interrupted process can rerun and reuse committed nodes. These boundaries matter when taking a useful prototype to scale.
+In the browser, **Workbench → Custom workflow** lets you import a method, edit a task, inspect the graph, run it, and attach a review note to a subsequent run. The [technical brief example](examples/methods/technical-brief.md) uses two readers, a shared reconciliation step, two parallel writers, and a reviewer.
+
+The offline example reads site notes and plant notes independently, then joins them into a volunteer guide. It runs again with changed site notes to show selective reuse. To call your own adapter, create a task JSON file with `site_notes`, `plant_notes`, and `audience`, then run:
+
+```sh
+lamina method run --method examples/methods/field-guide.json \
+  --task ./my-visit.json --workspace .lamina \
+  --adapter 'python examples/adapter/http_chat.py' --output ./run.json
+```
+
+The example adapter needs a compatible endpoint, model, and credentials supplied through environment variables. [Methods](docs/methods.md) documents the request shape, cache identity, receipt, and observation commands. An operator can select a previously recorded observation for a particular method node so that the next run receives it as context. The operator chooses which observation applies; Lamina does not select or revise methods automatically.
+
+The guide builder and generic method runner remain separate. The local browser app uses a fixed source-to-guide pipeline and configurable output procedures. Custom method graphs run from the command line or the local browser workbench. The workbench accepts a method and task, validates the graph, runs the configured adapter, displays execution receipts, and lets an operator attach a review note for a subsequent run. A generic graph does not inherit the guide pipeline's source and citation checks merely because it uses the same adapter.
+
+## What is checked
+
+For the guide, Lamina records the original file hash and accepted text locations. Extracted ideas need exact source quotes. Reconciliation accounts for each extracted idea, and the plan assigns or defers each reconciled idea. A review response can block export. These checks make omissions and bad merges easier to inspect, but they cannot show that parsing captured every figure, that extraction found every important point, or that a quote supports the writer's interpretation. The configured reviewer is another adapter call, not an independent expert.
+
+The method runner validates its job graph and resource limits. Its generic jobs only have to return JSON objects. The runtime does not verify the meaning or suitability of those objects. Local SQLite jobs support cached reuse and recovery after interruption, though active browser-run status is held in memory and does not automatically resume after an app restart. The reader's Listen view contains a script and optional browser speech; Lamina does not produce or audit podcast files.
+
+The [architecture status](docs/architecture-status.md) distinguishes these working pieces from the open design choices. [Design constraints](docs/design-constraints.md) explains why source boundaries, worker context, editorial selection, repair, and delivery matter. [Measurement](docs/measurement.md) sets out a quality-matched test of reuse, speed, cost, and correction on new material. The [systems benchmark](docs/benchmarks.md) measures synthetic scheduling and cache behavior; it is not a model-production or learning-quality result.
+
+## Technical paper
+
+The [engineering design paper](docs/technical-paper.md) describes source policy, representation choices, worker context, dependency types, selective repair, and the experiments needed to evaluate reuse on new tasks. It separates the proposed integrated system from the working reference implementation. The [recorded runtime experiment](docs/experiments/README.md) is reproducible without a model account.
+
+Rebuild the paper with `python tools/build_paper.py` after installing the `pdf` extra.
 
 ## Development
 
-```bash
+```sh
 python -m pip install -e '.[pdf,test]'
 python -m pytest tests -q
 ```
 
-Tests cover evidence ownership, held-out sources, cache concurrency, failure recovery, selective invalidation, dependency context, method validation, and artifact generation. [CI](https://github.com/FadiBahodi/lamina/actions/workflows/ci.yml) runs Python 3.11–3.13 without credentials.
-
-Created by **Fadi Bahodi**. Released under the [MIT License](LICENSE).
+Tests cover source and evidence contracts, cache behavior, dependency execution, recovery, and exports. The project is maintained by Fadi Bahodi and released under the [MIT License](LICENSE).

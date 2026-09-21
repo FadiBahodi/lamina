@@ -25,7 +25,7 @@
         "Build a source-grounded concept sequence with explanations, recall, contrast, and application.",
       audience: "Independent learners",
       instructions:
-        "Extract atomic concepts with exact source evidence. Merge equivalent ideas without losing distinct claims. Sequence lessons by dependency. Author explanation and three kinds of practice questions; retain evidence for each claim.",
+        "Extract atomic concepts with exact source evidence. Merge equivalent ideas without losing distinct claims. Sequence lessons by dependency. Explain the material and choose useful practice forms; retain evidence for each claim.",
       outputs: ["study-guide"],
       workers: 4,
     },
@@ -144,10 +144,11 @@
   }
 
   function showView(view) {
+    if (view === "method") view = "overview";
     state.view = view;
     document.body.classList.toggle("subview", view !== "overview");
     $$(".nav-link").forEach((b) => {
-      const yes = b.dataset.view === view;
+      const yes = b.dataset.view === view || (b.dataset.view === "workflows" && ["studio", "examples", "procedures"].includes(view));
       b.classList.toggle("is-active", yes);
       if (yes) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
@@ -159,7 +160,7 @@
     });
     if (view === "examples") showExample(state.example);
     if (view === "procedures") renderInspector();
-    const title = $(`#view-${view} h2`);
+    const title = $(`#view-${view} h1, #view-${view} h2`);
     if (title) {
       title.setAttribute("tabindex", "-1");
       title.focus({ preventScroll: true });
@@ -581,7 +582,7 @@
     if (state.mode !== "local") {
       b.textContent = "Explore the example ↗";
       b.disabled = false;
-      g.textContent = "Hosted showcase. No generation is running here.";
+      g.textContent = "Public demo. Run the local app to generate from your files.";
       return;
     }
     if (!state.adapter) {
@@ -868,7 +869,7 @@
         "p",
         "",
         b.description ||
-          "An original engineering field guide transformed into inspectable learning materials.",
+          "An engineering guide with source references and practice questions.",
       ),
     );
     const figure = node("figure", "example-image"),
@@ -969,7 +970,7 @@
       card.appendChild(flow);
       const result = add(
         node("div", "merge-result"),
-        node("span", "small-label", "CANONICAL CONCEPT"),
+        node("span", "small-label", "CONSOLIDATED IDEA"),
         node("strong", "", merge.title || ""),
         node("p", "", merge.explanation || ""),
       );
@@ -1015,7 +1016,7 @@
           node(
             "p",
             "",
-            `${counters.extracted_concepts} extracted ideas → ${counters.canonical_concepts} canonical concepts → ${counters.assigned_concepts} assigned. This is concept assignment coverage, not a claim of complete source comprehension.`,
+            `${counters.extracted_concepts} extracted ideas → ${counters.canonical_concepts} consolidated ideas → ${counters.assigned_concepts} assigned. These counts track extracted ideas and their lesson assignments.`,
           ),
         );
       root.appendChild(card);
@@ -1052,7 +1053,7 @@
           "p",
           "",
           s.scope_note?.replace(/SAMP-style(?: short-answer)?/gi, "progressive short-answer") ||
-            "An inspectable original example with candidate prompts and examiner marking notes.",
+            "An original exercise with candidate prompts and examiner marking notes.",
         ),
       ),
       add(node("div", "example-image"), node("img")),
@@ -1249,6 +1250,7 @@
     $$(".nav-link,[data-view]").forEach((b) =>
       b.addEventListener("click", () => showView(b.dataset.view)),
     );
+    $$("[data-paper-section]").forEach((b) => b.addEventListener("click", () => { showView("overview"); document.getElementById(b.dataset.paperSection)?.scrollIntoView({behavior:"smooth"}); }));
     $$("[data-example]").forEach((b) =>
       b.addEventListener("click", () => {
         showExample(b.dataset.example);

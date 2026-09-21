@@ -20,16 +20,19 @@ from urllib.parse import unquote, urlsplit
 
 from .export import export_bundle
 from .ingest import read_source
+from .method_runtime import record_observation, run_method
+from .methods import validate_method
 from .pipeline import build
 from .procedures import BUILTINS, validate_procedure
 from .providers import CommandProvider
-from .store import Workspace
+from .store import Workspace, canonical
 from .validation import validate_bundle
 
 MAX_BODY = 8_000_000
 MAX_FILES = 12
 MAX_FILE_CHARS = 500_000
 MAX_PDF_BYTES = 5_000_000
+MAX_METHOD_TASK_CHARS = 500_000
 SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.(?:md|txt|pdf)\Z", re.I)
 RUN_ID = re.compile(r"[0-9a-f]{32}\Z")
 
@@ -77,6 +80,26 @@ def run_procedure(workspace: Workspace, provider, procedure: dict, output: Path)
     return {"title": bundle["title"], "lessons": len(bundle["lessons"]), "links": links}
 
 
+def validate_method_task(task: object) -> dict:
+    """Bound browser-supplied reference data without interpreting it as a path."""
+    if not isinstance(task, dict) or len(task) > 64 or any(
+        not isinstance(key, str) or not key or len(key) > 100 for key in task
+    ):
+        raise ValueError("method task must be an object with at most 64 short field names")
+    if len(canonical(task)) > MAX_METHOD_TASK_CHARS:
+        raise OverflowError("method task exceeds the 500,000-character limit")
+    return task
+
+
+def public_method_receipt(receipt: dict) -> dict:
+    """Keep node outcomes inspectable without exposing adapter stderr/paths."""
+    cleaned = json.loads(json.dumps(receipt, ensure_ascii=False))
+    for node in cleaned["nodes"].values():
+        if "error" in node:
+            node["error"] = "Node failed; see the local Studio console"
+    return cleaned
+
+
 class StudioServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -121,6 +144,82 @@ class StudioServer(ThreadingHTTPServer):
 
         threading.Thread(target=work, name=f"lamina-run-{run_id[:8]}", daemon=True).start()
         return dict(status)
+
+    def start_method_run(self, method: dict, task: dict) -> dict:
+        if self.provider is None:
+            raise RuntimeError("No adapter configured. Start Studio with --adapter to run a method.")
+        selected = validate_method(method)
+        selected_task = validate_method_task(task)
+        for node in selected["nodes"]:
+            missing = set(node["task_keys"] or []) - set(selected_task)
+            if missing:
+                raise ValueError(f"{node['id']} missing task fields: {sorted(missing)}")
+        with self.run_lock:
+            if any(run["status"] in {"queued", "running"} for run in self.runs.values()):
+                raise RuntimeError("A build is already running in this workspace")
+            run_id = uuid.uuid4().hex
+            status = {"id": run_id, "kind": "method", "status": "queued", "error": None, "outputs": {}}
+            self.runs[run_id] = status
+
+        def work():
+            with self.run_lock:
+                status["status"] = "running"
+            try:
+                receipt = run_method(self.workspace, self.provider, selected, selected_task)
+                if receipt["status"] == "failed":
+                    for node_id, node in receipt["nodes"].items():
+                        if node["status"] == "failed":
+                            print(f"Lamina method run {run_id} node {node_id} failed: {node.get('error')}", flush=True)
+                visible_receipt = public_method_receipt(receipt)
+                output = self.output_root / run_id
+                output.mkdir(parents=True, exist_ok=True)
+                (output / "receipt.json").write_text(json.dumps(visible_receipt, ensure_ascii=False, indent=2) + "\n",
+                                                     encoding="utf-8")
+                with self.run_lock:
+                    if receipt["status"] == "completed":
+                        status.update(status="ready", receipt=visible_receipt,
+                                      outputs={"receipt": f"/outputs/{run_id}/receipt.json"})
+                    else:
+                        # The workspace retains raw node errors locally. HTTP
+                        # and downloadable receipts receive the redacted copy.
+                        status.update(status="failed", receipt=visible_receipt,
+                                      outputs={"receipt": f"/outputs/{run_id}/receipt.json"},
+                                      error="Method run failed; see the local Studio console")
+            except Exception as exc:
+                print(f"Lamina method run {run_id} failed: {exc}", flush=True)
+                with self.run_lock:
+                    status.update(status="failed", error="Method run failed; see the local Studio console")
+
+        threading.Thread(target=work, name=f"lamina-method-{run_id[:8]}", daemon=True).start()
+        return dict(status)
+
+    def record_method_observation(self, body: dict) -> dict:
+        if set(body) != {"run_id", "node_id", "note", "outcome", "applicability"}:
+            raise ValueError("observation needs exactly run_id, node_id, note, outcome, applicability")
+        run_id, node_id = body["run_id"], body["node_id"]
+        if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id) or not isinstance(node_id, str):
+            raise ValueError("observation needs a valid run ID and node ID")
+        for key in ("note", "outcome", "applicability"):
+            value = body[key]
+            if not isinstance(value, str) or not value.strip() or len(value) > 4000 or "\x00" in value:
+                raise ValueError(f"observation.{key} must be 1–4000 characters")
+        with self.run_lock:
+            run = self.runs.get(run_id)
+            if run is None:
+                raise LookupError("run not found")
+            if run.get("kind") != "method" or run["status"] != "ready":
+                raise RuntimeError("observation requires a completed method run")
+            receipt = run["receipt"]
+            if node_id not in receipt["nodes"] or receipt["nodes"][node_id]["status"] not in {"executed", "cached"}:
+                raise ValueError("node_id must name a completed node in this method run")
+            identity = dict(receipt["method"])
+            task_digest = receipt["task_digest"]
+        observation = record_observation(
+            self.workspace, family=identity["family"], method_id=identity["id"],
+            method_version=identity["version"], task_digest=task_digest,
+            outcome=body["outcome"], applicability=body["applicability"], note=body["note"])
+        return {"observation_id": observation["observation_id"], "run_id": run_id,
+                "node_id": node_id, "observation": observation}
 
 
 class StudioHandler(BaseHTTPRequestHandler):
@@ -215,7 +314,8 @@ class StudioHandler(BaseHTTPRequestHandler):
         if self._reject_origin():
             return
         path = self._path()
-        if path not in {"/api/sources", "/api/runs"}:
+        if path not in {"/api/sources", "/api/runs", "/api/methods/validate",
+                        "/api/method-runs", "/api/method-observations"}:
             self._json(404, {"error": "unknown API endpoint"})
             return
         try:
@@ -223,6 +323,17 @@ class StudioHandler(BaseHTTPRequestHandler):
             if path == "/api/sources":
                 response = self._sources(body)
                 self._json(201, response)
+            elif path == "/api/methods/validate":
+                if set(body) != {"method"}:
+                    raise ValueError("validation request must contain only method")
+                self._json(200, {"method": validate_method(body["method"])})
+            elif path == "/api/method-runs":
+                if set(body) != {"method", "task"}:
+                    raise ValueError("method run request needs exactly method and task")
+                run = self.server.start_method_run(body["method"], body["task"])
+                self._json(202, {"id": run["id"], "status": run["status"], "url": f"/api/runs/{run['id']}"})
+            elif path == "/api/method-observations":
+                self._json(201, self.server.record_method_observation(body))
             else:
                 if set(body) != {"procedure"}:
                     raise ValueError("run request must contain only procedure")
@@ -232,6 +343,8 @@ class StudioHandler(BaseHTTPRequestHandler):
             self._json(413, {"error": str(exc)})
         except RuntimeError as exc:
             self._json(409, {"error": str(exc)})
+        except LookupError as exc:
+            self._json(404, {"error": str(exc)})
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
 
@@ -310,8 +423,12 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(404, {"error": "file not found"})
                 return
             with self.server.run_lock:
-                ready = self.server.runs.get(parts[2], {}).get("status") == "ready"
-            if not ready:
+                run = self.server.runs.get(parts[2], {})
+                ready = run.get("status") == "ready"
+                failed_method_receipt = (run.get("kind") == "method" and run.get("status") == "failed"
+                                         and len(parts) == 4 and parts[3] == "receipt.json"
+                                         and bool(run.get("receipt")))
+            if not (ready or failed_method_receipt):
                 self._json(404, {"error": "file not found"})
                 return
             root = (self.server.output_root / parts[2]).resolve()

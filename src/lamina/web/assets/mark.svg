@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="17" fill="#113D3B"/>
-  <path d="M19 16v31h27" stroke="#F6F0E4" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M27 39h17M27 29h12" stroke="#B9D8C7" stroke-width="3.5" stroke-linecap="round"/>
-  <circle cx="46" cy="17" r="4" fill="#D7AA73"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lamina mark"><rect width="64" height="64" rx="5" fill="#176c88"/><path d="M17 15h8v31h24v7H17z" fill="#fff"/><path d="M31 15h7v24h11v7H31z" fill="#9fdfeb"/></svg>

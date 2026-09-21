@@ -1,0 +1,89 @@
+{
+  "schema_version": "1",
+  "family": "technical-briefs",
+  "id": "evidence-led-brief",
+  "version": "1.0",
+  "description": "Produce a decision-ready technical brief from a chosen current source and a historical source, retaining source IDs and disagreements through parallel drafting and final review.",
+  "applicability": {
+    "contexts": [
+      "An owner has selected the relevant text sources, stated their authority and boundaries, and specified the decision the brief should support.",
+      "A short technical brief can be divided into an explanation of behavior and a separate decision/operational section after a common evidence plan."
+    ],
+    "exclusions": [
+      "Do not use when critical evidence is in figures, tables, or attachments that have not been transcribed and checked.",
+      "Do not infer source authority from recency alone; the task owner must supply the source policy.",
+      "Do not treat model review as qualified approval for safety-critical, legal, financial, or medical decisions."
+    ],
+    "limits": [
+      "The method uses only supplied task fields and direct dependency outputs. It does not retrieve or verify external material.",
+      "The reviewer reports defects but this version does not automatically repair or block delivery when it reports a problem.",
+      "Expected shapes are response hints; the runtime currently enforces only that every node returns a JSON object."
+    ]
+  },
+  "resources": {
+    "workers": 4,
+    "lanes": {"reading": 2, "editorial": 2, "review": 1}
+  },
+  "nodes": [
+    {
+      "id": "current-read",
+      "role": "Current-source reader",
+      "instructions": "Read only task.current_source and task.brief.boundary. Extract atomic claims relevant to the requested decision. For each claim, copy its source ID and a short exact supporting excerpt; distinguish source statements from your inference. Record conditions, exceptions, unknowns, and any wording that could conflict with another source. Do not write the brief or claim to have checked anything outside the supplied text. Return a compact evidence object that a later worker can use without seeing the original source.",
+      "lane": "reading",
+      "depends_on": [],
+      "task_keys": ["current_source", "brief"],
+      "expected_shape": {"claims": [{"claim": "str", "source_id": "str", "excerpt": "str", "kind": "stated|inferred", "conditions": "str"}], "unknowns": ["str"]},
+      "input": {"source_field": "current_source", "output_contract": "Keep claim-level source IDs and excerpts; keep necessary conditions."}
+    },
+    {
+      "id": "historical-read",
+      "role": "Historical-source reader",
+      "instructions": "Read only task.historical_source and task.brief.boundary. Extract claims and observations relevant to the decision, each with source ID and a short exact excerpt. Mark observed behavior versus historical instructions versus your inference. Preserve contradictions and dates or conditions; do not silently promote an older instruction into current policy. Return a compact evidence object sufficient for reconciliation without the original source text.",
+      "lane": "reading",
+      "depends_on": [],
+      "task_keys": ["historical_source", "brief"],
+      "expected_shape": {"claims": [{"claim": "str", "source_id": "str", "excerpt": "str", "kind": "observation|instruction|inferred", "conditions": "str"}], "unknowns": ["str"]},
+      "input": {"source_field": "historical_source", "output_contract": "Keep claim-level source IDs and excerpts; distinguish observation from instruction."}
+    },
+    {
+      "id": "reconcile",
+      "role": "Evidence reconciler and brief planner",
+      "instructions": "Use task.brief.source_policy and the two direct reader results. Make a compact shared evidence board that carries forward every claim needed by the writers and reviewer, including source IDs, short excerpts, conditions, and whether a statement is source-stated or inferred. Identify every material conflict explicitly; apply only the supplied authority rule, explain the resulting treatment, and leave unresolved points unresolved. Choose a brief outline with a behavior section, a decision/operational section, and a visible uncertainty section. Mark claims that must not appear as established facts. Do not invent missing facts or flatten conflicting statements into a single consensus sentence. Your output is the common plan and evidence packet for both writers, who will not receive the reader outputs directly.",
+      "lane": "editorial",
+      "depends_on": ["current-read", "historical-read"],
+      "task_keys": ["brief"],
+      "expected_shape": {"evidence_board": [{"claim": "str", "source_ids": ["str"], "excerpts": ["str"], "conditions": "str", "status": "established|historical|unresolved|inference"}], "conflicts": [{"point": "str", "source_ids": ["str"], "treatment": "str"}], "outline": ["str"], "prohibited_as_fact": ["str"], "open_questions": ["str"]},
+      "input": {"planning_rule": "Carry enough source detail in this result for dependent writers and reviewer; direct dependencies are not transitive."}
+    },
+    {
+      "id": "behavior-draft",
+      "role": "Technical behavior writer",
+      "instructions": "Write only the behavior/mechanism section assigned by the reconciliation outline. Use the direct reconcile result as your evidence packet and task.brief for audience, length, and boundary. Cite source IDs near material claims. Keep preconditions and exception behavior visible. Do not resolve a listed conflict by omission or present an inference as a source fact. Return prose plus a claim-to-source map and any issue the reviewer must examine. Do not write the decision section.",
+      "lane": "editorial",
+      "depends_on": ["reconcile"],
+      "task_keys": ["brief"],
+      "expected_shape": {"section": "str", "claim_sources": [{"claim": "str", "source_ids": ["str"]}], "issues": ["str"]},
+      "input": {"section": "behavior and mechanism", "shared_plan_dependency": "reconcile"}
+    },
+    {
+      "id": "decision-draft",
+      "role": "Decision and operations writer",
+      "instructions": "Write only the decision/operational section assigned by the reconciliation outline. Use the direct reconcile result as your evidence packet and task.brief for the actual decision, audience, and boundary. Separate recommended action from source-stated behavior. Cite source IDs near material claims and retain important uncertainty and verification steps. Do not repeat or contradict the behavior section; if the evidence cannot support a recommendation, say what must be checked. Return prose plus a claim-to-source map and issues for review.",
+      "lane": "editorial",
+      "depends_on": ["reconcile"],
+      "task_keys": ["brief"],
+      "expected_shape": {"section": "str", "claim_sources": [{"claim": "str", "source_ids": ["str"]}], "issues": ["str"]},
+      "input": {"section": "decision and operations", "shared_plan_dependency": "reconcile"}
+    },
+    {
+      "id": "review",
+      "role": "Evidence and coherence reviewer",
+      "instructions": "Assemble the two draft sections into one short brief for task.brief.audience and decision. Check each material claim against the direct reconcile evidence board, source policy, conflicts, and prohibited-as-fact list. Flag missing source IDs, lost conditions, contradictions between sections, unsupported recommendations, and omissions of material uncertainty. Do not assert that you reread the original source texts; they are not in your direct context. Return assembled_brief with source IDs, a concrete issues list, and verdict ready or revise. A revise verdict is a review finding, not an automatic runtime stop or repair.",
+      "lane": "review",
+      "depends_on": ["reconcile", "behavior-draft", "decision-draft"],
+      "task_keys": ["brief"],
+      "expected_shape": {"assembled_brief": "str", "verdict": "ready|revise", "issues": [{"severity": "str", "finding": "str", "source_ids": ["str"]}]},
+      "input": {"review_rule": "Check against reconcile evidence and both drafts; report defects without silently repairing uncertain claims."}
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "brief": {
+    "audience": "An engineering lead deciding whether to change the retry timer for an internal export worker",
+    "decision": "Explain the current lease timeout and what must be checked before changing the retry timer.",
+    "boundary": "Cover only the export worker's lease, timeout, and retry behavior in the supplied notes. Do not infer database, queue, or client behavior that the notes do not state.",
+    "source_policy": "SPEC-2026 is the owner-designated current behavior specification. RUNBOOK-2024 is a historical operational note: retain its incident observation and its conflicting old instruction, but do not treat the old instruction as current behavior. If SPEC-2026 is silent, state the gap rather than borrowing an answer from RUNBOOK-2024.",
+    "output": "A brief of roughly 350-500 words with a behavior section, a decision/operational section, and explicit uncertainty. Put source IDs next to material claims. Separate source facts, inference, and recommended checks."
+  },
+  "current_source": {
+    "id": "SPEC-2026",
+    "kind": "owner-designated current specification",
+    "text": "An export worker obtains a 90-second lease when it starts a job. It renews the lease every 30 seconds while it is healthy. If renewal fails, the worker stops producing output and leaves the job for a later attempt. The scheduler may reassign a job only after its lease has expired. This specification does not set a retry timer or describe how partial output is cleaned up."
+  },
+  "historical_source": {
+    "id": "RUNBOOK-2024",
+    "kind": "historical operational note",
+    "text": "The 2024 runbook told operators to expect a 60-second lease timeout and to retry a stalled export after one minute. During incident INC-17, operators observed a second worker starting while the first worker was still writing a large export. The incident note did not establish whether the first worker had missed lease renewal, whether the old timeout was configured, or whether partial output was removed."
+  }
+}

@@ -3,17 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f5f2ec" />
+    <meta name="theme-color" content="#0d1117" />
     <meta
       name="description"
-      content="Lamina turns source material into useful work, with inspectable decisions and a method you can carry forward."
+      content="Open-source infrastructure for document generation workflows: parallel model calls, explicit context, persistent results, and selective reruns."
     />
-    <title>Lamina · Turn source material into useful work</title>
+    <title>Lamina | Reusable workflows for model-driven production</title>
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="inspector.css" />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="method-workbench.css" />
     <script src="inspector.js" defer></script>
     <script src="app.js" defer></script>
+    <script src="method-trace.js" defer></script>
+    <script src="method-workbench.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -22,26 +25,8 @@
         ><img src="assets/mark.svg" alt="" width="32" height="32" /><span>LAMINA</span></a
       >
       <nav class="nav" aria-label="Primary">
-        <button
-          type="button"
-          class="nav-link is-active"
-          data-view="overview"
-          aria-current="page"
-        >
-          Overview
-        </button>
-        <button type="button" class="nav-link" data-view="examples">
-          Examples
-        </button>
-        <button type="button" class="nav-link" data-view="studio">
-          Build
-        </button>
-        <button type="button" class="nav-link" data-view="procedures">
-          Procedures
-        </button>
-        <button type="button" class="nav-link" data-view="method">
-          How it works
-        </button>
+        <button type="button" class="nav-link is-active" data-view="overview" aria-current="page">Overview</button>
+        <button type="button" class="nav-link" data-view="workflows">Workbench</button>
       </nav>
       <a
         class="header-link"
@@ -53,38 +38,63 @@
 
     <main id="main">
       <section class="view is-active overview-view" id="view-overview" aria-labelledby="page-title">
-        <div class="hero-grid">
-          <div class="hero-copy">
-            <span class="eyebrow"><span class="eyebrow-rule"></span> LAMINA / OPEN SOURCE</span>
-            <h1 id="page-title">Turn source material into useful work. <em>Keep the method.</em></h1>
-            <p class="intro-copy">Give Lamina a collection and choose the kind of result you need. Its current engine organizes source passages, writes connected learning material, and lets you inspect how each result was made. Save the steps as a reusable method, then adapt and rerun them for a new project.</p>
-            <div class="hero-actions">
-              <button type="button" class="button button-primary" data-view="examples">Explore real outputs <span aria-hidden="true">↗</span></button>
-              <button type="button" class="button button-secondary" data-view="method">How the engine works</button>
-            </div>
-            <p class="hero-boundary">Current release: source-to-guide, decision practice, oral case, and listening script. Audio generation and automatic method adaptation are not included.</p>
-          </div>
-          <div class="hero-visual" aria-label="Original source and output illustration">
-            <div class="hero-art-head"><span>01 / ORIGINAL EXAMPLE</span><span>LEASES &amp; RECOVERY</span></div>
-            <img src="assets/experience-leases.svg" alt="Illustrated handoff: source notes about lease expiry become a lesson and a decision question about a late worker." />
-            <div class="hero-art-caption"><strong>A stopped report job is reclaimed.</strong><span>What happens if the first worker finishes late?</span></div>
+        <div class="product-intro">
+          <span class="section-index">LAMINA / OPEN-SOURCE WORKFLOW ENGINE</span>
+          <h1 id="page-title">Design, run, and revise<br class="desktop-break" /> model-driven workflows.</h1>
+          <div class="intro-columns">
+            <p class="product-summary">Define what each model worker receives, which results it needs, and how much work can run together. Import a method, execute it with your own model adapter, inspect the results, and apply a correction to the next run. The same method can travel between projects.</p>
+            <div class="intro-actions"><button class="button button-primary" type="button" data-view="workflows">Open the workbench</button><a class="button button-secondary" href="https://github.com/FadiBahodi/lamina/releases/tag/v0.4.0">Download Lamina</a><a class="text-button" href="assets/lamina-technical-paper.pdf">Technical paper ↗</a><span>Python + local web app · Your model adapter · MIT license</span></div>
           </div>
         </div>
-        <div class="overview-rule"><span>FROM A REAL, INSPECTABLE BUILD</span><span>SOURCE → JUDGMENT → OUTPUT</span></div>
-        <div class="transformation-intro"><span class="section-index">THE WORK, MADE VISIBLE</span><h2>One source collection. Several useful forms.</h2><p>These examples come from Lamina’s original resilient-workflows material. Open each result to inspect the source, the decisions, and the published artifact.</p></div>
-        <div class="experience-grid">
-          <article class="experience-card experience-card-guide">
-            <div class="experience-card-top"><span>01 / ILLUSTRATED GUIDE</span><span>ORIGINAL ENGINEERING MATERIAL</span></div>
-            <div class="experience-art"><div class="paper-source"><small>01-leases.md · SOURCE</small><strong>Leases make stalled work recoverable</strong><p>“Expiry means ownership is uncertain, not that the first worker stopped.”</p></div><div class="paper-output"><small>LESSON 01 · PUBLISHED EXCERPT</small><strong>Recover a stalled job without trusting the clock</strong><p>A lease makes work reclaimable; an owner token makes stale completion harmless.</p><span>WHY IT MATTERS →</span><p>A late worker can finish after a replacement claims the job. The completion check decides which result may publish.</p></div></div>
-            <h3>From source note to teachable guide</h3><p>Connected explanations, a source trail, and questions that test the distinction.</p><button type="button" class="card-link" data-example="engineering">Inspect the guide <span aria-hidden="true">↗</span></button>
-          </article>
-          <article class="experience-card experience-card-decision">
-            <div class="experience-card-top"><span>02 / DECISION PRACTICE</span><span>SEPARATE PUBLISHED EXAMPLE</span></div>
-            <div class="decision-art"><div class="decision-case"><small>CASE / PROGRESSIVE REVEAL</small><strong>The report worker returns after timeout.</strong><p>A replacement has claimed the job. The original worker now finishes. What should happen to its result?</p></div><div class="decision-answer"><small>ANSWER POINT</small><strong>Check the current owner token.</strong><p>Lease expiry permits a new claim; it does not prove the first worker stopped.</p></div></div>
-            <h3>From material to a decision</h3><p>Information arrives in steps, with an answer sheet and source-linked marking points.</p><button type="button" class="card-link" data-example="samp">Try decision practice <span aria-hidden="true">↗</span></button>
-          </article>
+        <div class="paper-nav"><a href="#paper-problem">Problem</a><a href="#paper-architecture">Architecture</a><a href="#execution">Implementation</a><a href="#paper-download">Download</a></div>
+        <section class="paper-section" id="paper-problem"><span class="section-index">01 / PROBLEM</span><h2>A finished document hides the decisions that made it.</h2><div class="paper-prose"><p>Producing a useful guide, assessment, or audio lesson requires more than summarizing the source. Someone chooses which details to preserve, which ideas belong together, what context each writer needs, and which parts require review. Those choices often disappear into a long conversation.</p><p>When the source changes or a new agent takes over, the team has to reconstruct that reasoning. Lamina treats the production method as an explicit, revisable object. The intended users are teams building repeated document workflows whose outputs must remain correct as the material changes.</p></div></section>
+        <section class="paper-section" id="paper-architecture"><span class="section-index">02 / PROPOSED ARCHITECTURE</span><h2>Preserve the decisions that control the work.</h2>
+          <div class="design-flow" aria-label="Proposed architecture"><div><span>01</span><h3>Task contract</h3><p>Requested output, audience, source permissions, acceptance tests, and resource budget.</p></div><div><span>02</span><h3>Method decision</h3><p>Choose a representation and work plan. State why it fits and which alternatives were rejected.</p></div><div><span>03</span><h3>Context &amp; execution</h3><p>Give each worker the evidence and completed results it needs. Schedule the actual dependencies.</p></div><div><span>04</span><h3>Review &amp; revision</h3><p>Trace a defect to the decision that caused it. Reopen affected work and test the revised method.</p></div></div>
+          <p class="figure-note">Proposed integration. The current guide pipeline and generic method runner share storage but retain separate orchestration.</p>
+          <div class="paper-prose"><p>A method needs conditions for use, a source representation, context-selection rules, and a policy for repair. A job graph executes the chosen plan. It cannot by itself decide whether a figure needs a separate reader or whether two writers need to agree on a disputed claim.</p><p>The paper specifies these boundaries, compares alternative coordination policies, and defines what would count as evidence that a retained method transfers to a new task.</p></div>
+        </section>
+        <section class="execution" id="execution" aria-labelledby="execution-title">
+          <div class="execution-heading"><div><span class="section-index">EXECUTION EXAMPLE</span><h2 id="execution-title">What changes when the input changes?</h2></div><p>Recorded runs of the method engine with a deterministic test adapter. Select a run, then a worker, to inspect its inputs and result.</p></div>
+          <div id="method-trace" aria-live="polite"><p class="loading">Loading execution records…</p></div>
+        </section>
+        <section class="paper-section" id="implementation-detail">
+        <div class="section-heading"><div><span class="section-index">ARCHITECTURE</span><h2 id="method-title">Context, execution, and revision.</h2></div><p>Models interpret sources and write the content. Lamina determines which inputs they receive, when their work can run, and which results can be reused.</p></div>
+        <div class="architecture-table" role="table" aria-label="Implemented architecture and remaining integration">
+          <div class="architecture-row" role="row"><span role="cell">Source store</span><p role="cell">Text units retain file identity, locators, and source roles. Assessment material stays out of guide authoring.</p><code role="cell">store.py · ingest.py</code></div>
+          <div class="architecture-row" role="row"><span role="cell">Document pipeline</span><p role="cell">Parallel extraction, whole-collection reconciliation and planning, then parallel authoring and review. Writers receive the shared plan and prerequisite evidence.</p><code role="cell">pipeline.py</code></div>
+          <div class="architecture-row" role="row"><span role="cell">Method runtime</span><p role="cell">A dependency graph schedules model jobs within worker and lane limits. Each node receives selected task fields and its completed prerequisites.</p><code role="cell">method_runtime.py</code></div>
+          <div class="architecture-row" role="row"><span role="cell">Experience</span><p role="cell">An operator records an observation and chooses which later nodes receive it. Those nodes include the observation in their request and cache identity.</p><code role="cell">observation_ids</code></div>
+          <div class="architecture-row" role="row"><span role="cell">Integration gap</span><p role="cell">The guide pipeline does not yet run as a custom method. Automatic method selection, completed-prose coordination, visual source extraction, and podcast delivery require further work.</p><a role="cell" href="https://github.com/FadiBahodi/lamina/blob/main/docs/architecture-status.md">Implementation map</a></div>
         </div>
-        <div class="overview-detail"><div><span class="section-index">WHY KEEP THE METHOD?</span><h2>Make the next run easier to understand.</h2></div><div><p>The guide keeps source locations, intermediate choices, and the finished result together. The command-line method runner adds explicit dependencies, worker context, selective reruns, and observations you can retrieve later. An agent can use these to adapt its work; automatic method selection and improvement remain research goals.</p><button type="button" class="text-button" data-view="method">See the present engine and the open work →</button></div></div>
+        <div class="systems-grid">
+          <article><span class="section-index">SCHEDULING</span><h3>A dependency can dominate the runtime.</h3><div class="equation">T ≥ max(W / p, D)</div><p>W is total service work, p is worker count, and D is the longest dependency path. This ideal lower bound explains why adding workers stops helping. Provider limits, queues, and retries add time.</p></article>
+          <article><span class="section-index">REPAIR</span><h3>Reuse depends on the inputs.</h3><div class="equation code-equation">key = H(runtime, adapter, node, context)</div><p>Context includes the selected task fields, dependency outputs, and selected observations. A node reruns when this request changes. Its descendants rerun if their own inputs change.</p></article>
+        </div>
+        <div class="inspector-shell method-inspector"><div class="section-heading"><div><span class="section-index">DOCUMENT PIPELINE</span><h2>Inspect the guide build.</h2></div><p>Source excerpts, merge decisions, lesson assignments, and reviewer responses from the published example.</p></div><div id="runtime-inspector"><p class="loading">Loading build records…</p></div></div>
+        <div class="architecture-reading"><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/architecture-status.md">Implementation map</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/design-constraints.md">Design constraints</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/measurement.md">Evaluation protocol</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/comparison.md">Product comparison</a></div>
+        </section>
+        <section class="product-scope" aria-labelledby="scope-title">
+          <div class="section-heading"><div><span class="section-index">WHAT YOU CAN BUILD</span><h2 id="scope-title">Document production is the first application.</h2></div><p>The local app runs imported method graphs and includes a document-to-guide pipeline. Both use the same durable job store. The guide pipeline retains its own orchestration and source validation.</p></div>
+          <div class="application-grid">
+            <article><span class="mono-label">01 / DOCUMENT PIPELINE</span><h3>Documents to a guide or assessment</h3><p>Read source passages in parallel, reconcile overlapping ideas, plan the sequence, then write and review. Export a reader, PDF, questions, or a narration script.</p><div class="mini-pipeline"><span>Sources</span><span>Extraction</span><span>Plan</span><span>Author</span><span>Review</span></div><button class="text-button" data-example="engineering" type="button">Open the generated guide</button><button class="text-button" data-example="samp" type="button">Try the assessment</button></article>
+            <article><span class="mono-label">02 / METHOD RUNTIME</span><h3>Define how agents work together</h3><p>A JSON method declares dependencies, task fields, model instructions, and concurrency limits. A worker can receive selected observations from a previous run. A method file can be reused in another project.</p><pre class="method-code"><code>{
+  "id": "incident-guide",
+  "depends_on": ["reliability-read", "deployment-read"],
+  "task_keys": ["audience"],
+  "lane": "editorial"
+}</code></pre><a class="text-button" href="https://github.com/FadiBahodi/lamina/blob/main/docs/methods.md">Read the method API</a></article>
+          </div>
+        </section>
+        <section class="paper-section paper-download" id="paper-download"><span class="section-index">DOWNLOAD &amp; REPRODUCE</span><h2>Read the design. Run the reference implementation.</h2><div class="download-grid"><div><h3>Technical paper</h3><p>Architecture, data contracts, scheduling, context budgets, revision rules, and the evaluation plan. Implemented mechanisms are distinguished from proposed ones.</p><a class="button button-primary" href="assets/lamina-technical-paper.pdf">Download PDF</a><a class="text-button" href="https://github.com/FadiBahodi/lamina/blob/main/docs/technical-paper.md">Read the source</a></div><div><h3>Local runtime</h3><pre class="method-code"><code>git clone https://github.com/FadiBahodi/lamina.git
+cd lamina
+python -m pip install -e '.[pdf]'
+lamina app</code></pre><a class="text-button" href="https://github.com/FadiBahodi/lamina/releases/tag/v0.4.0">Download the release</a><p class="figure-note">Python 3.11+. Configure a model adapter to generate from your own material.</p></div></div></section>
+      </section>
+
+      <section class="view" id="view-workflows" aria-labelledby="workflows-title" hidden>
+        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
+        <div class="section-heading"><div><span class="section-index">WORKBENCH / METHOD RUNTIME</span><h2 id="workflows-title">Define the work. Inspect the execution.</h2></div><p>A portable method describes the workers, their context and dependencies. Run it locally with your configured model adapter, then revise only the inputs that need to change.</p></div>
+        <div id="method-workbench"><p class="loading">Loading the method editor…</p></div>
       </section>
 
       <section
@@ -93,14 +103,15 @@
         aria-labelledby="studio-title"
         hidden
       >
+        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
         <div class="section-heading">
           <div>
             <span class="section-index">BUILD / LOCAL PRODUCTION</span>
-            <h2 id="studio-title">Bring your material. Choose a result.</h2>
+            <h2 id="studio-title">Build from your documents.</h2>
           </div>
           <p>
             Start with a published example or run your own collection locally.
-            Inspect the published build trace under How it works.
+            Inspect the published build trace in Overview.
           </p>
         </div>
         <div class="section-heading production-heading">
@@ -108,7 +119,7 @@
             <span class="section-index"
               >PRODUCTION / SOURCE → PROCEDURE → ARTIFACT</span
             >
-            <h2>Run a procedure.</h2>
+            <h2>Run configuration</h2>
           </div>
           <p>
             <span class="mode-pill" id="mode-pill">Checking local mode…</span>
@@ -243,7 +254,7 @@
                   Explore the example <span aria-hidden="true">↗</span>
                 </button>
                 <p id="run-guidance">
-                  Static showcase. No generation is running here.
+                  Public demo. Run the local app to generate from your files.
                 </p>
               </div>
               <div
@@ -256,13 +267,13 @@
           </div>
           <aside class="desk-aside" aria-labelledby="output-title">
             <div class="aside-top">
-              <span class="section-index">OUTPUT / ACTUAL EXCERPT</span>
-              <h3 id="output-title">Traceable output</h3>
+              <span class="section-index">OUTPUT PREVIEW</span>
+              <h3 id="output-title">Output preview</h3>
               <p id="output-description"></p>
             </div>
             <div id="output-preview" class="output-preview" aria-live="polite">
               <span class="small-label">PUBLISHED BUILD</span>
-              <p>Loading source-grounded example…</p>
+              <p>Loading example guide…</p>
             </div>
             <button
               type="button"
@@ -273,10 +284,9 @@
             </button>
             <div id="output-list" class="output-list"></div>
             <div class="aside-foot">
-              <span class="small-label">EVIDENCE BOUNDARY</span>
+              <span class="small-label">SOURCE REFERENCES</span>
               <p>
-                Source passages, assignment decisions, and the review's scope
-                remain inspectable.
+                Each output retains its source passages and lesson assignments.
               </p>
             </div>
           </aside>
@@ -289,12 +299,13 @@
         aria-labelledby="procedures-title"
         hidden
       >
+        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
         <div class="section-heading">
           <div>
             <span class="section-index"
               >PROCEDURES / PORTABLE CONFIGURATION</span
             >
-            <h2 id="procedures-title">Set the job, keep the instructions.</h2>
+            <h2 id="procedures-title">Configure a document workflow.</h2>
           </div>
           <p>
             Import, edit, validate, and export declarative procedures. Browser
@@ -307,7 +318,7 @@
             <label class="import-box" for="procedure-input"
               ><span class="small-label">PORTABLE CONTRACT / JSON</span
               ><strong>Import a procedure</strong
-              ><span>Schema-checked and browser-local.</span
+              ><span>Validated on import. Stored in this browser.</span
               ><input
                 id="procedure-input"
                 type="file"
@@ -328,10 +339,11 @@
         aria-labelledby="examples-title"
         hidden
       >
+        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
         <div class="section-heading">
           <div>
             <span class="section-index">EXAMPLES / PUBLISHED ARTIFACTS</span>
-            <h2 id="examples-title">Inspect the output.</h2>
+            <h2 id="examples-title">Guides and assessments.</h2>
           </div>
           <p>
             Original engineering material and a separate short-answer exercise.
@@ -363,7 +375,7 @@
           role="tabpanel"
           aria-labelledby="example-engineering-tab"
         >
-          <p class="loading">Loading the inspectable example…</p>
+          <p class="loading">Loading the example guide…</p>
         </div>
         <div
           id="example-samp"
@@ -376,115 +388,11 @@
         </div>
       </section>
 
-      <section
-        class="view"
-        id="view-method"
-        aria-labelledby="method-title"
-        hidden
-      >
-        <div class="section-heading">
-          <div>
-            <span class="section-index">HOW IT WORKS / CURRENT &amp; NEXT</span>
-            <h2 id="method-title">
-              The work has a shape. The evidence has limits.
-            </h2>
-          </div>
-          <p>
-            Follow what the current engine does, where it can be checked, and
-            what still needs to be built.
-          </p>
-        </div>
-        <div class="architecture-strip">
-          <span>CURRENT BUILD</span>
-          <div>
-            Source passages <b>→</b> proposed ideas <b>→</b> related ideas joined
-            <b>→</b> lesson route <b>→</b> written output <b>→</b> review
-          </div>
-        </div>
-        <div class="method-steps">
-          <article>
-            <span>01 / INPUT</span>
-            <h3>Keep a route to the source</h3>
-            <p>
-              Filename, heading, locator, and original passage stay available.
-              PDF text extraction is limited by figures and layout.
-            </p>
-          </article>
-          <article>
-            <span>02 / SEMANTICS</span>
-            <h3>Check what was quoted</h3>
-            <p>
-              Exact quotes are validated against source units. They establish
-              provenance, while interpretation still needs evaluation.
-            </p>
-          </article>
-          <article>
-            <span>03 / CURRICULUM</span>
-            <h3>Show what was chosen</h3>
-            <p>
-              Proposed ideas enter a lesson plan or an explicit deferral. This
-              accounts for what extraction found; it cannot prove that the
-              source was fully understood or that every idea belongs in the output.
-            </p>
-          </article>
-          <article>
-            <span>04 / DELIVERY</span>
-            <h3>Publish forms</h3>
-            <p>
-              Guide, decision practice, oral scenario, and listening script
-              share a base lesson bundle. The script is text, not a podcast.
-            </p>
-          </article>
-        </div>
-        <div class="mechanism-detail">
-          <div><span class="section-index">A WORKER'S VIEW</span><h3>Small source packet, clear ownership</h3><p>Each reading task sees one passage and a short stretch of its neighbors. The worker must quote its own passage for any proposed idea. That keeps source links checkable, but adjacent text alone cannot tell a writer how the entire finished guide should connect.</p></div>
-          <div><span class="section-index">A DEPENDENCY &amp; RECOVERY</span><h3>Parallel where possible; pause at shared decisions</h3><p>Source passages can be read in parallel. Joining related ideas and planning lessons are currently whole-collection steps. Lessons then run in parallel. Results are cached by their inputs and procedure revision; a failed review blocks export, while completed steps can be reused on retry. A cache entry records a prior response, not its quality.</p></div>
-          <div><span class="section-index">RESOURCE REALITY</span><h3>Speed requires a real workload</h3><p>The published benchmark measures local queue and cache mechanics with timed placeholders. It does not measure model calls, audio generation, teaching quality, or total time to a usable result. Larger collections still hit global context limits; model input, retries, review, and memory use must be measured on real jobs.</p></div>
-        </div>
-        <div class="inspector-shell method-inspector">
-          <div class="section-heading"><div><span class="section-index">PUBLISHED BUILD TRACE</span><h2>Inspect each handoff.</h2></div><p>Select a stage to see what entered, what came out, and what the check actually established.</p></div>
-          <div id="runtime-inspector"><p class="loading">Loading the published build trace…</p></div>
-        </div>
-        <div class="research-boundary">
-          <div>
-            <span class="section-index">AVAILABLE IN THE COMMAND LINE</span>
-            <h3>Methods that can be tested and reused</h3>
-          </div>
-          <p>
-            A separate command-line method runtime now supports declared jobs,
-            resource lanes, scoped cached reruns, and retained human observations.
-            This browser still runs the fixed guide-building flow. Neither
-            surface automatically selects a method, learns from the result, or
-            offers a visual method designer yet.
-          </p>
-        </div>
-        <p class="architecture-links">
-          <a
-            href="https://github.com/FadiBahodi/lamina/blob/main/docs/design.md"
-            >Representations &amp; conservation</a
-          >
-          ·
-          <a
-            href="https://github.com/FadiBahodi/lamina/blob/main/docs/methods.md"
-            >Methods &amp; memory</a
-          >
-          ·
-          <a
-            href="https://github.com/FadiBahodi/lamina/blob/main/docs/benchmarks.md"
-            >Reproducible benchmarks</a
-          >
-          ·
-          <a href="https://github.com/FadiBahodi/lamina/blob/main/docs/design-constraints.md">Design constraints</a>
-          ·
-          <a href="https://github.com/FadiBahodi/lamina/blob/main/docs/measurement.md">What to measure</a>
-          ·
-          <a href="https://github.com/FadiBahodi/lamina/blob/main/docs/comparison.md">Comparison</a>
-        </p>
-      </section>
+
     </main>
     <footer class="footer">
       <div class="footer-brand">
-        Lamina <span>/ work from source</span>
+        Lamina <span>/ document workflow infrastructure</span>
       </div>
       <div>
         <a href="workbench/">Study reader</a
@@ -493,13 +401,13 @@
           rel="noopener noreferrer"
           >Source on GitHub</a
         ><a
-          href="https://github.com/FadiBahodi/lamina#run-lamina-locally"
+          href="https://github.com/FadiBahodi/lamina#run-it-locally"
           rel="noopener noreferrer"
           >Run locally</a
         >
       </div>
       <p>
-          Original public examples. Inspect the work, the result, and the limits of each check.
+          Lamina is open source under the MIT license.
       </p>
     </footer>
   </body>

@@ -34,6 +34,26 @@ def _tables(workspace: Workspace) -> None:
         """)
 
 
+def _selected_observations(workspace: Workspace, method: dict) -> dict[str, list[dict]]:
+    """Resolve only named, same-family operator observations before work starts."""
+    wanted = {oid for node in method["nodes"] for oid in node["observation_ids"]}
+    if not wanted:
+        return {node["id"]: [] for node in method["nodes"]}
+    placeholders = ",".join("?" for _ in wanted)
+    with workspace.connection() as db:
+        rows = db.execute(f"SELECT * FROM method_observations WHERE observation_id IN ({placeholders})",
+                          tuple(sorted(wanted))).fetchall()
+    found = {row["observation_id"]: dict(row) for row in rows}
+    missing = wanted - set(found)
+    if missing:
+        raise ValueError(f"unknown method observations: {sorted(missing)}")
+    wrong = {oid for oid, row in found.items() if row["family"] != method["family"]}
+    if wrong:
+        raise ValueError(f"observations belong to another family: {sorted(wrong)}")
+    return {node["id"]: [{"kind": "operator_observation", "observation": found[oid]}
+                          for oid in node["observation_ids"]] for node in method["nodes"]}
+
+
 def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict:
     """Run independent ready nodes concurrently, with no future-result leakage.
 
@@ -53,6 +73,7 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
     if not hasattr(provider, "identity") or not callable(getattr(provider, "call", None)):
         raise ValueError("provider needs identity and call(stage, payload)")
     _tables(workspace)
+    selected_observations = _selected_observations(workspace, method)
     started = time.monotonic()
     run_id = uuid.uuid4().hex
     nodes = method["nodes"]
@@ -74,7 +95,8 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
                    "expected_shape": node["expected_shape"],
                    "input": {"method": {"family": method["family"], "id": method["id"]},
                              "node": {"id": node["id"], "input": node["input"]},
-                             "task": selected, "dependencies": dependencies}}
+                             "task": selected, "dependencies": dependencies,
+                             "experience": selected_observations[node["id"]]}}
         node_identity = digest({"runtime": RUNTIME_REVISION, "provider": provider.identity,
                                 "family": method["family"], "method_id": method["id"],
                                 "node_id": node["id"]})
@@ -92,6 +114,7 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
             result = workspace.run_cached(STAGE, payload, call, identity=node_identity, retries=0)
             record = {"status": "executed" if invoked else "cached", "lane": node["lane"],
                       "depends_on": node["depends_on"],
+                      "observation_ids": node["observation_ids"],
                       "context_bytes": len(canonical(payload).encode("utf-8")),
                       "wall_ms": round((time.monotonic() - began) * 1000, 3),
                       "output_digest": digest(result)}
@@ -99,6 +122,7 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
         except Exception as exc:
             record = {"status": "failed", "lane": node["lane"],
                       "depends_on": node["depends_on"],
+                      "observation_ids": node["observation_ids"],
                       "context_bytes": len(canonical(payload).encode("utf-8")),
                       "wall_ms": round((time.monotonic() - began) * 1000, 3),
                       "error": f"{type(exc).__name__}: {exc}"[:1000]}
@@ -111,6 +135,7 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
                 if any(records.get(dep, {}).get("status") in {"failed", "skipped"} for dep in deps):
                     records[nid] = {"status": "skipped", "lane": by_id[nid]["lane"],
                                     "depends_on": deps, "reason": "dependency failed",
+                                    "observation_ids": by_id[nid]["observation_ids"],
                                     "context_bytes": 0, "wall_ms": 0}
                     outstanding.remove(nid)
             for nid in sorted(list(outstanding), key=order.get):

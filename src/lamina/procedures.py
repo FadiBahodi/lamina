@@ -54,7 +54,7 @@ def procedure_context(value: dict) -> dict:
 
 BUILTINS = [
     {"schema_version": "1", "id": "study-guide", "name": "Source-grounded study guide",
-     "description": "Connected lessons with evidence, recall, contrasts, application, and a reviewed study site.",
+     "description": "Lessons with source references, practice questions, and a separate answer key.",
      "audience": "A learner who needs to explain and apply the supplied source material.",
      "instructions": "Make the global plan coherent. Give each lesson a clear objective and use the source evidence for answerable recall and application. Explicitly defer concepts that cannot fit.",
      "outputs": ["study-guide"], "workers": 4},

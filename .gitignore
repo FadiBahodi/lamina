@@ -15,3 +15,6 @@ studio-site/
 !src/lamina/demo/
 !src/lamina/demo/**
 docs/implementation-contract.md
+
+output/
+tmp/

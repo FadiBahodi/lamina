@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 from lamina.method_runtime import list_experience, list_runs, record_observation, run_method
+from lamina.method_example import method_demo
 from lamina.methods import validate_method
 from lamina.store import Workspace
 
@@ -54,6 +55,17 @@ class CountingProvider:
                 self.active -= 1
 
 
+class ExperienceProvider(CountingProvider):
+    def call(self, stage: str, payload: dict) -> dict:
+        data = payload["input"]
+        with self.lock:
+            self.calls.append(copy.deepcopy(payload))
+        if data["node"]["id"] == "guide":
+            return {"guide": " | ".join([str(data["dependencies"]),
+                    *[item["observation"]["note"] for item in data["experience"]]])}
+        return {"finding": next(iter(data["task"].values()))}
+
+
 class MethodTests(unittest.TestCase):
     def test_validation_rejects_unknown_cycle_duplicate_and_resource_errors(self):
         base = garden()
@@ -81,6 +93,10 @@ class MethodTests(unittest.TestCase):
         reference = copy.deepcopy(base)
         reference["nodes"][0]["input"]["model_explanation"] = "See https://example.org/model and ./notes.md"
         self.assertIn("model_explanation", validate_method(reference)["nodes"][0]["input"])
+        bad = copy.deepcopy(base)
+        bad["nodes"][0]["observation_ids"] = ["a" * 32, "a" * 32]
+        with self.assertRaisesRegex(ValueError, "observation_ids"):
+            validate_method(bad)
 
     def test_parallel_siblings_bounded_and_dependency_context_explicit(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -181,6 +197,69 @@ class MethodTests(unittest.TestCase):
             self.assertEqual(observation["failure"], "missed a path closure")
             self.assertEqual(len(list_experience(Workspace(Path(temp)), "field-guides")), 1)
             self.assertEqual(list_experience(workspace, "other-family"), [])
+
+    def test_selected_observation_changes_only_consumer_and_missing_or_wrong_family_fails_early(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Workspace(Path(temp))
+            method = garden()
+            task = {"site_notes": "shade", "plant_notes": "mint", "audience": "helpers"}
+            provider = ExperienceProvider()
+            first = run_method(workspace, provider, method, task)
+            self.assertEqual(len(provider.calls), 3)
+            selected = record_observation(
+                workspace, family="field-guides", method_id=method["id"],
+                method_version="1.0", task_digest=first["task_digest"],
+                outcome="needs correction", applicability="shade garden",
+                note="Check the north gate before entry.")
+            guided = copy.deepcopy(method)
+            guided["version"] = "1.1"
+            guided["nodes"][2]["observation_ids"] = [selected["observation_id"]]
+            provider.calls.clear()
+            second = run_method(workspace, provider, guided, task)
+            self.assertEqual([call["input"]["node"]["id"] for call in provider.calls], ["guide"])
+            self.assertIn("Check the north gate", second["results"]["guide"]["guide"])
+            self.assertEqual(second["nodes"]["guide"]["observation_ids"], [selected["observation_id"]])
+            self.assertEqual(second["nodes"]["site-read"]["status"], "cached")
+            self.assertEqual(second["nodes"]["plant-read"]["status"], "cached")
+            self.assertEqual(provider.calls[0]["input"]["experience"][0]["kind"], "operator_observation")
+            record_observation(workspace, family="field-guides", method_id=method["id"],
+                               method_version="1.1", task_digest=first["task_digest"],
+                               outcome="unselected", applicability="other garden", note="Unselected note")
+            provider.calls.clear()
+            third = run_method(workspace, provider, guided, task)
+            self.assertEqual(provider.calls, [])
+            self.assertEqual(third["nodes"]["guide"]["status"], "cached")
+            with workspace.connection() as db:
+                db.execute("UPDATE method_observations SET note=? WHERE observation_id=?",
+                           ("Check both gates.", selected["observation_id"]))
+            fourth = run_method(workspace, provider, guided, task)
+            self.assertEqual([call["input"]["node"]["id"] for call in provider.calls], ["guide"])
+            self.assertIn("Check both gates.", fourth["results"]["guide"]["guide"])
+            wrong = record_observation(workspace, family="other-family", method_id="other",
+                                       method_version="1", task_digest="other", outcome="x",
+                                       applicability="other", note="Wrong family")
+            bad = copy.deepcopy(guided)
+            bad["nodes"][2]["observation_ids"] = [wrong["observation_id"]]
+            provider.calls.clear()
+            with self.assertRaisesRegex(ValueError, "another family"):
+                run_method(workspace, provider, bad, task)
+            self.assertEqual(provider.calls, [])
+            bad["nodes"][2]["observation_ids"] = ["f" * 32]
+            with self.assertRaisesRegex(ValueError, "unknown method observations"):
+                run_method(workspace, provider, bad, task)
+            self.assertEqual(provider.calls, [])
+
+    def test_packaged_example_shows_explicit_observation_consumer(self):
+        example = method_demo()
+        self.assertEqual(example["kind"], "deterministic_offline_fixture")
+        first, second, third = [entry["receipt"] for entry in example["runs"]]
+        self.assertEqual([first["nodes"][key]["status"] for key in ("reliability-read", "deployment-read", "incident-guide")],
+                         ["executed", "executed", "executed"])
+        self.assertEqual([second["nodes"][key]["status"] for key in ("reliability-read", "deployment-read", "incident-guide")],
+                         ["cached", "executed", "executed"])
+        self.assertEqual([third["nodes"][key]["status"] for key in ("reliability-read", "deployment-read", "incident-guide")],
+                         ["cached", "cached", "executed"])
+        self.assertIn("Lease expiry does not prove", third["results"]["incident-guide"]["guide"])
 
 
 if __name__ == "__main__":

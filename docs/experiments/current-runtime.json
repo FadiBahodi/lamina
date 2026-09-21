@@ -1,0 +1,113 @@
+{
+  "schema_version": "1",
+  "generated_at_utc": "2026-09-21T19:49:12+00:00",
+  "experiment": "deterministic_offline_method_fixture",
+  "reproduce": ".venv/bin/python benchmarks/run_method_example.py",
+  "python_version": "3.14.7",
+  "repetitions": 10,
+  "workspace_policy": "fresh temporary local workspace for each three-run sequence",
+  "fixture_adapter": "incident-guide-fixture-v1; no model or network call",
+  "tests": {
+    "command": "python -m unittest tests.test_method_runtime -q",
+    "exit_code": 0,
+    "count": 8
+  },
+  "verification": {
+    "checked_repetitions": 10,
+    "all_expected_node_status_patterns": true,
+    "all_requests_captured_or_identically_reused": true,
+    "all_dependency_contexts_scoped": true,
+    "all_selected_observations_same_family_and_only_on_final_editor": true,
+    "all_final_guides_changed_by_selected_observation": true
+  },
+  "timing": {
+    "unit": "milliseconds",
+    "source": "run_method receipt wall_ms from time.monotonic",
+    "quantile": "nearest-rank p95 = sorted sample at ceil(0.95 * n) - 1; for n=10 this is the maximum",
+    "steps": {
+      "Initial guide": {
+        "samples_ms": [
+          4.683,
+          3.689,
+          4.285,
+          4.645,
+          4.69,
+          4.314,
+          3.68,
+          4.394,
+          6.071,
+          4.319
+        ],
+        "median_ms": 4.357,
+        "p95_ms": 6.071
+      },
+      "Deployment note changed": {
+        "samples_ms": [
+          4.101,
+          4.272,
+          3.179,
+          3.221,
+          3.316,
+          4.755,
+          4.378,
+          3.117,
+          7.104,
+          3.293
+        ],
+        "median_ms": 3.708,
+        "p95_ms": 7.104
+      },
+      "Operator caution selected": {
+        "samples_ms": [
+          3.601,
+          3.59,
+          3.502,
+          3.624,
+          3.265,
+          3.733,
+          3.525,
+          3.384,
+          5.06,
+          3.125
+        ],
+        "median_ms": 3.558,
+        "p95_ms": 5.06
+      }
+    }
+  },
+  "outcomes": {
+    "nodes": [
+      "reliability-read",
+      "deployment-read",
+      "incident-guide"
+    ],
+    "expected_status_by_step": {
+      "Initial guide": [
+        "executed",
+        "executed",
+        "executed"
+      ],
+      "Deployment note changed": [
+        "cached",
+        "executed",
+        "executed"
+      ],
+      "Operator caution selected": [
+        "cached",
+        "cached",
+        "executed"
+      ]
+    },
+    "verified_sequence_count": 10,
+    "sample_guides": {
+      "Initial guide": "A lease expires after 60 seconds; a second worker may retry. | Deployments restart the worker process after draining requests.",
+      "Deployment note changed": "A lease expires after 60 seconds; a second worker may retry. | Deployments restart workers; a queued job may be reclaimed after restart.",
+      "Operator caution selected": "A lease expires after 60 seconds; a second worker may retry. | Deployments restart workers; a queued job may be reclaimed after restart. | Lease expiry does not prove the original worker stopped; fence stale commits."
+    }
+  },
+  "limits": [
+    "Deterministic fixture tests orchestration and cache behavior, not semantic quality.",
+    "Wall times measure local fixture calls and SQLite overhead, not LLM latency or production speed.",
+    "No token, provider cost, source comprehension, learner outcome, or delivery measure is collected."
+  ]
+}

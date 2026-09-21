@@ -676,7 +676,7 @@ def _section_context(plan: dict, section: dict) -> tuple[dict, dict[str, dict]]:
     units = {u["id"]: u for u in plan["units"]}
     chosen = [idea_map[i] for i in section["idea_ids"]]
     own_ids = {uid for idea in chosen for uid in idea["unit_ids"]}
-    own_units = {uid: units[uid] for uid in own_ids}
+    own_units = {u["id"]: u for u in plan["units"] if u["id"] in own_ids}
     route = plan["route"]
     route_outline = [
         {

@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.lamina*/
+build/
+dist/
+demo/
+site/
+.DS_Store
+.env
+.env.*
+*.sqlite3*
+!src/lamina/demo/
+!src/lamina/demo/**
+docs/implementation-contract.md

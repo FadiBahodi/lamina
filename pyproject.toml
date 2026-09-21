@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lamina-engine"
+version = "0.1.0"
+description = "Evidence-preserving document pipelines for deliberate learning."
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Fadi Bahodi"}]
+readme = "README.md"
+keywords = ["retrieval", "learning", "document-processing", "provenance", "pipelines"]
+dependencies = []
+
+[project.optional-dependencies]
+pdf = ["pypdf>=5,<7", "reportlab>=4,<5"]
+
+[project.scripts]
+lamina = "lamina.cli:main"
+
+[project.urls]
+Repository = "https://github.com/FadiBahodi/lamina"
+Documentation = "https://github.com/FadiBahodi/lamina/tree/main/docs"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lamina = ["web/*", "web/assets/*", "demo/*", "demo/**/*"]

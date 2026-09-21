@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f1e8" />
+    <meta
+      name="description"
+      content="Lamina turns source documents into inspectable lessons and deliberate practice."
+    />
+    <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Lamina — a learning workbench</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="app-shell">
+      <aside class="rail" aria-label="Workspace">
+        <a class="brand" href="#learn" aria-label="Lamina home">
+          <img src="assets/mark.svg" alt="" width="38" height="38" />
+          <span>lamina<span class="brand-dot">.</span></span>
+        </a>
+        <div class="rail-label">A learning workbench</div>
+        <nav class="primary-nav" aria-label="Main navigation">
+          <button
+            class="nav-link active"
+            type="button"
+            data-view="learn"
+            aria-current="page"
+          >
+            <span class="nav-num">01</span> Learn
+            <span class="nav-arrow" aria-hidden="true">↗</span>
+          </button>
+          <button class="nav-link" type="button" data-view="practice">
+            <span class="nav-num">02</span> Practice
+            <span class="nav-arrow" aria-hidden="true">↗</span>
+          </button>
+          <button class="nav-link" type="button" data-view="sources">
+            <span class="nav-num">03</span> Sources
+            <span class="nav-arrow" aria-hidden="true">↗</span>
+          </button>
+          <button class="nav-link" type="button" data-view="coverage">
+            <span class="nav-num">04</span> Coverage
+            <span class="nav-arrow" aria-hidden="true">↗</span>
+          </button>
+        </nav>
+        <div class="rail-bottom">
+          <div class="rail-rule"></div>
+          <p>
+            Study the idea.<br />Test the distinction.<br />Inspect the source.
+          </p>
+          <div id="rail-downloads" class="rail-downloads"></div>
+          <div class="rail-foot">
+            Your answers and ratings stay in this browser.
+          </div>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <span class="topbar-label">DOCUMENT → UNDERSTANDING</span>
+          <span class="topbar-side"
+            ><span class="status-dot"></span> LOCAL STUDY SPACE</span
+          >
+        </header>
+        <main id="main" tabindex="-1">
+          <div id="app" aria-live="polite"></div>
+        </main>
+        <footer class="site-footer">
+          <span>Lamina / learning with a traceable source</span
+          ><span id="footer-downloads" class="footer-downloads"></span>
+        </footer>
+      </div>
+    </div>
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

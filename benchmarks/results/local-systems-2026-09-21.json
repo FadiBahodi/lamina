@@ -1,0 +1,203 @@
+{
+  "benchmark": "synthetic_wait_on_real_workspace_cache",
+  "generated_utc": "2026-09-21T18:07:17.537219+00:00",
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "python": "3.14.7",
+    "sqlite": "3.53.4",
+    "logical_cpus": 12
+  },
+  "workload": {
+    "synthetic": true,
+    "units": 24,
+    "lessons": 6,
+    "delays_seconds": {
+      "extract": 0.05,
+      "reconcile": 0.12,
+      "plan": 0.12,
+      "author": 0.08,
+      "review": 0.04
+    },
+    "workers": [
+      1,
+      4,
+      8
+    ],
+    "dependency_graph": "parallel extract -> reconcile -> plan -> parallel (author -> review)",
+    "description": "Each handler only sleeps and returns a tiny JSON object; no model or media work."
+  },
+  "bounds": {
+    "synthetic_handler_work_seconds": 2.16,
+    "synthetic_longest_dependency_seconds": 0.41,
+    "scope": "Sleep-only idealizations; excludes SQLite, thread scheduling, payload serialization, model inference, and I/O."
+  },
+  "runs": [
+    {
+      "workers": 1,
+      "generic_work_span_lower_bound_seconds": 2.16,
+      "barrier_aware_sleep_only_ideal_seconds": 2.16,
+      "cold": {
+        "wall_seconds": 2.411839,
+        "phase_wall_seconds": {
+          "extract": 1.348108,
+          "reconcile": 0.126597,
+          "plan": 0.129262,
+          "author_and_review": 0.80784
+        },
+        "handler_calls": {
+          "author": 6,
+          "extract": 24,
+          "plan": 1,
+          "reconcile": 1,
+          "review": 6
+        },
+        "total_handler_calls": 38,
+        "max_simultaneous_handlers": 1,
+        "expected_cold_handler_calls": {
+          "extract": 24,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 6,
+          "review": 6
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 38
+        }
+      },
+      "warm": {
+        "wall_seconds": 0.021736,
+        "phase_wall_seconds": {
+          "extract": 0.014264,
+          "reconcile": 0.000517,
+          "plan": 0.000442,
+          "author_and_review": 0.006499
+        },
+        "handler_calls": {},
+        "total_handler_calls": 0,
+        "max_simultaneous_handlers": 0,
+        "expected_cold_handler_calls": {
+          "extract": 24,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 6,
+          "review": 6
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 38
+        }
+      }
+    },
+    {
+      "workers": 4,
+      "generic_work_span_lower_bound_seconds": 0.54,
+      "barrier_aware_sleep_only_ideal_seconds": 0.78,
+      "cold": {
+        "wall_seconds": 0.864859,
+        "phase_wall_seconds": {
+          "extract": 0.339347,
+          "reconcile": 0.12871,
+          "plan": 0.125035,
+          "author_and_review": 0.27174
+        },
+        "handler_calls": {
+          "author": 6,
+          "extract": 24,
+          "plan": 1,
+          "reconcile": 1,
+          "review": 6
+        },
+        "total_handler_calls": 38,
+        "max_simultaneous_handlers": 4,
+        "expected_cold_handler_calls": {
+          "extract": 24,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 6,
+          "review": 6
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 38
+        }
+      },
+      "warm": {
+        "wall_seconds": 0.022076,
+        "phase_wall_seconds": {
+          "extract": 0.009967,
+          "reconcile": 0.000593,
+          "plan": 0.000534,
+          "author_and_review": 0.010965
+        },
+        "handler_calls": {},
+        "total_handler_calls": 0,
+        "max_simultaneous_handlers": 0,
+        "expected_cold_handler_calls": {
+          "extract": 24,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 6,
+          "review": 6
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 38
+        }
+      }
+    },
+    {
+      "workers": 8,
+      "generic_work_span_lower_bound_seconds": 0.41,
+      "barrier_aware_sleep_only_ideal_seconds": 0.51,
+      "cold": {
+        "wall_seconds": 0.59477,
+        "phase_wall_seconds": {
+          "extract": 0.19148,
+          "reconcile": 0.126929,
+          "plan": 0.122742,
+          "author_and_review": 0.153602
+        },
+        "handler_calls": {
+          "author": 6,
+          "extract": 24,
+          "plan": 1,
+          "reconcile": 1,
+          "review": 6
+        },
+        "total_handler_calls": 38,
+        "max_simultaneous_handlers": 8,
+        "expected_cold_handler_calls": {
+          "extract": 24,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 6,
+          "review": 6
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 38
+        }
+      },
+      "warm": {
+        "wall_seconds": 0.017963,
+        "phase_wall_seconds": {
+          "extract": 0.005329,
+          "reconcile": 0.000489,
+          "plan": 0.000414,
+          "author_and_review": 0.011719
+        },
+        "handler_calls": {},
+        "total_handler_calls": 0,
+        "max_simultaneous_handlers": 0,
+        "expected_cold_handler_calls": {
+          "extract": 24,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 6,
+          "review": 6
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 38
+        }
+      }
+    }
+  ]
+}

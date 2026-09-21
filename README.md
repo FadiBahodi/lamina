@@ -1,12 +1,18 @@
 # Lamina
 
-[**Live workbench**](https://fadibahodi.github.io/lamina/) · [Architecture](docs/architecture.md) · [Bring your own model](docs/adapters.md) · [MIT license](LICENSE)
+[**Live workbench**](https://fadibahodi.github.io/lamina/) · [Architecture](docs/architecture.md) · [Design study](docs/design.md) · [Evaluation](docs/evaluation.md) · [MIT license](LICENSE)
 
 **From documents to a study system you can inspect.** Lamina extracts source-grounded ideas, consolidates overlaps, plans a learning route, and produces lessons, recall/contrast/apply practice, local cases, listen scripts, and printable handouts. The same validated bundle powers each output.
 
 ![Lamina study workbench](docs/preview.png)
 
 Lamina separates the jobs that often get blurred together. Code owns source identity, cache keys, coverage accounting, evidence checks, and export. A configured content adapter interprets the material and reviews the result. You can follow a generated claim back to an exact source passage.
+
+## The engineering problem
+
+Overlapping documents contain repeated ideas, context-specific answers, contradictions, and prerequisites. Compressing them into a readable study route can silently remove the very distinctions a learner needs. Lamina treats that transformation as a sequence of explicit representations and checked boundaries: source units, extracted concepts, canonical memberships, a curriculum plan, and authored artifacts.
+
+The current implementation provides a runnable local pipeline. The [design study](docs/design.md) compares global and hierarchical reconciliation, formalizes concept and proposed answer-level conservation, and separates search relevance from curricular priority. The [evaluation plan](docs/evaluation.md) distinguishes software invariants from semantic quality and learner outcomes. A [reproducible systems benchmark](docs/benchmarks.md) measures cold builds, concurrent work, and cache reuse without presenting synthetic timings as model-generation performance.
 
 ## Try the offline demo
 

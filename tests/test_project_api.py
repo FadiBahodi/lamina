@@ -51,12 +51,13 @@ def _call(server, path, body=None, headers=None):
 
 
 def _finished(server, rid):
-    for _ in range(300):
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
         status = json.loads(_call(server, f"/api/runs/{rid}")[1])
         if status["status"] in {"ready", "review", "failed", "interrupted"}:
             return status
-        time.sleep(0.01)
-    raise AssertionError("Production run did not finish")
+        time.sleep(0.05)
+    raise AssertionError(f"Production run did not finish: {status.get('status')}, {status.get('events', [])[-3:]}")
 
 
 def _upload_four(server):

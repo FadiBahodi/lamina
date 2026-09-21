@@ -1,0 +1,259 @@
+{
+  "benchmark": "synthetic_wait_on_real_workspace_cache",
+  "generated_utc": "2026-09-21T22:52:07.187231+00:00",
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "python": "3.14.7",
+    "sqlite": "3.53.4",
+    "logical_cpus": 12
+  },
+  "workload": {
+    "synthetic": true,
+    "units": 64,
+    "lessons": 16,
+    "delays_seconds": {
+      "extract": 0.05,
+      "reconcile": 0.12,
+      "plan": 0.12,
+      "author": 0.08,
+      "review": 0.04
+    },
+    "workers": [
+      1,
+      4,
+      16,
+      32
+    ],
+    "dependency_graph": "parallel extract -> reconcile -> plan -> parallel (author -> review)",
+    "description": "Each handler only sleeps and returns a tiny JSON object; no model or media work."
+  },
+  "bounds": {
+    "synthetic_handler_work_seconds": 5.36,
+    "synthetic_longest_dependency_seconds": 0.41,
+    "scope": "Sleep-only idealizations; excludes SQLite, thread scheduling, payload serialization, model inference, and I/O."
+  },
+  "runs": [
+    {
+      "workers": 1,
+      "generic_work_span_lower_bound_seconds": 5.36,
+      "barrier_aware_sleep_only_ideal_seconds": 5.36,
+      "cold": {
+        "wall_seconds": 6.001347,
+        "phase_wall_seconds": {
+          "extract": 3.614657,
+          "reconcile": 0.127069,
+          "plan": 0.128122,
+          "author_and_review": 2.131479
+        },
+        "handler_calls": {
+          "author": 16,
+          "extract": 64,
+          "plan": 1,
+          "reconcile": 1,
+          "review": 16
+        },
+        "total_handler_calls": 98,
+        "max_simultaneous_handlers": 1,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      },
+      "warm": {
+        "wall_seconds": 0.053657,
+        "phase_wall_seconds": {
+          "extract": 0.036793,
+          "reconcile": 0.000506,
+          "plan": 0.000417,
+          "author_and_review": 0.015927
+        },
+        "handler_calls": {},
+        "total_handler_calls": 0,
+        "max_simultaneous_handlers": 0,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      }
+    },
+    {
+      "workers": 4,
+      "generic_work_span_lower_bound_seconds": 1.34,
+      "barrier_aware_sleep_only_ideal_seconds": 1.52,
+      "cold": {
+        "wall_seconds": 1.690284,
+        "phase_wall_seconds": {
+          "extract": 0.900664,
+          "reconcile": 0.127625,
+          "plan": 0.127419,
+          "author_and_review": 0.534559
+        },
+        "handler_calls": {
+          "author": 16,
+          "extract": 64,
+          "plan": 1,
+          "reconcile": 1,
+          "review": 16
+        },
+        "total_handler_calls": 98,
+        "max_simultaneous_handlers": 4,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      },
+      "warm": {
+        "wall_seconds": 0.020334,
+        "phase_wall_seconds": {
+          "extract": 0.013619,
+          "reconcile": 0.000674,
+          "plan": 0.000529,
+          "author_and_review": 0.005501
+        },
+        "handler_calls": {},
+        "total_handler_calls": 0,
+        "max_simultaneous_handlers": 0,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      }
+    },
+    {
+      "workers": 16,
+      "generic_work_span_lower_bound_seconds": 0.41,
+      "barrier_aware_sleep_only_ideal_seconds": 0.56,
+      "cold": {
+        "wall_seconds": 0.776998,
+        "phase_wall_seconds": {
+          "extract": 0.269095,
+          "reconcile": 0.125524,
+          "plan": 0.124826,
+          "author_and_review": 0.257538
+        },
+        "handler_calls": {
+          "author": 16,
+          "extract": 64,
+          "plan": 1,
+          "reconcile": 1,
+          "review": 16
+        },
+        "total_handler_calls": 98,
+        "max_simultaneous_handlers": 16,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      },
+      "warm": {
+        "wall_seconds": 0.082118,
+        "phase_wall_seconds": {
+          "extract": 0.041086,
+          "reconcile": 0.000696,
+          "plan": 0.000697,
+          "author_and_review": 0.039628
+        },
+        "handler_calls": {},
+        "total_handler_calls": 0,
+        "max_simultaneous_handlers": 0,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      }
+    },
+    {
+      "workers": 32,
+      "generic_work_span_lower_bound_seconds": 0.41,
+      "barrier_aware_sleep_only_ideal_seconds": 0.46,
+      "cold": {
+        "wall_seconds": 0.625692,
+        "phase_wall_seconds": {
+          "extract": 0.182006,
+          "reconcile": 0.124497,
+          "plan": 0.122819,
+          "author_and_review": 0.196353
+        },
+        "handler_calls": {
+          "author": 16,
+          "extract": 64,
+          "plan": 1,
+          "reconcile": 1,
+          "review": 16
+        },
+        "total_handler_calls": 98,
+        "max_simultaneous_handlers": 30,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      },
+      "warm": {
+        "wall_seconds": 0.135645,
+        "phase_wall_seconds": {
+          "extract": 0.090192,
+          "reconcile": 0.000976,
+          "plan": 0.000542,
+          "author_and_review": 0.043921
+        },
+        "handler_calls": {},
+        "total_handler_calls": 0,
+        "max_simultaneous_handlers": 0,
+        "expected_cold_handler_calls": {
+          "extract": 64,
+          "reconcile": 1,
+          "plan": 1,
+          "author": 16,
+          "review": 16
+        },
+        "sqlite_job_stats_after_run": {
+          "completed": 98
+        }
+      }
+    }
+  ]
+}

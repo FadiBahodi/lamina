@@ -146,12 +146,13 @@ def benchmark(units: int = 24, lessons: int = 6,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--widths", type=int, nargs="+", default=[1,4,8,16,32])
     parser.add_argument("--units", type=int, default=24)
     parser.add_argument("--lessons", type=int, default=6)
     parser.add_argument("--output", type=Path,
                         default=ROOT / "benchmarks" / "results" / "local-systems.json")
     args = parser.parse_args()
-    result = benchmark(args.units, args.lessons)
+    result = benchmark(args.units, args.lessons, tuple(args.widths))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"output": str(args.output),

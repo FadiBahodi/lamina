@@ -56,8 +56,8 @@ def validate_method(value: dict) -> dict:
     if not isinstance(resources, dict) or set(resources) != {"workers", "lanes"}:
         raise ValueError("resources needs workers and lanes")
     workers, lanes = resources["workers"], resources["lanes"]
-    if type(workers) is not int or not 1 <= workers <= 32:
-        raise ValueError("workers must be 1..32")
+    if type(workers) is not int or not 1 <= workers <= 128:
+        raise ValueError("workers must be 1..128")
     if not isinstance(lanes, dict) or not lanes or len(lanes) > 16:
         raise ValueError("lanes must be a nonempty bounded object")
     clean_lanes = {}
@@ -68,8 +68,8 @@ def validate_method(value: dict) -> dict:
         clean_lanes[lane] = capacity
     method["resources"] = {"workers": workers, "lanes": dict(sorted(clean_lanes.items()))}
     nodes = value["nodes"]
-    if not isinstance(nodes, list) or not 1 <= len(nodes) <= 64:
-        raise ValueError("nodes must contain 1..64 entries")
+    if not isinstance(nodes, list) or not 1 <= len(nodes) <= 1024:
+        raise ValueError("nodes must contain 1..1024 entries")
     clean_nodes, seen = [], set()
     for raw in nodes:
         required = {"id", "role", "instructions", "lane", "depends_on", "input"}

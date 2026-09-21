@@ -6,17 +6,19 @@
     <meta name="theme-color" content="#0d1117" />
     <meta
       name="description"
-      content="Open-source infrastructure for document generation workflows: parallel model calls, explicit context, persistent results, and selective reruns."
+      content="Lamina turns source files into guides, documents, assessments, and listening scripts with parallel reading, source evidence, review, and section revision."
     />
-    <title>Lamina | Reusable workflows for model-driven production</title>
+    <title>Lamina | Make useful work from your sources</title>
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="inspector.css" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="method-workbench.css" />
+    <link rel="stylesheet" href="production-workbench.css" />
     <script src="inspector.js" defer></script>
     <script src="app.js" defer></script>
     <script src="method-trace.js" defer></script>
     <script src="method-workbench.js" defer></script>
+    <script src="production-workbench.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -26,7 +28,7 @@
       >
       <nav class="nav" aria-label="Primary">
         <button type="button" class="nav-link is-active" data-view="overview" aria-current="page">Overview</button>
-        <button type="button" class="nav-link" data-view="workflows">Workbench</button>
+        <button type="button" class="nav-link" data-view="workflows">Projects</button>
       </nav>
       <a
         class="header-link"
@@ -39,62 +41,37 @@
     <main id="main">
       <section class="view is-active overview-view" id="view-overview" aria-labelledby="page-title">
         <div class="product-intro">
-          <span class="section-index">LAMINA / OPEN-SOURCE WORKFLOW ENGINE</span>
-          <h1 id="page-title">Design, run, and revise<br class="desktop-break" /> model-driven workflows.</h1>
+          <span class="section-index">LAMINA / LOCAL PRODUCTION SOFTWARE</span>
+          <h1 id="page-title">Turn a source collection into a finished piece of work.</h1>
           <div class="intro-columns">
-            <p class="product-summary">Define what each model worker receives, which results it needs, and how much work can run together. Import a method, execute it with your own model adapter, inspect the results, and apply a correction to the next run. The same method can travel between projects.</p>
-            <div class="intro-actions"><button class="button button-primary" type="button" data-view="workflows">Open the workbench</button><a class="button button-secondary" href="https://github.com/FadiBahodi/lamina/releases/tag/v0.4.1">Download Lamina</a><a class="text-button" href="assets/lamina-technical-paper.pdf">Technical paper ↗</a><span>Python + local web app · Your model adapter · MIT license</span></div>
+            <p class="product-summary">Describe the goal, add your material, and choose how much work may run at once. Lamina organizes the reading, coordinates writing and review, keeps a route back to the source, and lets you revise the result.</p>
+            <div class="intro-actions"><button class="button button-primary" type="button" data-view="workflows">Open a project →</button><a class="button button-secondary" href="https://github.com/FadiBahodi/lamina/releases/latest">Download Lamina</a><span>Python + local app · Your model adapter · MIT license</span></div>
           </div>
         </div>
-        <div class="paper-nav"><a href="#paper-problem">Problem</a><a href="#paper-architecture">Architecture</a><a href="#execution">Implementation</a><a href="#paper-download">Download</a></div>
-        <section class="paper-section" id="paper-problem"><span class="section-index">01 / PROBLEM</span><h2>A finished document hides the decisions that made it.</h2><div class="paper-prose"><p>Producing a useful guide, assessment, or audio lesson requires more than summarizing the source. Someone chooses which details to preserve, which ideas belong together, what context each writer needs, and which parts require review. Those choices often disappear into a long conversation.</p><p>When the source changes or a new agent takes over, the team has to reconstruct that reasoning. Lamina treats the production method as an explicit, revisable object. The intended users are teams building repeated document workflows whose outputs must remain correct as the material changes.</p></div></section>
-        <section class="paper-section" id="paper-architecture"><span class="section-index">02 / PROPOSED ARCHITECTURE</span><h2>Preserve the decisions that control the work.</h2>
-          <div class="design-flow" aria-label="Proposed architecture"><div><span>01</span><h3>Task contract</h3><p>Requested output, audience, source permissions, acceptance tests, and resource budget.</p></div><div><span>02</span><h3>Method decision</h3><p>Choose a representation and work plan. State why it fits and which alternatives were rejected.</p></div><div><span>03</span><h3>Context &amp; execution</h3><p>Give each worker the evidence and completed results it needs. Schedule the actual dependencies.</p></div><div><span>04</span><h3>Review &amp; revision</h3><p>Trace a defect to the decision that caused it. Reopen affected work and test the revised method.</p></div></div>
-          <p class="figure-note">Proposed integration. The current guide pipeline and generic method runner share storage but retain separate orchestration.</p>
-          <div class="paper-prose"><p>A method needs conditions for use, a source representation, context-selection rules, and a policy for repair. A job graph executes the chosen plan. It cannot by itself decide whether a figure needs a separate reader or whether two writers need to agree on a disputed claim.</p><p>The paper specifies these boundaries, compares alternative coordination policies, and defines what would count as evidence that a retained method transfers to a new task.</p></div>
+        <section class="product-story" aria-labelledby="story-title">
+          <div><span class="section-index">THE PRODUCT</span><h2 id="story-title">You choose the job. The system handles the handoffs.</h2><p>A guide, assessment, or listening script needs different editorial decisions. Lamina reads your sources in bounded pieces, lets the model shape a plan for the goal, and carries relevant source and prior work to each writer. The current release produces text and documents; a listening script is not an audio file.</p><button type="button" class="text-button" data-view="workflows">Start with your own sources →</button></div>
+          <div class="story-flow" aria-label="Project flow"><div><span>01</span><strong>Goal + source files</strong><p>State the audience and result. Add text, Markdown, or PDF sources locally.</p></div><div><span>02</span><strong>Read + plan</strong><p>Parallel readers examine bounded passages with neighboring context. A shared plan orders the work.</p></div><div><span>03</span><strong>Write + review</strong><p>Writers build the artifact and a review records what passed or needs attention.</p></div><div><span>04</span><strong>Open + revise</strong><p>Inspect the result and its source evidence. Revisit a gap and rerun affected work.</p></div></div>
+        </section>
+        <section class="scale-section" aria-labelledby="scale-title">
+          <div class="section-heading"><div><span class="section-index">SEE THE SCHEDULING SHAPE</span><h2 id="scale-title">Parallel work still has dependencies.</h2></div><p>Move the reader count to see how a source collection is divided into waves. The shared plan waits for reading; a larger worker pool cannot remove that wait.</p></div>
+          <div id="scale-lab" class="scale-lab">
+            <div class="scale-controls"><label>Source pieces <strong id="scale-units-value">24</strong><input id="scale-units" type="range" min="4" max="128" value="24"></label><label>Readers at once <strong id="scale-readers-value">16</strong><input id="scale-readers" type="range" min="1" max="128" value="16"></label><div class="scale-assumption">Illustrative scheduling only. Each piece represents a bounded reading task; workers are assumed equally available. The diagram makes no time, cost, quality, or provider-limit claim.</div></div>
+            <div class="scale-visual"><div class="scale-lane"><span>READ IN PARALLEL</span><div id="scale-waves" class="scale-waves"></div><strong id="scale-wave-count">2 waves</strong></div><div class="scale-gate"><span>→</span><strong>Shared plan</strong><small>Needs the reading results</small></div><div class="scale-lane scale-output"><span>THEN WRITE &amp; REVIEW</span><strong>Several sections can proceed</strong><small>Within the limits set for the project</small></div></div>
+          </div>
+          <div class="context-explainer"><div><span class="section-index">CONTEXT IS A DESIGN CHOICE</span><h3>A reader gets the passage it owns and the source units beside it.</h3></div><div class="context-packet"><span>PREVIOUS / neighboring source unit</span><strong>OWNED SOURCE PASSAGE</strong><span>NEXT / neighboring source unit</span></div><p>Neighbors help interpret a boundary. A writer receives the shared plan, its assigned ideas, and exact evidence needed from prerequisite sections. It does not receive another writer's completed prose. More context has a cost; less context can break the connection between ideas.</p></div>
         </section>
         <section class="execution" id="execution" aria-labelledby="execution-title">
-          <div class="execution-heading"><div><span class="section-index">EXECUTION EXAMPLE</span><h2 id="execution-title">What changes when the input changes?</h2></div><p>Recorded runs of the method engine with a deterministic test adapter. Select a run, then a worker, to inspect its inputs and result.</p></div>
+          <div class="execution-heading"><div><span class="section-index">RECORDED EXAMPLE</span><h2 id="execution-title">Inspect a real run and a selective rerun.</h2></div><p>These are actual cache and dependency decisions from a deterministic test adapter. They demonstrate execution and reuse, not model writing quality or production speed.</p></div>
           <div id="method-trace" aria-live="polite"><p class="loading">Loading execution records…</p></div>
         </section>
-        <section class="paper-section" id="implementation-detail">
-        <div class="section-heading"><div><span class="section-index">ARCHITECTURE</span><h2 id="method-title">Context, execution, and revision.</h2></div><p>Models interpret sources and write the content. Lamina determines which inputs they receive, when their work can run, and which results can be reused.</p></div>
-        <div class="architecture-table" role="table" aria-label="Implemented architecture and remaining integration">
-          <div class="architecture-row" role="row"><span role="cell">Source store</span><p role="cell">Text units retain file identity, locators, and source roles. Assessment material stays out of guide authoring.</p><code role="cell">store.py · ingest.py</code></div>
-          <div class="architecture-row" role="row"><span role="cell">Document pipeline</span><p role="cell">Parallel extraction, whole-collection reconciliation and planning, then parallel authoring and review. Writers receive the shared plan and prerequisite evidence.</p><code role="cell">pipeline.py</code></div>
-          <div class="architecture-row" role="row"><span role="cell">Method runtime</span><p role="cell">A dependency graph schedules model jobs within worker and lane limits. Each node receives selected task fields and its completed prerequisites.</p><code role="cell">method_runtime.py</code></div>
-          <div class="architecture-row" role="row"><span role="cell">Experience</span><p role="cell">An operator records an observation and chooses which later nodes receive it. Those nodes include the observation in their request and cache identity.</p><code role="cell">observation_ids</code></div>
-          <div class="architecture-row" role="row"><span role="cell">Integration gap</span><p role="cell">The guide pipeline does not yet run as a custom method. Automatic method selection, completed-prose coordination, visual source extraction, and podcast delivery require further work.</p><a role="cell" href="https://github.com/FadiBahodi/lamina/blob/main/docs/architecture-status.md">Implementation map</a></div>
-        </div>
-        <div class="systems-grid">
-          <article><span class="section-index">SCHEDULING</span><h3>A dependency can dominate the runtime.</h3><div class="equation">T ≥ max(W / p, D)</div><p>W is total service work, p is worker count, and D is the longest dependency path. This ideal lower bound explains why adding workers stops helping. Provider limits, queues, and retries add time.</p></article>
-          <article><span class="section-index">REPAIR</span><h3>Reuse depends on the inputs.</h3><div class="equation code-equation">key = H(runtime, adapter, node, context)</div><p>Context includes the selected task fields, dependency outputs, and selected observations. A node reruns when this request changes. Its descendants rerun if their own inputs change.</p></article>
-        </div>
-        <div class="inspector-shell method-inspector"><div class="section-heading"><div><span class="section-index">DOCUMENT PIPELINE</span><h2>Inspect the guide build.</h2></div><p>Source excerpts, merge decisions, lesson assignments, and reviewer responses from the published example.</p></div><div id="runtime-inspector"><p class="loading">Loading build records…</p></div></div>
-        <div class="architecture-reading"><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/architecture-status.md">Implementation map</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/design-constraints.md">Design constraints</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/measurement.md">Evaluation protocol</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/comparison.md">Product comparison</a></div>
-        </section>
-        <section class="product-scope" aria-labelledby="scope-title">
-          <div class="section-heading"><div><span class="section-index">WHAT YOU CAN BUILD</span><h2 id="scope-title">Document production is the first application.</h2></div><p>The local app runs imported method graphs and includes a document-to-guide pipeline. Both use the same durable job store. The guide pipeline retains its own orchestration and source validation.</p></div>
-          <div class="application-grid">
-            <article><span class="mono-label">01 / DOCUMENT PIPELINE</span><h3>Documents to a guide or assessment</h3><p>Read source passages in parallel, reconcile overlapping ideas, plan the sequence, then write and review. Export a reader, PDF, questions, or a narration script.</p><div class="mini-pipeline"><span>Sources</span><span>Extraction</span><span>Plan</span><span>Author</span><span>Review</span></div><button class="text-button" data-example="engineering" type="button">Open the generated guide</button><button class="text-button" data-example="samp" type="button">Try the assessment</button></article>
-            <article><span class="mono-label">02 / METHOD RUNTIME</span><h3>Define how agents work together</h3><p>A JSON method declares dependencies, task fields, model instructions, and concurrency limits. A worker can receive selected observations from a previous run. A method file can be reused in another project.</p><pre class="method-code"><code>{
-  "id": "incident-guide",
-  "depends_on": ["reliability-read", "deployment-read"],
-  "task_keys": ["audience"],
-  "lane": "editorial"
-}</code></pre><a class="text-button" href="https://github.com/FadiBahodi/lamina/blob/main/docs/methods.md">Read the method API</a></article>
-          </div>
-        </section>
-        <section class="paper-section paper-download" id="paper-download"><span class="section-index">DOWNLOAD &amp; REPRODUCE</span><h2>Read the design. Run the reference implementation.</h2><div class="download-grid"><div><h3>Technical paper</h3><p>Architecture, data contracts, scheduling, context budgets, revision rules, and the evaluation plan. Implemented mechanisms are distinguished from proposed ones.</p><a class="button button-primary" href="assets/lamina-technical-paper.pdf">Download PDF</a><a class="text-button" href="https://github.com/FadiBahodi/lamina/blob/main/docs/technical-paper.md">Read the source</a></div><div><h3>Local runtime</h3><pre class="method-code"><code>git clone https://github.com/FadiBahodi/lamina.git
-cd lamina
-python -m pip install -e '.[pdf]'
-lamina app</code></pre><a class="text-button" href="https://github.com/FadiBahodi/lamina/releases/tag/v0.4.1">Download the release</a><p class="figure-note">Python 3.11+. Configure a model adapter to generate from your own material.</p></div></div></section>
+        <section class="overview-foot"><div><span class="section-index">GO DEEPER</span><h2>Use it, then inspect the machinery.</h2><p>Open a project to try the product locally, examine the published examples, or read the implementation and evaluation boundaries.</p></div><div class="overview-links"><button type="button" class="text-button" data-view="workflows">Open a project →</button><button type="button" class="text-button" data-view="examples">Published outputs →</button><a class="text-button" href="assets/lamina-technical-paper.pdf">Technical paper ↗</a><a class="text-button" href="https://github.com/FadiBahodi/lamina">Source code ↗</a></div></section>
       </section>
 
       <section class="view" id="view-workflows" aria-labelledby="workflows-title" hidden>
-        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
-        <div class="section-heading"><div><span class="section-index">WORKBENCH / METHOD RUNTIME</span><h2 id="workflows-title">Define the work. Inspect the execution.</h2></div><p>A portable method describes the workers, their context and dependencies. Run it locally with your configured model adapter, then revise only the inputs that need to change.</p></div>
-        <div id="method-workbench"><p class="loading">Loading the method editor…</p></div>
+        <div class="project-heading"><div><span class="section-index">PROJECT WORKBENCH</span><h2 id="workflows-title">Make something from your material.</h2><p>Give the project a goal, add sources, and set the available capacity. Start the run to see each stage and open its finished output.</p></div><span class="project-mode" id="project-mode">Checking local app…</span></div>
+        <div id="production-workbench"><p class="loading">Loading project workbench…</p></div>
+        <details class="advanced-workflow"><summary>Advanced: define a custom execution method</summary><p>A technical editor for teams that need to control individual worker inputs and dependencies. The project form above is the normal path.</p><div id="method-workbench"><p class="loading">Loading advanced method editor…</p></div></details>
+        <div class="workbench-secondary"><button type="button" class="text-button" data-view="studio">Use the earlier document builder</button><button type="button" class="text-button" data-view="examples">Explore published outputs</button><button type="button" class="text-button" data-view="procedures">Edit document settings</button></div>
       </section>
 
       <section
@@ -103,7 +80,7 @@ lamina app</code></pre><a class="text-button" href="https://github.com/FadiBahod
         aria-labelledby="studio-title"
         hidden
       >
-        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
+        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Projects</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
         <div class="section-heading">
           <div>
             <span class="section-index">BUILD / LOCAL PRODUCTION</span>
@@ -299,7 +276,7 @@ lamina app</code></pre><a class="text-button" href="https://github.com/FadiBahod
         aria-labelledby="procedures-title"
         hidden
       >
-        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
+        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Projects</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
         <div class="section-heading">
           <div>
             <span class="section-index"
@@ -339,7 +316,7 @@ lamina app</code></pre><a class="text-button" href="https://github.com/FadiBahod
         aria-labelledby="examples-title"
         hidden
       >
-        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Custom workflow</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
+        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Projects</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="examples">Example outputs</button><button type="button" data-view="procedures">Document settings</button></nav>
         <div class="section-heading">
           <div>
             <span class="section-index">EXAMPLES / PUBLISHED ARTIFACTS</span>
@@ -401,7 +378,7 @@ lamina app</code></pre><a class="text-button" href="https://github.com/FadiBahod
           rel="noopener noreferrer"
           >Source on GitHub</a
         ><a
-          href="https://github.com/FadiBahodi/lamina#run-it-locally"
+          href="https://github.com/FadiBahodi/lamina#start-a-project"
           rel="noopener noreferrer"
           >Run locally</a
         >

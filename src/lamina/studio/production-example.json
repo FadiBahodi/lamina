@@ -1,0 +1,890 @@
+{
+  "label": "Deterministic fixture exercising the actual production engine; no generative quality claim.",
+  "brief": {
+    "goal": "Write a short incident guide for a team deploying lease-based background workers.",
+    "audience": "On-call engineers",
+    "constraints": "Preserve the distinction between lease expiry and worker termination."
+  },
+  "options": {
+    "format": "guide",
+    "reader_workers": 8,
+    "writer_workers": 8,
+    "review_workers": 8,
+    "core_words": 100,
+    "halo_units": 1
+  },
+  "sources": [
+    {
+      "name": "reliability-notes.md",
+      "role": "teaching",
+      "text": "# Reliability notes\n\nA lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.\n\nA fencing token lets storage reject writes from workers holding an older token."
+    },
+    {
+      "name": "deployment-notes.md",
+      "role": "teaching",
+      "text": "# Deployment notes\n\nA retry acquires a new token before it writes. The retry must not assume that the former worker has stopped.\n\nOperations should log the token on each write attempt so a stale rejection can be traced."
+    }
+  ],
+  "plan": {
+    "schema_version": "1.0",
+    "revision": "lamina-production-1",
+    "brief": {
+      "goal": "Write a short incident guide for a team deploying lease-based background workers.",
+      "audience": "On-call engineers",
+      "constraints": "Preserve the distinction between lease expiry and worker termination."
+    },
+    "options": {
+      "format": "guide",
+      "reader_workers": 8,
+      "writer_workers": 8,
+      "review_workers": 8,
+      "core_words": 100,
+      "halo_units": 1,
+      "max_request_bytes": 1500000
+    },
+    "provider_identity": "original-production-fixture-v1",
+    "sources": [
+      {
+        "id": "fixture_source_1",
+        "title": "reliability-notes",
+        "filename": "reliability-notes.md",
+        "sha256": "fixture-1",
+        "role": "teaching"
+      },
+      {
+        "id": "fixture_source_2",
+        "title": "deployment-notes",
+        "filename": "deployment-notes.md",
+        "sha256": "fixture-2",
+        "role": "teaching"
+      }
+    ],
+    "units": [
+      {
+        "id": "fixture_unit_1_1",
+        "source_id": "fixture_source_1",
+        "heading": "reliability-notes.md",
+        "text": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.",
+        "locator": "paragraph 1",
+        "ordinal": 1,
+        "role": "teaching"
+      },
+      {
+        "id": "fixture_unit_1_2",
+        "source_id": "fixture_source_1",
+        "heading": "reliability-notes.md",
+        "text": "A fencing token lets storage reject writes from workers holding an older token.",
+        "locator": "paragraph 2",
+        "ordinal": 2,
+        "role": "teaching"
+      },
+      {
+        "id": "fixture_unit_2_1",
+        "source_id": "fixture_source_2",
+        "heading": "deployment-notes.md",
+        "text": "A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped.",
+        "locator": "paragraph 1",
+        "ordinal": 1,
+        "role": "teaching"
+      },
+      {
+        "id": "fixture_unit_2_2",
+        "source_id": "fixture_source_2",
+        "heading": "deployment-notes.md",
+        "text": "Operations should log the token on each write attempt so a stale rejection can be traced.",
+        "locator": "paragraph 2",
+        "ordinal": 2,
+        "role": "teaching"
+      }
+    ],
+    "windows": [
+      {
+        "id": "window_1",
+        "source_id": "fixture_source_1",
+        "core": [
+          {
+            "id": "fixture_unit_1_1",
+            "source_id": "fixture_source_1",
+            "heading": "reliability-notes.md",
+            "text": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.",
+            "locator": "paragraph 1",
+            "ordinal": 1,
+            "role": "teaching"
+          },
+          {
+            "id": "fixture_unit_1_2",
+            "source_id": "fixture_source_1",
+            "heading": "reliability-notes.md",
+            "text": "A fencing token lets storage reject writes from workers holding an older token.",
+            "locator": "paragraph 2",
+            "ordinal": 2,
+            "role": "teaching"
+          }
+        ],
+        "before": [],
+        "after": []
+      },
+      {
+        "id": "window_2",
+        "source_id": "fixture_source_2",
+        "core": [
+          {
+            "id": "fixture_unit_2_1",
+            "source_id": "fixture_source_2",
+            "heading": "deployment-notes.md",
+            "text": "A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped.",
+            "locator": "paragraph 1",
+            "ordinal": 1,
+            "role": "teaching"
+          },
+          {
+            "id": "fixture_unit_2_2",
+            "source_id": "fixture_source_2",
+            "heading": "deployment-notes.md",
+            "text": "Operations should log the token on each write attempt so a stale rejection can be traced.",
+            "locator": "paragraph 2",
+            "ordinal": 2,
+            "role": "teaching"
+          }
+        ],
+        "before": [],
+        "after": []
+      }
+    ],
+    "ideas": [
+      {
+        "id": "window_1:idea_1",
+        "title": "reliability-notes.md",
+        "explanation": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.",
+        "unit_ids": [
+          "fixture_unit_1_1"
+        ],
+        "evidence": [
+          {
+            "unit_id": "fixture_unit_1_1",
+            "quote": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped."
+          }
+        ]
+      },
+      {
+        "id": "window_1:idea_2",
+        "title": "reliability-notes.md",
+        "explanation": "A fencing token lets storage reject writes from workers holding an older token.",
+        "unit_ids": [
+          "fixture_unit_1_2"
+        ],
+        "evidence": [
+          {
+            "unit_id": "fixture_unit_1_2",
+            "quote": "A fencing token lets storage reject writes from workers holding an older token."
+          }
+        ]
+      },
+      {
+        "id": "window_2:idea_1",
+        "title": "deployment-notes.md",
+        "explanation": "A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped.",
+        "unit_ids": [
+          "fixture_unit_2_1"
+        ],
+        "evidence": [
+          {
+            "unit_id": "fixture_unit_2_1",
+            "quote": "A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped."
+          }
+        ]
+      },
+      {
+        "id": "window_2:idea_2",
+        "title": "deployment-notes.md",
+        "explanation": "Operations should log the token on each write attempt so a stale rejection can be traced.",
+        "unit_ids": [
+          "fixture_unit_2_2"
+        ],
+        "evidence": [
+          {
+            "unit_id": "fixture_unit_2_2",
+            "quote": "Operations should log the token on each write attempt so a stale rejection can be traced."
+          }
+        ]
+      }
+    ],
+    "route": {
+      "title": "Lease-worker incident guide",
+      "summary": "Expiry, fencing, and traceability",
+      "sections": [
+        {
+          "id": "section_1",
+          "title": "What expiry means",
+          "purpose": "Distinguish lease expiry from worker termination",
+          "idea_ids": [
+            "window_1:idea_1"
+          ],
+          "context_section_ids": []
+        },
+        {
+          "id": "section_2",
+          "title": "Safe retry",
+          "purpose": "Explain fencing and fresh tokens",
+          "idea_ids": [
+            "window_1:idea_2",
+            "window_2:idea_1"
+          ],
+          "context_section_ids": [
+            "section_1"
+          ]
+        },
+        {
+          "id": "section_3",
+          "title": "Trace rejection",
+          "purpose": "Explain write-attempt logging",
+          "idea_ids": [
+            "window_2:idea_2"
+          ],
+          "context_section_ids": [
+            "section_2"
+          ]
+        }
+      ],
+      "omitted": [],
+      "shared_context": [
+        {
+          "statement": "A new lease does not prove that the previous worker has stopped; fencing rejects stale writes.",
+          "evidence": [
+            {
+              "unit_id": "fixture_unit_1_1",
+              "quote": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped."
+            },
+            {
+              "unit_id": "fixture_unit_1_2",
+              "quote": "A fencing token lets storage reject writes from workers holding an older token."
+            }
+          ]
+        }
+      ]
+    },
+    "metrics": {
+      "requests": [
+        {
+          "stage": "production_read",
+          "item": "window_1",
+          "cache": "miss",
+          "request_bytes": 1749,
+          "wall_ms": 1.05
+        },
+        {
+          "stage": "production_read",
+          "item": "window_2",
+          "cache": "miss",
+          "request_bytes": 1766,
+          "wall_ms": 2.845
+        },
+        {
+          "stage": "production_route",
+          "item": "global",
+          "cache": "miss",
+          "request_bytes": 3248,
+          "wall_ms": 1.599
+        }
+      ],
+      "peak_provider_calls": {
+        "production_read": 1,
+        "production_route": 1
+      },
+      "context_bytes_total": 6763,
+      "cache_hits": 0,
+      "cache_misses": 3,
+      "wall_ms": 6.028,
+      "selected_sources": 2,
+      "source_units": 4,
+      "reader_windows": 2,
+      "extracted_ideas": 4,
+      "assigned_ideas": 4,
+      "omitted_ideas": 0
+    },
+    "plan_digest": "572ef3edf3a1885b571cf9d47f0a10b3cde358aae76f21a0533caa69ec8a72ce"
+  },
+  "runs": [
+    {
+      "title": "Initial build",
+      "receipt": {
+        "schema_version": "1.0",
+        "revision": "lamina-production-1",
+        "status": "ready",
+        "format": "guide",
+        "title": "Lease-worker incident guide",
+        "markdown": "# Lease-worker incident guide\n\n## What expiry means\n\nA lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.\n\n## Safe retry\n\nA fencing token lets storage reject writes from workers holding an older token. A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped. Lease expiry alone never proves that the former worker stopped.\n\n## Trace rejection\n\nOperations should log the token on each write attempt so a stale rejection can be traced.\n",
+        "candidate_markdown": null,
+        "examiner_markdown": null,
+        "sections": [
+          {
+            "id": "section_1",
+            "title": "What expiry means",
+            "body": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.",
+            "used_idea_ids": [
+              "window_1:idea_1"
+            ],
+            "evidence": [
+              {
+                "unit_id": "fixture_unit_1_1",
+                "quote": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped."
+              }
+            ]
+          },
+          {
+            "id": "section_2",
+            "title": "Safe retry",
+            "body": "A fencing token lets storage reject writes from workers holding an older token. A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped. Lease expiry alone never proves that the former worker stopped.",
+            "used_idea_ids": [
+              "window_1:idea_2",
+              "window_2:idea_1"
+            ],
+            "evidence": [
+              {
+                "unit_id": "fixture_unit_1_2",
+                "quote": "A fencing token lets storage reject writes from workers holding an older token."
+              },
+              {
+                "unit_id": "fixture_unit_2_1",
+                "quote": "A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped."
+              }
+            ]
+          },
+          {
+            "id": "section_3",
+            "title": "Trace rejection",
+            "body": "Operations should log the token on each write attempt so a stale rejection can be traced.",
+            "used_idea_ids": [
+              "window_2:idea_2"
+            ],
+            "evidence": [
+              {
+                "unit_id": "fixture_unit_2_2",
+                "quote": "Operations should log the token on each write attempt so a stale rejection can be traced."
+              }
+            ]
+          }
+        ],
+        "initial_findings": {
+          "section_2": [
+            {
+              "issue": "Expiry does not prove a worker stopped.",
+              "repair_instruction": "Restore the expiry/termination distinction.",
+              "evidence": [
+                {
+                  "unit_id": "fixture_unit_1_2",
+                  "quote": "A fencing token lets storage reject writes from workers holding an older token."
+                }
+              ]
+            }
+          ]
+        },
+        "findings": {},
+        "sources": [
+          {
+            "id": "fixture_source_1",
+            "title": "reliability-notes",
+            "filename": "reliability-notes.md",
+            "sha256": "fixture-1",
+            "role": "teaching"
+          },
+          {
+            "id": "fixture_source_2",
+            "title": "deployment-notes",
+            "filename": "deployment-notes.md",
+            "sha256": "fixture-2",
+            "role": "teaching"
+          }
+        ],
+        "plan_digest": "572ef3edf3a1885b571cf9d47f0a10b3cde358aae76f21a0533caa69ec8a72ce",
+        "metrics": {
+          "requests": [
+            {
+              "stage": "production_repair",
+              "item": "section_2",
+              "cache": "miss",
+              "request_bytes": 5016,
+              "wall_ms": 1.709
+            },
+            {
+              "stage": "production_review",
+              "item": "section_1",
+              "cache": "miss",
+              "request_bytes": 3676,
+              "wall_ms": 2.429
+            },
+            {
+              "stage": "production_review",
+              "item": "section_2",
+              "cache": "miss",
+              "request_bytes": 5096,
+              "wall_ms": 0.918
+            },
+            {
+              "stage": "production_review",
+              "item": "section_2",
+              "cache": "miss",
+              "request_bytes": 5165,
+              "wall_ms": 1.533
+            },
+            {
+              "stage": "production_review",
+              "item": "section_3",
+              "cache": "miss",
+              "request_bytes": 4807,
+              "wall_ms": 5.348
+            },
+            {
+              "stage": "production_write",
+              "item": "section_1",
+              "cache": "miss",
+              "request_bytes": 3169,
+              "wall_ms": 1.103
+            },
+            {
+              "stage": "production_write",
+              "item": "section_2",
+              "cache": "miss",
+              "request_bytes": 4360,
+              "wall_ms": 2.137
+            },
+            {
+              "stage": "production_write",
+              "item": "section_3",
+              "cache": "miss",
+              "request_bytes": 4318,
+              "wall_ms": 5.261
+            }
+          ],
+          "peak_provider_calls": {
+            "production_write": 1,
+            "production_review": 1,
+            "production_repair": 1
+          },
+          "context_bytes_total": 35607,
+          "cache_hits": 0,
+          "cache_misses": 8,
+          "wall_ms": 16.235,
+          "sections": 3,
+          "initial_flagged_sections": 1,
+          "remaining_flagged_sections": 0,
+          "output_bytes": 531
+        },
+        "scope": "Source-grounded model output and model review; no independent truth, mastery, audio, or delivery verification."
+      }
+    },
+    {
+      "title": "Targeted section revision",
+      "receipt": {
+        "schema_version": "1.0",
+        "revision": "lamina-production-1",
+        "status": "ready",
+        "format": "guide",
+        "title": "Lease-worker incident guide",
+        "markdown": "# Lease-worker incident guide\n\n## What expiry means\n\nA lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.\n\n## Safe retry\n\nA fencing token lets storage reject writes from workers holding an older token. A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped. Lease expiry alone never proves that the former worker stopped.\n\n## Trace rejection\n\nOperations should log the token on each write attempt so a stale rejection can be traced. Operator note: Add the incident ticket ID beside each rejected write.\n",
+        "candidate_markdown": null,
+        "examiner_markdown": null,
+        "sections": [
+          {
+            "body": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.",
+            "evidence": [
+              {
+                "quote": "A lease expires after thirty seconds. Lease expiry does not prove that the former worker stopped.",
+                "unit_id": "fixture_unit_1_1"
+              }
+            ],
+            "id": "section_1",
+            "title": "What expiry means",
+            "used_idea_ids": [
+              "window_1:idea_1"
+            ]
+          },
+          {
+            "body": "A fencing token lets storage reject writes from workers holding an older token. A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped. Lease expiry alone never proves that the former worker stopped.",
+            "evidence": [
+              {
+                "quote": "A fencing token lets storage reject writes from workers holding an older token.",
+                "unit_id": "fixture_unit_1_2"
+              },
+              {
+                "quote": "A retry acquires a new token before it writes. The retry must not assume that the former worker has stopped.",
+                "unit_id": "fixture_unit_2_1"
+              }
+            ],
+            "id": "section_2",
+            "title": "Safe retry",
+            "used_idea_ids": [
+              "window_1:idea_2",
+              "window_2:idea_1"
+            ]
+          },
+          {
+            "id": "section_3",
+            "title": "Trace rejection",
+            "body": "Operations should log the token on each write attempt so a stale rejection can be traced. Operator note: Add the incident ticket ID beside each rejected write.",
+            "used_idea_ids": [
+              "window_2:idea_2"
+            ],
+            "evidence": [
+              {
+                "unit_id": "fixture_unit_2_2",
+                "quote": "Operations should log the token on each write attempt so a stale rejection can be traced."
+              }
+            ]
+          }
+        ],
+        "initial_findings": {
+          "section_2": [
+            {
+              "evidence": [
+                {
+                  "quote": "A fencing token lets storage reject writes from workers holding an older token.",
+                  "unit_id": "fixture_unit_1_2"
+                }
+              ],
+              "issue": "Expiry does not prove a worker stopped.",
+              "repair_instruction": "Restore the expiry/termination distinction."
+            }
+          ]
+        },
+        "findings": {},
+        "sources": [
+          {
+            "id": "fixture_source_1",
+            "title": "reliability-notes",
+            "filename": "reliability-notes.md",
+            "sha256": "fixture-1",
+            "role": "teaching"
+          },
+          {
+            "id": "fixture_source_2",
+            "title": "deployment-notes",
+            "filename": "deployment-notes.md",
+            "sha256": "fixture-2",
+            "role": "teaching"
+          }
+        ],
+        "plan_digest": "572ef3edf3a1885b571cf9d47f0a10b3cde358aae76f21a0533caa69ec8a72ce",
+        "metrics": {
+          "requests": [
+            {
+              "stage": "production_repair",
+              "item": "section_2",
+              "cache": "hit",
+              "request_bytes": 5016,
+              "wall_ms": 0.511
+            },
+            {
+              "stage": "production_review",
+              "item": "section_1",
+              "cache": "hit",
+              "request_bytes": 3676,
+              "wall_ms": 0.631
+            },
+            {
+              "stage": "production_review",
+              "item": "section_2",
+              "cache": "hit",
+              "request_bytes": 5096,
+              "wall_ms": 1.794
+            },
+            {
+              "stage": "production_review",
+              "item": "section_2",
+              "cache": "hit",
+              "request_bytes": 5165,
+              "wall_ms": 0.553
+            },
+            {
+              "stage": "production_review",
+              "item": "section_3",
+              "cache": "miss",
+              "request_bytes": 4877,
+              "wall_ms": 5.419
+            },
+            {
+              "stage": "production_write",
+              "item": "section_1",
+              "cache": "hit",
+              "request_bytes": 3169,
+              "wall_ms": 4.583
+            },
+            {
+              "stage": "production_write",
+              "item": "section_2",
+              "cache": "hit",
+              "request_bytes": 4360,
+              "wall_ms": 0.526
+            },
+            {
+              "stage": "production_write",
+              "item": "section_3",
+              "cache": "miss",
+              "request_bytes": 4400,
+              "wall_ms": 2.075
+            }
+          ],
+          "peak_provider_calls": {
+            "production_write": 1,
+            "production_review": 1
+          },
+          "context_bytes_total": 35759,
+          "cache_hits": 6,
+          "cache_misses": 2,
+          "wall_ms": 13.02,
+          "sections": 3,
+          "initial_flagged_sections": 1,
+          "remaining_flagged_sections": 0,
+          "output_bytes": 601
+        },
+        "scope": "Source-grounded model output and model review; no independent truth, mastery, audio, or delivery verification."
+      }
+    }
+  ],
+  "events": [
+    {
+      "stage": "production_read",
+      "item": "window_1",
+      "status": "started"
+    },
+    {
+      "stage": "production_read",
+      "item": "window_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_read",
+      "item": "window_1",
+      "status": "completed"
+    },
+    {
+      "stage": "production_read",
+      "item": "window_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_route",
+      "item": "global",
+      "status": "started"
+    },
+    {
+      "stage": "production_route",
+      "item": "global",
+      "status": "completed"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_1",
+      "status": "started"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_3",
+      "status": "started"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_1",
+      "status": "completed"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_3",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_1",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_3",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_1",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_3",
+      "status": "completed"
+    },
+    {
+      "stage": "production_repair",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_repair",
+      "item": "section_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_1",
+      "status": "started"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_3",
+      "status": "started"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_3",
+      "status": "completed"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_1",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_1",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_3",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_1",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_3",
+      "status": "completed"
+    },
+    {
+      "stage": "production_repair",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_repair",
+      "item": "section_2",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "started"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2",
+      "status": "completed"
+    }
+  ],
+  "provider_calls": [
+    {
+      "stage": "production_read",
+      "item": "window_1"
+    },
+    {
+      "stage": "production_read",
+      "item": "window_2"
+    },
+    {
+      "stage": "production_route",
+      "item": "global"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_1"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_2"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_3"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_1"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_3"
+    },
+    {
+      "stage": "production_repair",
+      "item": "section_2"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_2"
+    },
+    {
+      "stage": "production_write",
+      "item": "section_3"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_3"
+    }
+  ]
+}

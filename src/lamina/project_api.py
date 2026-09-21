@@ -1,0 +1,185 @@
+"""Local project execution, progress and recoverable browser history."""
+
+from __future__ import annotations
+import copy
+import json
+import re
+import threading
+import time
+import uuid
+
+_RUN = re.compile(r"[0-9a-f]{32}\Z")
+
+
+def _save(server, status):
+    output = server.output_root / status["id"]
+    output.mkdir(parents=True, exist_ok=True)
+    target = output / "project-state.json"
+    temp = output / "project-state.tmp"
+    temp.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+    temp.replace(target)
+
+
+def restore_projects(server):
+    for path in server.output_root.glob("*/project-state.json"):
+        if not _RUN.fullmatch(path.parent.name):
+            continue
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+            if state.get("id") != path.parent.name or state.get("kind") != "production":
+                continue
+            if state.get("status") in {"running", "queued"}:
+                state.update(
+                    status="interrupted",
+                    error="The app stopped during this project. Resume to reuse completed work.",
+                )
+            server.runs[state["id"]] = state
+        except (ValueError, OSError):
+            continue
+
+
+def start_project(server, body, *, parent=None, section_notes=None):
+    from .production import plan_production, run_production
+    from .production_export import export_production
+
+    if server.provider is None:
+        raise RuntimeError(
+            "Start the local app with a model adapter to build from your sources."
+        )
+    if (
+        not isinstance(body, dict)
+        or set(body) - {"brief", "source_ids", "options"}
+        or not {"brief", "source_ids"} <= set(body)
+    ):
+        raise ValueError(
+            "A project needs a goal, source IDs and optional production settings."
+        )
+    brief = body["brief"]
+    source_ids = body["source_ids"]
+    options = body.get("options", {})
+    if not isinstance(brief, str) or not 1 <= len(brief.strip()) <= 12000:
+        raise ValueError("The goal must contain 1–12000 characters.")
+    if (
+        not isinstance(source_ids, list)
+        or not source_ids
+        or len(source_ids) > 2048
+        or any(not isinstance(x, str) for x in source_ids)
+    ):
+        raise ValueError("Choose at least one source.")
+    owned = {s["id"] for s in server.workspace.sources() if s["role"] == "teaching"}
+    if not set(source_ids) <= owned:
+        raise ValueError(
+            "All selected sources must be teaching sources in this workspace."
+        )
+    if not isinstance(options, dict):
+        raise ValueError("Production settings must be an object.")
+    # Fail before creating a run for malformed resource settings.
+    for key in ("reader_workers", "writer_workers", "review_workers"):
+        if key in options and (
+            type(options[key]) is not int or not 1 <= options[key] <= 128
+        ):
+            raise ValueError(f"{key} must be 1–128.")
+    plan = copy.deepcopy(parent.get("plan")) if parent else None
+    if section_notes is not None:
+        if not plan:
+            raise ValueError("The earlier project has no saved plan to revise.")
+        if (
+            not isinstance(section_notes, dict)
+            or not section_notes
+            or len(section_notes) > 128
+            or any(
+                not isinstance(k, str)
+                or not isinstance(v, str)
+                or not v.strip()
+                or len(v) > 8000
+                for k, v in section_notes.items()
+            )
+        ):
+            raise ValueError("Choose sections and describe each requested change.")
+        valid_ids = {s["id"] for s in plan["route"]["sections"]}
+        if set(section_notes) - valid_ids:
+            raise ValueError("Revision names an unknown section.")
+        options = {
+            **options,
+            "section_notes": {**options.get("section_notes", {}), **section_notes},
+        }
+    request = {"brief": brief.strip(), "source_ids": source_ids, "options": options}
+    with server.run_lock:
+        if any(r["status"] in {"running", "queued"} for r in server.runs.values()):
+            raise RuntimeError(
+                "A project is already running. Its independent workers are executing together."
+            )
+        rid = uuid.uuid4().hex
+        status = {
+            "id": rid,
+            "kind": "production",
+            "status": "queued",
+            "created_at": time.time(),
+            "error": None,
+            "outputs": {},
+            "events": [],
+            "request": request,
+        }
+        if parent:
+            status["parent_id"] = parent["id"]
+        server.runs[rid] = status
+        _save(server, status)
+
+    last_progress_save = 0.0
+
+    def progress(event):
+        nonlocal last_progress_save
+        with server.run_lock:
+            status["events"].append({"at": time.time(), **event})
+            if len(status["events"]) > 10000:
+                status["events"] = status["events"][-10000:]
+            now = time.monotonic()
+            if now - last_progress_save >= 0.25:
+                _save(server, status)
+                last_progress_save = now
+
+    def work():
+        nonlocal plan
+        with server.run_lock:
+            status["status"] = "running"
+            _save(server, status)
+        try:
+            if plan is None:
+                plan = plan_production(
+                    server.workspace,
+                    server.provider,
+                    request["brief"],
+                    source_ids,
+                    options,
+                    progress=progress,
+                )
+            with server.run_lock:
+                status["plan"] = plan
+                _save(server, status)
+            receipt = run_production(
+                server.workspace, server.provider, plan, options, progress=progress
+            )
+            links = export_production(receipt, plan, server.output_root / rid)
+            completed = (
+                "review" if receipt.get("status") in {"review", "revise"} else "ready"
+            )
+            with server.run_lock:
+                status.update(
+                    status=completed,
+                    receipt=receipt,
+                    outputs={k: f"/outputs/{rid}/{v}" for k, v in links.items()},
+                )
+                _save(server, status)
+        except Exception as exc:
+            print(
+                f"Lamina project {rid} failed: {type(exc).__name__}: {exc}", flush=True
+            )
+            with server.run_lock:
+                status.update(
+                    status="failed",
+                    error="The project stopped. See the local console for details; completed work is retained.",
+                )
+                _save(server, status)
+
+    threading.Thread(target=work, name=f"lamina-project-{rid[:8]}", daemon=True).start()
+    return dict(status)

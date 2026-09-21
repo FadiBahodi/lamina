@@ -13,6 +13,8 @@ def prepare_studio(output: Path, with_pdf: bool = False) -> Path:
     All semantic output here is the bundled curated fixture. This helper never
     calls a remote model and never reads an operator's working collection.
     """
+    from .production_example import production_demo
+    from .production_export import export_production
     from .method_example import method_demo
     from .export import export_bundle
     from .ingest import ingest_paths
@@ -43,6 +45,9 @@ def prepare_studio(output: Path, with_pdf: bool = False) -> Path:
         export_bundle(bundle, reader)
         export_samp(generate_samp(bundle, provider, workspace), output / "examples" / "samp")
     (output / "method-example.json").write_text(json.dumps(method_demo(), indent=2) + "\n", encoding="utf-8")
+    production = production_demo()
+    (output / "production-example.json").write_text(json.dumps(production, indent=2) + "\n", encoding="utf-8")
+    export_production(production["runs"][0]["receipt"], production["plan"], output / "examples" / "production")
     from .static_assets import fingerprint_page_assets
     fingerprint_page_assets(output)
     return output

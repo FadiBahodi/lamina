@@ -55,3 +55,19 @@ The real reconciliation call sees **all extracted raw concepts**; the plan sees 
 Likewise, the author receives its assigned source units. If one unit supports concepts placed in several lessons, its text may be sent several times. Measure `Σ lesson source bytes` and the largest individual request. Cache identities include stage, complete payload, and provider/adapter version; unchanged requests are reusable, while changes to an assigned source or global concept board can invalidate downstream work. Counts of assigned or deferred concepts establish structural accounting of **extracted** concepts only, not complete understanding of the source or learner proficiency.
 
 The benchmark does not exercise a distributed queue. `Workspace` uses SQLite WAL on one local filesystem, a renewable lease, and a fencing token. Its tests cover recovery and stale-owner rejection; this sleep benchmark only times normal completed jobs and warm cache reads. It also excludes PDF extraction, image understanding, model inference, voice rendering, listening behavior, and actual teaching outcomes.
+
+
+## Wider scheduling run (v0.5)
+
+The checked-in [width experiment](../benchmarks/results/production-widths.json) uses 64 reader jobs, two serial global jobs and 16 author–review chains (98 handlers). Each handler sleeps and returns a small object; it performs no model inference.
+
+| Capacity | Cold wall time (s) | Observed peak handlers | Warm handler calls |
+| --- | ---: | ---: | ---: |
+| 1 | 6.001 | 1 | 0 |
+| 4 | 1.690 | 4 | 0 |
+| 16 | 0.777 | 16 | 0 |
+| 32 | 0.626 | 30 | 0 |
+
+These measurements show that capacity is configurable beyond four and that actual overlap can be smaller than the configured ceiling. They are single local runs, not statistical estimates or predictions of model speed. Warm elapsed time need not fall as worker count rises: threads, SQLite access and scheduling still cost time even when handlers are cached.
+
+Reproduce with `python benchmarks/run_systems.py --units 64 --lessons 16 --widths 1 4 16 32`. The separate [production fixture](../examples/production-example.json) exercises the full source-aware engine, including a deliberate false inference, review, repair and targeted revision. The revision reuses six of eight requests and executes the changed writer and its reviewer; this is a structural result, not a quality benchmark.

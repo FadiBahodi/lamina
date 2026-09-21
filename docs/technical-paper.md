@@ -1,6 +1,6 @@
 # Lamina technical paper
 
-[Read the technical paper (PDF)](../output/pdf/lamina-technical-paper.pdf). Its editable source is [LaTeX](paper/lamina.tex), with a [bibliography](paper/references.bib) and [build instructions](paper/BUILD.md).
+[Read the technical paper (PDF)](https://fadibahodi.github.io/lamina/assets/lamina-technical-paper.pdf). Its editable source is [LaTeX](paper/lamina.tex), with a [bibliography](paper/references.bib) and [build instructions](paper/BUILD.md).
 
 The paper explains Lamina as infrastructure for producing and updating documents from source material. It describes the task contract and source policy, owned reading windows with neighboring context, task-shaped representations, shared plans and dependency types, worker context, concurrency and resource limits, reuse, review and local repair. A fictional engineering brief shows why a current rule and a conflicting historical observation must remain separate through writing and review.
 

@@ -103,6 +103,24 @@ def parser() -> argparse.ArgumentParser:
         help="Executable and arguments; invoked without a shell",
     )
     produce.add_argument("--adapter-version")
+    produce.add_argument(
+        "--audio-adapter", help="Optional speech command for finished podcast scripts"
+    )
+    produce.add_argument("--audio-adapter-version")
+    produce.add_argument(
+        "--source-policy",
+        type=Path,
+        help="JSON mapping source IDs to authority, supplement, historical or form_exemplar",
+    )
+    produce.add_argument(
+        "--observation-id",
+        action="append",
+        help="Reuse a selected prior operator observation",
+    )
+    produce.add_argument(
+        "--method-family",
+        help="Family for retained observations (default: document-production)",
+    )
     produce.add_argument("--timeout", type=float, default=120)
     produce.add_argument(
         "--format", choices=["document", "guide", "podcast-script", "assessment"]
@@ -110,6 +128,12 @@ def parser() -> argparse.ArgumentParser:
     produce.add_argument("--readers", type=int)
     produce.add_argument("--writers", type=int)
     produce.add_argument("--reviewers", type=int)
+    produce.add_argument(
+        "--retrieval-targets",
+        action="store_true",
+        default=None,
+        help="Merge equivalent retrieval tasks while preserving answer groups (guide or assessment)",
+    )
     produce.add_argument("--core-words", type=int)
     produce.add_argument("--halo-units", type=int)
     produce.add_argument("--output", type=Path, default=Path("output/project"))
@@ -180,6 +204,8 @@ def parser() -> argparse.ArgumentParser:
         "--adapter-version", help="Cache identity for your model/config revision"
     )
     studio.add_argument("--timeout", type=float, default=120)
+    studio.add_argument("--audio-adapter", help="Startup-only optional speech adapter")
+    studio.add_argument("--audio-adapter-version")
     demo = commands.add_parser(
         "demo", help="Run the original curated fixture, offline, with no credentials"
     )
@@ -271,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
             }
         elif args.command == "produce":
             from .production import plan_production, run_production
-            from .production_export import export_production
+            from .production_delivery import deliver_production
             from .studio_server import make_provider
 
             workspace = Workspace(args.workspace)
@@ -287,6 +313,14 @@ def main(argv: list[str] | None = None) -> int:
                     "review_workers": args.reviewers,
                     "core_words": args.core_words,
                     "halo_units": args.halo_units,
+                    "source_policy": (
+                        json.loads(args.source_policy.read_text(encoding="utf-8"))
+                        if args.source_policy
+                        else None
+                    ),
+                    "observation_ids": args.observation_id,
+                    "method_family": args.method_family,
+                    "retrieval_targets": args.retrieval_targets,
                 }.items()
                 if value is not None
             }
@@ -315,7 +349,14 @@ def main(argv: list[str] | None = None) -> int:
                     args.section_notes.read_text(encoding="utf-8")
                 )
             receipt = run_production(workspace, provider, plan, options)
-            links = export_production(receipt, plan, args.output)
+            audio_provider = make_provider(
+                args.audio_adapter,
+                version=args.audio_adapter_version,
+                timeout=args.timeout,
+            )
+            links = deliver_production(
+                workspace, receipt, plan, args.output, audio_provider=audio_provider
+            )
             result = {
                 "status": receipt["status"],
                 "title": receipt["title"],
@@ -402,6 +443,8 @@ def main(argv: list[str] | None = None) -> int:
                 adapter=args.adapter,
                 adapter_version=args.adapter_version,
                 timeout=args.timeout,
+                audio_adapter=args.audio_adapter,
+                audio_adapter_version=args.audio_adapter_version,
             )
             print(
                 f"Lamina at http://127.0.0.1:{server.server_port} · Ctrl-C to stop",

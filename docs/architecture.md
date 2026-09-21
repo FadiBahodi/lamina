@@ -1,5 +1,7 @@
 # Architecture
 
+This page describes the structured lesson builder. The default Projects interface uses the newer [source-aware production engine](production.md); [architecture status](architecture-status.md) maps both paths and the reusable method runtime.
+
 Lamina is a local document-to-learning pipeline with a static reader. Its central invariant is that semantic decisions may change while source identity and evidence remain inspectable. The core uses Python 3.11+ and SQLite; the exported workbench uses plain browser assets.
 
 ## Data flow

@@ -209,6 +209,11 @@ def test_project_http_upload_build_artifact_revise_and_restart(tmp_path, monkeyp
 def test_assessment_candidate_download_separate_from_examiner(tmp_path, monkeypatch):
     class AssessmentFixture(FixtureAdapter):
         def call(self, stage, request):
+            if stage == "assessment_blind_solve":
+                assert set(request["input"]) == {"current_candidate_body", "prior_candidate_bodies"}
+                return {"answer": "Check the current fencing token.", "uncertainties": []}
+            if stage == "assessment_judge":
+                return {"findings": []}
             if (
                 stage == "production_review"
                 and request["input"]["format"] == "assessment"

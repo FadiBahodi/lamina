@@ -39,8 +39,9 @@ def restore_projects(server):
 
 
 def start_project(server, body, *, parent=None, section_notes=None):
-    from .production import plan_production, run_production
-    from .production_export import export_production
+    from .production import REVISION, _options, plan_production, run_production
+    from .production_delivery import deliver_production
+    from .source_policy import normalize_production_inputs
 
     if server.provider is None:
         raise RuntimeError(
@@ -73,13 +74,33 @@ def start_project(server, body, *, parent=None, section_notes=None):
         )
     if not isinstance(options, dict):
         raise ValueError("Production settings must be an object.")
+    if parent is None and "section_notes" in options:
+        raise ValueError("Create a project first, then revise its named sections.")
+    _options({k: v for k, v in options.items() if k != "section_notes"})
     # Fail before creating a run for malformed resource settings.
     for key in ("reader_workers", "writer_workers", "review_workers"):
         if key in options and (
             type(options[key]) is not int or not 1 <= options[key] <= 128
         ):
             raise ValueError(f"{key} must be 1–128.")
+    normalized = normalize_production_inputs(
+        server.workspace,
+        source_ids,
+        {k: v for k, v in options.items() if k != "section_notes"},
+    )
+    options = {
+        **normalized["options"],
+        **(
+            {"section_notes": options["section_notes"]}
+            if "section_notes" in options
+            else {}
+        ),
+    }
     plan = copy.deepcopy(parent.get("plan")) if parent else None
+    if plan and plan.get("revision") != REVISION:
+        raise ValueError(
+            "This plan uses an older production format. Start a new project with the same sources and goal; its original files remain available."
+        )
     if section_notes is not None:
         if not plan:
             raise ValueError("The earlier project has no saved plan to revise.")
@@ -159,7 +180,14 @@ def start_project(server, body, *, parent=None, section_notes=None):
             receipt = run_production(
                 server.workspace, server.provider, plan, options, progress=progress
             )
-            links = export_production(receipt, plan, server.output_root / rid)
+            links = deliver_production(
+                server.workspace,
+                receipt,
+                plan,
+                server.output_root / rid,
+                audio_provider=server.audio_provider,
+                progress=progress,
+            )
             completed = (
                 "review" if receipt.get("status") in {"review", "revise"} else "ready"
             )
@@ -183,3 +211,63 @@ def start_project(server, body, *, parent=None, section_notes=None):
 
     threading.Thread(target=work, name=f"lamina-project-{rid[:8]}", daemon=True).start()
     return dict(status)
+
+
+def run_project_example(server):
+    """Execute the original fixture without using the operator's live adapter."""
+    from .production_example import production_demo
+    from .production_export import export_production
+
+    example = production_demo()
+    rid = uuid.uuid4().hex
+    receipt = example["runs"][0]["receipt"]
+    links = export_production(receipt, example["plan"], server.output_root / rid)
+    status = {
+        "id": rid,
+        "kind": "production",
+        "status": receipt["status"],
+        "example": True,
+        "adapter_label": "Deterministic original example",
+        "created_at": time.time(),
+        "error": None,
+        "events": example["events"][
+            : 2
+            * (
+                len(example["plan"]["metrics"]["requests"])
+                + len(receipt["metrics"]["requests"])
+            )
+        ],
+        "plan": example["plan"],
+        "receipt": receipt,
+        "outputs": {k: f"/outputs/{rid}/{v}" for k, v in links.items()},
+    }
+    with server.run_lock:
+        server.runs[rid] = status
+        _save(server, status)
+    return status
+
+
+def keep_project_observation(server, run, body):
+    from .method_runtime import record_observation
+
+    if run.get("status") not in {"ready", "review"} or not run.get("plan"):
+        raise ValueError("Open a finished project before keeping a note.")
+    if set(body) != {"note", "applicability", "outcome"}:
+        raise ValueError("A note needs its observation, applicability and outcome.")
+    for value in body.values():
+        if (
+            not isinstance(value, str)
+            or not value.strip()
+            or len(value) > 4000
+            or "\x00" in value
+        ):
+            raise ValueError("Each note field must contain 1–4000 characters.")
+    plan = run["plan"]
+    return record_observation(
+        server.workspace,
+        family=plan["options"].get("method_family", "document-production"),
+        method_id="source-aware-production",
+        method_version=plan["revision"],
+        task_digest=plan["plan_digest"],
+        **body,
+    )

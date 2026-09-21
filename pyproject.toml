@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lamina-engine"
-version = "0.5.0"
+version = "0.6.0"
 description = "Reusable model workflows with explicit context, parallel execution, and selective revision."
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Fadi Bahodi"}]
 readme = "README.md"
 keywords = ["retrieval", "learning", "document-processing", "provenance", "pipelines"]
-dependencies = []
+dependencies = ["markdown-it-py>=3,<5", "filelock>=3,<4"]
 
 [project.optional-dependencies]
 pdf = ["pypdf>=5,<7", "reportlab>=4,<5"]

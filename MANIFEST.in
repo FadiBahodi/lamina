@@ -1,0 +1,8 @@
+include AGENTS.md
+recursive-include docs *.md *.tex *.bib *.png *.json
+exclude docs/active-design-contract.md
+exclude docs/implementation-contract.md
+recursive-include examples *.py *.md *.json
+recursive-include tools *.py
+recursive-include benchmarks *.py *.md *.json
+global-exclude __pycache__ *.py[cod] .DS_Store

@@ -27,7 +27,7 @@
   ],
   "plan": {
     "schema_version": "1.0",
-    "revision": "lamina-production-1",
+    "revision": "lamina-production-3",
     "brief": {
       "goal": "Write a short incident guide for a team deploying lease-based background workers.",
       "audience": "On-call engineers",
@@ -40,7 +40,14 @@
       "review_workers": 8,
       "core_words": 100,
       "halo_units": 1,
-      "max_request_bytes": 1500000
+      "max_request_bytes": 1500000,
+      "retrieval_targets": false,
+      "source_policy": {
+        "fixture_source_1": "authority",
+        "fixture_source_2": "authority"
+      },
+      "observation_ids": [],
+      "method_family": "document-production"
     },
     "provider_identity": "original-production-fixture-v1",
     "sources": [
@@ -49,16 +56,25 @@
         "title": "reliability-notes",
         "filename": "reliability-notes.md",
         "sha256": "fixture-1",
-        "role": "teaching"
+        "role": "teaching",
+        "policy": "authority"
       },
       {
         "id": "fixture_source_2",
         "title": "deployment-notes",
         "filename": "deployment-notes.md",
         "sha256": "fixture-2",
-        "role": "teaching"
+        "role": "teaching",
+        "policy": "authority"
       }
     ],
+    "factual_source_ids": [
+      "fixture_source_1",
+      "fixture_source_2"
+    ],
+    "form_exemplar_ids": [],
+    "form_exemplars": [],
+    "experience": [],
     "units": [
       {
         "id": "fixture_unit_1_1",
@@ -209,6 +225,7 @@
         ]
       }
     ],
+    "retrieval_targets": null,
     "route": {
       "title": "Lease-worker incident guide",
       "summary": "Expiry, fencing, and traceability",
@@ -290,47 +307,51 @@
           "stage": "production_read",
           "item": "window_54982d7bd38c",
           "cache": "miss",
-          "request_bytes": 1798,
-          "wall_ms": 1.257
+          "request_bytes": 2020,
+          "wall_ms": 1.216
         },
         {
           "stage": "production_read",
           "item": "window_e947db1fbbae",
           "cache": "miss",
-          "request_bytes": 1815,
-          "wall_ms": 2.992
+          "request_bytes": 2037,
+          "wall_ms": 2.88
         },
         {
           "stage": "production_route",
           "item": "global",
           "cache": "miss",
-          "request_bytes": 3856,
-          "wall_ms": 2.009
+          "request_bytes": 4381,
+          "wall_ms": 1.578
         }
       ],
       "peak_provider_calls": {
         "production_read": 1,
         "production_route": 1
       },
-      "context_bytes_total": 7469,
+      "context_bytes_total": 8438,
       "cache_hits": 0,
       "cache_misses": 3,
-      "wall_ms": 6.601,
+      "wall_ms": 6.859,
       "selected_sources": 2,
+      "factual_sources": 2,
+      "form_exemplar_sources": 0,
+      "selected_observations": 0,
       "source_units": 4,
       "reader_windows": 2,
       "extracted_ideas": 4,
       "assigned_ideas": 4,
-      "omitted_ideas": 0
+      "omitted_ideas": 0,
+      "retrieval_target_count": 0
     },
-    "plan_digest": "d3a2cf05694f85cda6538878c8125dfca3ad9dcc9b520b7e3919d094fa65ee82"
+    "plan_digest": "ac83327d0f857513bddc0c37a54164ea945d8cfca11686963d73cb57380dff0b"
   },
   "runs": [
     {
       "title": "Initial build",
       "receipt": {
         "schema_version": "1.0",
-        "revision": "lamina-production-1",
+        "revision": "lamina-production-3",
         "status": "ready",
         "format": "guide",
         "title": "Lease-worker incident guide",
@@ -386,6 +407,8 @@
             ]
           }
         ],
+        "retrieval_targets": null,
+        "retrieval_markdown": null,
         "initial_findings": {
           "section_2": [
             {
@@ -407,74 +430,76 @@
             "title": "reliability-notes",
             "filename": "reliability-notes.md",
             "sha256": "fixture-1",
-            "role": "teaching"
+            "role": "teaching",
+            "policy": "authority"
           },
           {
             "id": "fixture_source_2",
             "title": "deployment-notes",
             "filename": "deployment-notes.md",
             "sha256": "fixture-2",
-            "role": "teaching"
+            "role": "teaching",
+            "policy": "authority"
           }
         ],
-        "plan_digest": "d3a2cf05694f85cda6538878c8125dfca3ad9dcc9b520b7e3919d094fa65ee82",
+        "plan_digest": "ac83327d0f857513bddc0c37a54164ea945d8cfca11686963d73cb57380dff0b",
         "metrics": {
           "requests": [
             {
               "stage": "production_repair",
               "item": "section_2",
               "cache": "miss",
-              "request_bytes": 5749,
-              "wall_ms": 1.638
+              "request_bytes": 6063,
+              "wall_ms": 1.633
             },
             {
               "stage": "production_review",
               "item": "section_1",
               "cache": "miss",
-              "request_bytes": 4450,
-              "wall_ms": 1.561
+              "request_bytes": 4764,
+              "wall_ms": 5.772
             },
             {
               "stage": "production_review",
               "item": "section_2",
+              "cache": "miss",
+              "request_bytes": 6211,
+              "wall_ms": 1.06
+            },
+            {
+              "stage": "production_review",
+              "item": "section_2",
+              "cache": "miss",
+              "request_bytes": 6280,
+              "wall_ms": 1.531
+            },
+            {
+              "stage": "production_review",
+              "item": "section_3",
               "cache": "miss",
               "request_bytes": 5897,
-              "wall_ms": 2.364
-            },
-            {
-              "stage": "production_review",
-              "item": "section_2",
-              "cache": "miss",
-              "request_bytes": 5966,
-              "wall_ms": 2.034
-            },
-            {
-              "stage": "production_review",
-              "item": "section_3",
-              "cache": "miss",
-              "request_bytes": 5583,
-              "wall_ms": 5.517
+              "wall_ms": 2.092
             },
             {
               "stage": "production_write",
               "item": "section_1",
               "cache": "miss",
-              "request_bytes": 3927,
-              "wall_ms": 1.198
+              "request_bytes": 4391,
+              "wall_ms": 1.251
             },
             {
               "stage": "production_write",
               "item": "section_2",
               "cache": "miss",
-              "request_bytes": 5134,
-              "wall_ms": 2.246
+              "request_bytes": 5598,
+              "wall_ms": 2.427
             },
             {
               "stage": "production_write",
               "item": "section_3",
               "cache": "miss",
-              "request_bytes": 5078,
-              "wall_ms": 5.542
+              "request_bytes": 5542,
+              "wall_ms": 5.34
             }
           ],
           "peak_provider_calls": {
@@ -482,14 +507,15 @@
             "production_review": 1,
             "production_repair": 1
           },
-          "context_bytes_total": 41784,
+          "context_bytes_total": 44746,
           "cache_hits": 0,
           "cache_misses": 8,
-          "wall_ms": 17.573,
+          "wall_ms": 17.092,
           "sections": 3,
           "initial_flagged_sections": 1,
           "remaining_flagged_sections": 0,
-          "output_bytes": 531
+          "output_bytes": 531,
+          "retrieval_targets": 0
         },
         "scope": "Source-grounded model output and model review; no independent truth, mastery, audio, or delivery verification."
       }
@@ -498,7 +524,7 @@
       "title": "Targeted section revision",
       "receipt": {
         "schema_version": "1.0",
-        "revision": "lamina-production-1",
+        "revision": "lamina-production-3",
         "status": "ready",
         "format": "guide",
         "title": "Lease-worker incident guide",
@@ -554,6 +580,8 @@
             ]
           }
         ],
+        "retrieval_targets": null,
+        "retrieval_markdown": null,
         "initial_findings": {
           "section_2": [
             {
@@ -575,88 +603,91 @@
             "title": "reliability-notes",
             "filename": "reliability-notes.md",
             "sha256": "fixture-1",
-            "role": "teaching"
+            "role": "teaching",
+            "policy": "authority"
           },
           {
             "id": "fixture_source_2",
             "title": "deployment-notes",
             "filename": "deployment-notes.md",
             "sha256": "fixture-2",
-            "role": "teaching"
+            "role": "teaching",
+            "policy": "authority"
           }
         ],
-        "plan_digest": "d3a2cf05694f85cda6538878c8125dfca3ad9dcc9b520b7e3919d094fa65ee82",
+        "plan_digest": "ac83327d0f857513bddc0c37a54164ea945d8cfca11686963d73cb57380dff0b",
         "metrics": {
           "requests": [
             {
               "stage": "production_repair",
               "item": "section_2",
               "cache": "hit",
-              "request_bytes": 5749,
-              "wall_ms": 0.518
+              "request_bytes": 6063,
+              "wall_ms": 0.699
             },
             {
               "stage": "production_review",
               "item": "section_1",
               "cache": "hit",
-              "request_bytes": 4450,
-              "wall_ms": 1.952
+              "request_bytes": 4764,
+              "wall_ms": 1.996
             },
             {
               "stage": "production_review",
               "item": "section_2",
               "cache": "hit",
-              "request_bytes": 5897,
-              "wall_ms": 0.535
+              "request_bytes": 6211,
+              "wall_ms": 0.636
             },
             {
               "stage": "production_review",
               "item": "section_2",
               "cache": "hit",
-              "request_bytes": 5966,
-              "wall_ms": 0.612
+              "request_bytes": 6280,
+              "wall_ms": 0.603
             },
             {
               "stage": "production_review",
               "item": "section_3",
               "cache": "miss",
-              "request_bytes": 5653,
-              "wall_ms": 5.441
+              "request_bytes": 5967,
+              "wall_ms": 5.647
             },
             {
               "stage": "production_write",
               "item": "section_1",
               "cache": "hit",
-              "request_bytes": 3927,
-              "wall_ms": 0.7
+              "request_bytes": 4391,
+              "wall_ms": 0.728
             },
             {
               "stage": "production_write",
               "item": "section_2",
               "cache": "hit",
-              "request_bytes": 5134,
-              "wall_ms": 1.889
+              "request_bytes": 5598,
+              "wall_ms": 1.894
             },
             {
               "stage": "production_write",
               "item": "section_3",
               "cache": "miss",
-              "request_bytes": 5160,
-              "wall_ms": 5.668
+              "request_bytes": 5624,
+              "wall_ms": 5.778
             }
           ],
           "peak_provider_calls": {
             "production_write": 1,
             "production_review": 1
           },
-          "context_bytes_total": 41936,
+          "context_bytes_total": 44898,
           "cache_hits": 6,
           "cache_misses": 2,
-          "wall_ms": 14.881,
+          "wall_ms": 15.391,
           "sections": 3,
           "initial_flagged_sections": 1,
           "remaining_flagged_sections": 0,
-          "output_bytes": 601
+          "output_bytes": 601,
+          "retrieval_targets": 0
         },
         "scope": "Source-grounded model output and model review; no independent truth, mastery, audio, or delivery verification."
       }
@@ -740,17 +771,17 @@
     },
     {
       "stage": "production_review",
-      "item": "section_1",
-      "status": "completed"
-    },
-    {
-      "stage": "production_review",
       "item": "section_2",
       "status": "completed"
     },
     {
       "stage": "production_review",
       "item": "section_3",
+      "status": "completed"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_1",
       "status": "completed"
     },
     {
@@ -881,15 +912,15 @@
     },
     {
       "stage": "production_review",
-      "item": "section_1"
-    },
-    {
-      "stage": "production_review",
       "item": "section_2"
     },
     {
       "stage": "production_review",
       "item": "section_3"
+    },
+    {
+      "stage": "production_review",
+      "item": "section_1"
     },
     {
       "stage": "production_repair",

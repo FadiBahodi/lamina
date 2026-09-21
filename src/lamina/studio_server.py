@@ -137,10 +137,15 @@ class StudioServer(ThreadingHTTPServer):
         port: int = 8048,
         adapter: str | None = None,
         adapter_version: str | None = None,
+        audio_adapter: str | None = None,
+        audio_adapter_version: str | None = None,
         timeout: float = 120,
     ):
         self.workspace = Workspace(workspace)
         self.provider = make_provider(adapter, version=adapter_version, timeout=timeout)
+        self.audio_provider = make_provider(
+            audio_adapter, version=audio_adapter_version, timeout=timeout
+        )
         self.output_root = self.workspace.root / "outputs"
         self.output_root.mkdir(parents=True, exist_ok=True)
         from .studio_site import prepare_studio
@@ -416,6 +421,7 @@ class StudioHandler(BaseHTTPRequestHandler):
                 {
                     "mode": "local",
                     "adapter_configured": self.server.provider is not None,
+                    "audio_adapter_configured": self.server.audio_provider is not None,
                     "sources": [
                         {
                             "id": s["id"],
@@ -427,6 +433,18 @@ class StudioHandler(BaseHTTPRequestHandler):
                     ],
                     "jobs": self.server.workspace.stats()["jobs"],
                     "active_run": active,
+                },
+            )
+            return
+        if path == "/api/project-observations":
+            from .method_runtime import list_experience
+
+            self._json(
+                200,
+                {
+                    "observations": list_experience(
+                        self.server.workspace, "document-production", limit=100
+                    )
                 },
             )
             return
@@ -471,9 +489,10 @@ class StudioHandler(BaseHTTPRequestHandler):
             return
         path = self._path()
         project_action = re.fullmatch(
-            r"/api/projects/([0-9a-f]{32})/(revise|resume)", path
+            r"/api/projects/([0-9a-f]{32})/(revise|resume|observation)", path
         )
         if not project_action and path not in {
+            "/api/project-example",
             "/api/projects",
             "/api/sources",
             "/api/runs",
@@ -485,7 +504,21 @@ class StudioHandler(BaseHTTPRequestHandler):
             return
         try:
             body = self._body()
-            if path == "/api/projects" or project_action:
+            if path == "/api/project-example":
+                if body:
+                    raise ValueError("The original example takes no custom input.")
+                from .project_api import run_project_example
+
+                run = run_project_example(self.server)
+                self._json(
+                    201,
+                    {
+                        "id": run["id"],
+                        "status": run["status"],
+                        "url": f"/api/runs/{run['id']}",
+                    },
+                )
+            elif path == "/api/projects" or project_action:
                 from .project_api import start_project
 
                 if project_action:
@@ -495,6 +528,17 @@ class StudioHandler(BaseHTTPRequestHandler):
                         raise LookupError("Project not found.")
                     if parent["status"] in {"running", "queued"}:
                         raise RuntimeError("Wait for this project to finish.")
+                    if project_action[2] == "observation":
+                        from .project_api import keep_project_observation
+
+                        self._json(
+                            201, keep_project_observation(self.server, parent, body)
+                        )
+                        return
+                    if parent.get("example"):
+                        raise ValueError(
+                            "Run the original example again, or start your own project with a model adapter."
+                        )
                     if project_action[2] == "revise":
                         if set(body) != {"section_notes"}:
                             raise ValueError("Describe changes by section ID.")

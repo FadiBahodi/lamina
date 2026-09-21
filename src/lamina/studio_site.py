@@ -1,4 +1,5 @@
 """Build the same original example collection for hosted and local Studio."""
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,9 @@ def prepare_studio(output: Path, with_pdf: bool = False) -> Path:
     assets = Path(__file__).with_name("studio")
     output.mkdir(parents=True, exist_ok=True)
     shutil.copytree(assets, output, dirs_exist_ok=True)
-    (output / "procedures.json").write_text(json.dumps(BUILTINS, indent=2) + "\n", encoding="utf-8")
+    (output / "procedures.json").write_text(
+        json.dumps(BUILTINS, indent=2) + "\n", encoding="utf-8"
+    )
     with tempfile.TemporaryDirectory(prefix="lamina-studio-example-") as temp:
         workspace = Workspace(Path(temp))
         ingest_paths([Path(__file__).with_name("demo") / "sources"], workspace)
@@ -43,18 +46,35 @@ def prepare_studio(output: Path, with_pdf: bool = False) -> Path:
             export_pdf(bundle, reader / "study-guide.pdf")
             bundle["downloads"]["pdf"] = "study-guide.pdf"
         export_bundle(bundle, reader)
-        export_samp(generate_samp(bundle, provider, workspace), output / "examples" / "samp")
-    (output / "method-example.json").write_text(json.dumps(method_demo(), indent=2) + "\n", encoding="utf-8")
+        export_samp(
+            generate_samp(bundle, provider, workspace), output / "examples" / "samp"
+        )
+    (output / "method-example.json").write_text(
+        json.dumps(method_demo(), indent=2) + "\n", encoding="utf-8"
+    )
     production = production_demo()
-    (output / "production-example.json").write_text(json.dumps(production, indent=2) + "\n", encoding="utf-8")
-    export_production(production["runs"][0]["receipt"], production["plan"], output / "examples" / "production")
+    (output / "production-example.json").write_text(
+        json.dumps(production, indent=2) + "\n", encoding="utf-8"
+    )
+    export_production(
+        production["runs"][0]["receipt"],
+        production["plan"],
+        output / "examples" / "production",
+    )
+    export_production(
+        production["runs"][1]["receipt"],
+        production["plan"],
+        output / "examples" / "production-revised",
+    )
     from .static_assets import fingerprint_page_assets
+
     fingerprint_page_assets(output)
     return output
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     parser.add_argument("--pdf", action="store_true")

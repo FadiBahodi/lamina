@@ -54,9 +54,10 @@ class FixtureProvider:
 
     identity = "fixture-production-v1"
 
-    def __init__(self, *, bad_quote=False, review_issue=False, delay=0):
+    def __init__(self, *, bad_quote=False, review_issue=False, check_issue=False, delay=0):
         self.bad_quote = bad_quote
         self.review_issue = review_issue
+        self.check_issue = check_issue
         self.delay = delay
         self.requests = []
         self.lock = threading.Lock()
@@ -156,6 +157,15 @@ class FixtureProvider:
                         }
                     ]
                 }
+            return {"findings": []}
+        if stage == "assessment_blind_solve":
+            assert set(data) == {"current_candidate_body", "prior_candidate_bodies"}
+            return {"answer": "Check the fencing token.", "uncertainties": []}
+        if stage == "assessment_judge":
+            if self.check_issue:
+                return {"findings": [{"kind": "unanswerable", "issue": "The candidate prompt lacks the condition.",
+                                      "repair_instruction": "Add the condition to the candidate prompt.",
+                                      "evidence": [data["evidence"][0]]}]}
             return {"findings": []}
         raise AssertionError(stage)
 
@@ -287,6 +297,21 @@ def test_assessment_candidate_artifact_excludes_marking(tmp_path):
     assert "A lease expires" not in receipt["candidate_markdown"]
     assert "A lease expires" in receipt["examiner_markdown"]
     assert "marking_body" in receipt["sections"][0]
+    assert receipt["assessment_checks"]["status"] == "passed"
+
+
+def test_assessment_blind_finding_keeps_output_for_review(tmp_path):
+    ws = workspace(tmp_path)
+    provider = FixtureProvider(check_issue=True)
+    receipt = build_production(ws, provider, "Create an assessment", ["s1"],
+                               {"format": "assessment", "core_words": 100})
+    assert receipt["status"] == "review"
+    assert receipt["assessment_checks"]["status"] == "review"
+    assert receipt["assessment_checks"]["checks"][0]["findings"][0]["kind"] == "unanswerable"
+    assert "What makes" in receipt["candidate_markdown"]
+    solves = [request["input"] for stage, request in provider.requests if stage == "assessment_blind_solve"]
+    assert solves and all(set(row) == {"current_candidate_body", "prior_candidate_bodies"} for row in solves)
+    assert all("marking_body" not in str(row) for row in solves)
 
 
 def test_new_source_revision_reuses_unaffected_reader_windows(tmp_path):

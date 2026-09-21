@@ -43,6 +43,8 @@ def prepare_studio(output: Path, with_pdf: bool = False) -> Path:
         export_bundle(bundle, reader)
         export_samp(generate_samp(bundle, provider, workspace), output / "examples" / "samp")
     (output / "method-example.json").write_text(json.dumps(method_demo(), indent=2) + "\n", encoding="utf-8")
+    from .static_assets import fingerprint_page_assets
+    fingerprint_page_assets(output)
     return output
 
 

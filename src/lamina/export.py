@@ -45,3 +45,6 @@ def export_bundle(bundle: dict, output: Path) -> None:
     (output / "bundle.json").write_text(
         json.dumps(bundle, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+
+    from .static_assets import fingerprint_page_assets
+    fingerprint_page_assets(output)

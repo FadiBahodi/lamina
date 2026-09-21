@@ -1,6 +1,6 @@
 # Lamina
 
-[Design paper (PDF)](https://fadibahodi.github.io/lamina/assets/lamina-technical-paper.pdf) · [Interactive design and workbench](https://fadibahodi.github.io/lamina/) · [Download v0.4](https://github.com/FadiBahodi/lamina/releases/tag/v0.4.0)
+[Design paper (PDF)](https://fadibahodi.github.io/lamina/assets/lamina-technical-paper.pdf) · [Interactive design and workbench](https://fadibahodi.github.io/lamina/) · [Download v0.4](https://github.com/FadiBahodi/lamina/releases/tag/v0.4.1)
 
 Lamina is an open-source Python engine for document production workflows. You give it source material and an adapter to a model. The model reads, plans, and writes. Lamina defines what each call receives, schedules independent jobs, and reuses completed results when their inputs have not changed. Its guide pipeline also carries source references into the finished work.
 

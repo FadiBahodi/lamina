@@ -54,7 +54,7 @@
   const contextFields = make("div", "pb-context-fields");
   function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
   const coreWords = numericField("Words in each owned passage", 800, 100, 2000);
-  const haloUnits = numericField("Neighboring passages lent", 2, 0, 8);
+  const haloUnits = numericField("Neighboring passages on each side", 2, 0, 8);
   const maxRequest = numericField("Maximum request bytes", 1500000, 4096, 2000000);
   const retrievalChoice=make("label","pb-retrieval-choice");retrievalChoice.hidden=true;
   const retrievalTargets=make("input");retrievalTargets.type="checkbox";
@@ -79,7 +79,7 @@
   const output = make("div", "pb-output");
   activity.append(activityTitle, activityStatus, events, output);
   const replay = make("section", "pb-replay");
-  const replayHeading = make("div"); replayHeading.append(make("strong", "", "Recorded project"), make("p", "", "Fixed test responses show the reading, writing, review, and revision steps. They do not evaluate model writing."));
+  const replayHeading = make("div"); replayHeading.append(make("strong", "", "Recorded project"), make("p", "", "Explore reading, writing, review and revision using fixed test responses."));
   const replayActions = make("div", "pb-replay-actions");
   const replayButton = make("button", "pb-secondary", "Initial result"); replayButton.type = "button";
   const replayRevision = make("button", "pb-secondary", "After section revision"); replayRevision.type = "button";
@@ -88,8 +88,21 @@
   const recentList = make("div", "pb-recent-list"); recent.append(recentList);
   shell.append(form, activity, recent, replay); host.replaceChildren(shell);
   const setMessage = (value, bad = false) => { mode.textContent = value; mode.classList.toggle("error", bad); };
+  window.addEventListener("lamina:setup", event => {
+    const setup=event.detail;
+    if(!setup || typeof setup.brief!=="string" || !["guide","assessment","podcast-script"].includes(setup.options?.format))return;
+    goal.value=setup.brief; format.value=setup.options.format;
+    for(const [key,input] of Object.entries(workerInputs)){
+      const value=setup.options[key];if(Number.isInteger(value)&&value>=1&&value<=128)input.value=String(value);
+    }
+    coreWords.value=String(setup.options.core_words);haloUnits.value=String(setup.options.halo_units);
+    updateFormatNote();updateRetrievalChoice();retrievalTargets.checked=Boolean(setup.options.retrieval_targets)&&!retrievalChoice.hidden;
+    let notice=form.querySelector('.setup-loaded');if(!notice){notice=make('p','setup-loaded');notice.setAttribute('role','status');form.prepend(notice);}
+    notice.textContent=`${setup.name} setup loaded. Adjust the brief, then choose your sources.`;
+    goal.focus();
+  });
   function safeNumber(input, name) { const n = Number(input.value); if (!Number.isInteger(n) || n < Number(input.min) || n > Number(input.max)) throw Error(`${name} must be ${input.min}–${input.max}.`); return n; }
-  function options(selected) { if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose at least one factual source. An example of output form cannot supply facts.");if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");return {format:format.value, reader_workers:safeNumber(workerInputs.reader_workers,"Reading capacity"), writer_workers:safeNumber(workerInputs.writer_workers,"Writing capacity"), review_workers:safeNumber(workerInputs.review_workers,"Review capacity"), core_words:safeNumber(coreWords,"Passage size"), halo_units:safeNumber(haloUnits,"Neighboring passages"), max_request_bytes:safeNumber(maxRequest,"Request byte limit"), retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden, source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])), observation_ids:Array.from(state.selectedObservations)}; }
+  function options(selected) { if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose an authority, supplement or historical source for factual evidence.");if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");return {format:format.value, reader_workers:safeNumber(workerInputs.reader_workers,"Reading capacity"), writer_workers:safeNumber(workerInputs.writer_workers,"Writing capacity"), review_workers:safeNumber(workerInputs.review_workers,"Review capacity"), core_words:safeNumber(coreWords,"Passage size"), halo_units:safeNumber(haloUnits,"Neighboring passages"), max_request_bytes:safeNumber(maxRequest,"Request byte limit"), retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden, source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])), observation_ids:Array.from(state.selectedObservations)}; }
   function renderSources() {
     sourceList.replaceChildren();
     if (!state.sources.length) { sourceList.append(make("p", "pb-empty", state.local ? "No sources stored locally yet. Add files below." : "Add your own sources in the local app. You can explore the recorded project here.")); return; }

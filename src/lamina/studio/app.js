@@ -378,7 +378,7 @@
         node(
           "div",
           "preview-meta",
-          "Speech + retrieval pauses · script, not synthesized audio",
+          "Written script with explanations and recall pauses",
         ),
       );
       return;
@@ -1158,7 +1158,7 @@
         "p",
         "",
         state.sampExaminer
-          ? "Tick points as a local marking aid; inspect each source quote. This does not calculate a validated score."
+          ? "Tick the answer points as you review the response. Open a source quotation to check its support."
           : "The examiner sheet is hidden while the candidate answers. Reveal it when ready to review.",
       ),
     );
@@ -1234,7 +1234,7 @@
     const note = node(
       "p",
       "inline-note",
-      "Answers and marks stay in this browser. This original example is not an official examination or a validated scoring instrument.",
+      "Answers and marking notes stay in this browser. This practice example uses an informal checklist.",
     );
     note.style.marginTop = "14px";
     root.appendChild(note);

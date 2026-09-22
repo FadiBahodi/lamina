@@ -10,6 +10,8 @@ Models decide how to group and explain the material. Lamina manages source ident
 
 ![Lamina project interface](docs/overview.png)
 
+The [workflow design guide](docs/workflow-design.md) follows reference, audio and assessment jobs from source selection to delivery. It explains the worker inputs, dependencies and resource choices, with measurements from the earlier audio system and Lamina's scheduler. The website includes reusable setups for each job.
+
 ## How it works
 
 1. Readers work on assigned passages with neighboring text for context. Each extracted idea cites a quotation from its assigned passage.

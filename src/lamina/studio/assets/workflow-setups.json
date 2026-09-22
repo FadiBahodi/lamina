@@ -1,0 +1,119 @@
+[
+  {
+    "id": "reference",
+    "name": "Reference guide",
+    "title": "Several sources, one place to find an answer.",
+    "description": "A reference is organized around the question a reader brings to it. Chapters from different sources may answer that same question, with different exceptions or levels of detail.",
+    "brief": "Build a reference for practitioners using the supplied sources. Organize it around presenting problems or operational questions. For each question, preserve the complete answer group, conditions, exceptions and discriminating features. Merge equivalent questions; keep variants when they change the answer or the decision. Explain conflicts using source authority. Use tables when comparison helps. Include source citations and record deliberate omissions.",
+    "options": {
+      "format": "guide",
+      "reader_workers": 16,
+      "writer_workers": 8,
+      "review_workers": 8,
+      "core_words": 800,
+      "halo_units": 2,
+      "retrieval_targets": true
+    },
+    "inputs": "Add the reference texts. Assign authority, supplement and historical roles in Projects; add a layout example as a form exemplar.",
+    "stages": [
+      [
+        "Read source regions",
+        "Readers extract ideas and supporting passages. Neighbors supply the context around a page or paragraph boundary."
+      ],
+      [
+        "Build an answer catalog",
+        "Group equivalent questions, give each idea an owner, and preserve the conditions within each answer group."
+      ],
+      [
+        "Write by question",
+        "Writers receive the shared contents plan, their assigned answers and supporting evidence. Chapters can proceed together."
+      ],
+      [
+        "Check and export",
+        "Review each section, repair flagged passages, and export HTML, Markdown and PDF."
+      ]
+    ],
+    "decision": "Grouping answers before writing gives each section a defined scope and gives reviewers a complete answer group to check.",
+    "context": "Shared contents plan + assigned answer groups + source quotations + selected prerequisite evidence.",
+    "delivery": "An HTML reference and printable PDF, with the plan and review report beside them.",
+    "revision": "Request a change to one section. Its writer and reviewer run again; unchanged requests reuse saved results. Replan when the sources or goal change."
+  },
+  {
+    "id": "audio",
+    "name": "Spoken lesson",
+    "title": "Plan the lesson before dividing the script.",
+    "description": "A useful spoken lesson has an order: the listener needs some ideas before others, and difficult distinctions often need another example later. A shared route lets several writers contribute to that sequence.",
+    "brief": "Write a spoken lesson for a practitioner learning this material during a commute. Choose a coherent route through the supplied sources and divide it at natural changes in the argument. Preserve useful answer lists, exact quantities, mechanisms and exceptions. Explain unfamiliar terms in context, include brief recall questions and revisit important distinctions in a different scenario. Each section should build on the shared plan and assigned evidence. Return a script with speaker labels and clear transitions.",
+    "options": {
+      "format": "podcast-script",
+      "reader_workers": 16,
+      "writer_workers": 8,
+      "review_workers": 8,
+      "core_words": 800,
+      "halo_units": 2,
+      "retrieval_targets": false
+    },
+    "inputs": "Add teaching material and select its source roles. Set the audience and listening context in the brief. Configure a speech adapter when starting the local app to produce audio.",
+    "stages": [
+      [
+        "Read in parallel",
+        "Readers collect explanations, conditions and examples from their assigned source regions."
+      ],
+      [
+        "Choose the teaching route",
+        "One plan sets the order and the evidence each section needs from earlier ideas."
+      ],
+      [
+        "Write the sections",
+        "Writers share the route and receive their own evidence packets. Review and repair finish the script."
+      ],
+      [
+        "Render the audio",
+        "A speech adapter converts a ready script to WAV. Local synthesis calls share one resource lane."
+      ]
+    ],
+    "decision": "Writers receive earlier planned ideas and their evidence. They can work at the same time because they share the intended route. A task that requires the actual preceding prose needs a dependency on that completed result.",
+    "context": "Teaching route + assigned material + earlier planned ideas and selected quotations.",
+    "delivery": "A script, or a WAV file with its synthesis text and delivery report when an audio adapter is configured.",
+    "revision": "Revise the affected script section and review it, then render the revised script. The speech adapter caches identical requests."
+  },
+  {
+    "id": "assessment",
+    "name": "Assessment",
+    "title": "Write the questions and test what the candidate can infer.",
+    "description": "A staged case needs a coherent sequence of decisions and enough information to answer each question. The marking guide and the candidate sheet serve different readers.",
+    "brief": "Create a staged short-answer assessment for practitioners from the supplied teaching sources. Choose a coherent situation with consequential decisions. Each stage should reveal only the information needed at that point. State the requested response and any answer limit clearly. Write creditable answer items, mark allocations and acceptable alternatives in the examiner material. Include questions that require applying the evidence, interpreting new findings and revising an earlier decision. Preserve conditions and numerical criteria from the sources.",
+    "options": {
+      "format": "assessment",
+      "reader_workers": 16,
+      "writer_workers": 8,
+      "review_workers": 8,
+      "core_words": 800,
+      "halo_units": 2,
+      "retrieval_targets": true
+    },
+    "inputs": "Add teaching sources as authorities or supplements. Use example questions as form exemplars. Keep evaluation questions in the held-out assessment role.",
+    "stages": [
+      [
+        "Choose learning targets",
+        "Extract evidence and group the decisions or answer sets the assessment should test."
+      ],
+      [
+        "Plan and write the case",
+        "A common route coordinates the sections. Writers produce candidate prompts and examiner material."
+      ],
+      [
+        "Solve with candidate information",
+        "Each solve receives the current and earlier candidate sections. The marking guide goes to a separate judge."
+      ],
+      [
+        "Export both views",
+        "Save candidate and examiner files separately, with answerability findings in the examiner report."
+      ]
+    ],
+    "decision": "The solver has to attempt the question using the information supplied to the candidate. The judge can then locate ambiguity, missing data or a mismatch between the prompt and the marking guide.",
+    "context": "Writers: plan and evidence. Solver: candidate information up to this stage. Judge: candidate response, marking guide and cited evidence.",
+    "delivery": "Candidate and examiner HTML, Markdown and PDF files, plus a private review report. Live oral-session software supplies the controls for releasing findings during practice.",
+    "revision": "Edit the affected section and run the assessment checks again. Questions that depend on revised earlier information receive a new candidate context."
+  }
+]

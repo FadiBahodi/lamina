@@ -299,7 +299,7 @@
         node(
           "p",
           "fixture-note",
-          "Recorded example · These lessons were written for this guide; they do not show generation from arbitrary sources.",
+          "Example guide · The lessons were written for this demonstration.",
         ),
       );
     const art = node("img", "hero-art");
@@ -790,7 +790,7 @@
         node(
           "p",
           "micro-note",
-          "Use these points to guide a debrief. The checkboxes are your notes, not exam marks.",
+          "Use the checklist to record discussion points for the debrief.",
         ),
       );
       (scenario.checklist || []).forEach((item) => {
@@ -1036,7 +1036,7 @@
       node(
         "p",
         "",
-        "Source excerpts show where quotations came from. Review checks the stated rubric; it does not establish that a lesson is complete. Self-ratings are personal notes. Assessment inputs, when used, are excluded from this guide.",
+        "Source excerpts identify quoted passages. Review covers the stated rubric; completeness requires checking the original material. Self-ratings record your own assessment. Held-out questions stay outside the guide.",
       ),
     );
     add(host, boundary);

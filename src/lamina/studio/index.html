@@ -8,7 +8,7 @@
       name="description"
       content="Lamina turns source files into guides, documents, assessments, and listening scripts with parallel reading, source evidence, review, and section revision."
     />
-    <title>Lamina | Make useful work from your sources</title>
+    <title>Lamina | Document workflows</title>
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="inspector.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -19,6 +19,7 @@
     <script src="method-trace.js" defer></script>
     <script src="method-workbench.js" defer></script>
     <script src="production-workbench.js" defer></script>
+    <script src="workflow-guide.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -41,30 +42,38 @@
     <main id="main">
       <section class="view is-active overview-view" id="view-overview" aria-labelledby="page-title">
         <div class="product-intro">
-          <span class="section-index">LAMINA / LOCAL APP</span>
-          <h1 id="page-title">Turn source files into work you can use.</h1>
+          <span class="section-index">OPEN SOURCE / PYTHON</span>
+          <h1 id="page-title">Build and reuse document workflows.</h1>
           <div class="intro-columns">
-            <p class="product-summary">Set a goal, add sources, and choose a document, guide, assessment, or listening script. Lamina plans the work, coordinates reading and writing, shows source passages alongside the result, and lets you revise a section.</p>
+            <p class="product-summary">Lamina coordinates the model calls between your source material and the finished result. Define the job, divide the reading, give writers a shared plan, and save the work so you can revise it later. Use the local app, CLI or Python API.</p>
             <div class="intro-actions"><button class="button button-primary" type="button" data-view="workflows">Open a project →</button><a class="button button-secondary" href="https://github.com/FadiBahodi/lamina/releases/latest">Download Lamina</a><span>Python + local app · Your model adapter · MIT license</span></div>
           </div>
         </div>
-        <section class="product-story" aria-labelledby="story-title">
-          <div><span class="section-index">HOW A PROJECT RUNS</span><h2 id="story-title">From source files to a reviewed result.</h2><p>Lamina divides the reading, plans for the goal, and gives each writer the source evidence and prerequisite ideas it needs. Review findings stay with the result. You can inspect the output and request a revision to one section. A configured audio adapter can turn a listening script into a WAV file.</p><button type="button" class="text-button" data-view="workflows">Start a project →</button></div>
-          <div class="story-flow" aria-label="Project flow"><div><span>01</span><strong>Set the goal</strong><p>Name the audience and outcome. Add text, Markdown, or PDF sources.</p></div><div><span>02</span><strong>Read and plan</strong><p>Readers work on separate passages with neighboring context. Their findings inform a shared plan.</p></div><div><span>03</span><strong>Write and review</strong><p>Writers follow the plan. Review records findings against the result.</p></div><div><span>04</span><strong>Open and revise</strong><p>Read the output with its source evidence. Revise a section when it needs work.</p></div></div>
+        <section class="workflow-guide" id="workflow-guide" aria-labelledby="workflow-title">
+          <div class="section-heading"><div><span class="section-index">WORKFLOW DESIGN</span><h2 id="workflow-title">Start with the work you need to produce.</h2></div><p>Choose a setup to see how the source material, model context and output fit together. Each setup can be loaded into Projects or downloaded for use from Python.</p></div>
+          <div id="workflow-explorer"><p class="loading">Loading workflow setups…</p></div>
         </section>
         <section class="scale-section" aria-labelledby="scale-title">
           <div class="section-heading"><div><span class="section-index">WORK SCHEDULING</span><h2 id="scale-title">See what can run together.</h2></div><p>Change the reader count to see how many waves the source pieces need. Planning begins after reading finishes.</p></div>
           <div id="scale-lab" class="scale-lab">
-            <div class="scale-controls"><label>Source pieces <strong id="scale-units-value">24</strong><input id="scale-units" type="range" min="4" max="128" value="24"></label><label>Readers at once <strong id="scale-readers-value">16</strong><input id="scale-readers" type="range" min="1" max="128" value="16"></label><div class="scale-assumption">Scheduling illustration: each piece is one reading task. This does not estimate run time or output quality.</div></div>
+            <div class="scale-controls"><label>Source pieces <strong id="scale-units-value">24</strong><input id="scale-units" type="range" min="4" max="128" value="24"></label><label>Readers at once <strong id="scale-readers-value">16</strong><input id="scale-readers" type="range" min="1" max="128" value="16"></label><div class="scale-assumption">Schedule model: equal-size tasks and available readers. Run times depend on the model, source and provider limits.</div></div>
             <div class="scale-visual"><div class="scale-lane"><span>READ IN PARALLEL</span><div id="scale-waves" class="scale-waves"></div><strong id="scale-wave-count">2 waves</strong></div><div class="scale-gate"><span>→</span><strong>Shared plan</strong><small>Needs the reading results</small></div><div class="scale-lane scale-output"><span>THEN WRITE &amp; REVIEW</span><strong>Several sections can proceed</strong><small>Within the limits set for the project</small></div></div>
           </div>
-          <div class="context-explainer"><div><span class="section-index">SOURCE CONTEXT</span><h3>Each reader owns a passage and can see its neighbors.</h3></div><div class="context-packet"><span>PREVIOUS SOURCE PASSAGE</span><strong>OWNED SOURCE PASSAGE</strong><span>NEXT SOURCE PASSAGE</span></div><p>Neighboring passages help a reader understand where an idea begins or ends. Each writer gets the plan, assigned ideas, and exact prerequisite evidence. It does not receive another writer's completed prose.</p></div>
+          <div class="context-explainer"><div><span class="section-index">SOURCE CONTEXT</span><h3>Each reader owns a passage and can see its neighbors.</h3></div><div class="context-packet"><span>PREVIOUS SOURCE PASSAGE</span><strong>OWNED SOURCE PASSAGE</strong><span>NEXT SOURCE PASSAGE</span></div><p>Neighboring passages help a reader follow an idea across a boundary. Writers then receive the shared plan, their assigned ideas and the source evidence needed to explain them. Smaller passages spread the reading across more calls and repeat more context.</p></div>
+        </section>
+        <section class="performance-story" aria-labelledby="performance-title">
+          <div class="section-heading"><div><span class="section-index">TIME AND CAPACITY</span><h2 id="performance-title">Find the stage that sets the pace.</h2></div><p>Extra workers help while independent jobs are waiting to run. Planning, shared hardware and queued projects can determine when the result is ready.</p></div>
+          <div class="performance-columns">
+            <article><span class="measure-label">LAMINA / SYNTHETIC SCHEDULER RUN</span><h3>64 reading jobs, 16 writing chains</h3><div class="timing-bars" aria-label="Measured cold wall time by worker capacity"><div><span>1 worker</span><i style="--bar:100%"></i><b>6.001 s</b></div><div><span>4 workers</span><i style="--bar:28.2%"></i><b>1.690 s</b></div><div><span>16 workers</span><i style="--bar:12.9%"></i><b>0.777 s</b></div><div><span>32 workers</span><i style="--bar:10.4%"></i><b>0.626 s</b></div></div><p>Each job sleeps for a fixed duration through Lamina's real scheduler and cache. Two serial steps still connect reading to writing. Single runs on one machine, 21 September 2026.</p><a href="https://github.com/FadiBahodi/lamina/blob/main/benchmarks/results/production-widths.json">Read the run data</a></article>
+            <article><span class="measure-label">EARLIER AUDIO SYSTEM / PRODUCTION RECORDS</span><h3>The queue changed the experience.</h3><div class="timing-pair"><div><b>9.6 min</b><span>median job service</span></div><div><b>84 min</b><span>median queue wait</span></div></div><p>A saved batch of 19 course jobs spent much more time waiting than running. In one part, planning took 73.754 seconds; the slowest of eight writers took 4.122 seconds. That called for attention to admission, planning and the media queue.</p><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/workflow-design.md#where-time-went">Read the measurement context</a></article>
+          </div>
+          <p class="engineering-equation"><span>LOWER BOUND ON COMPLETION TIME</span><strong>T ≥ max(D, max<sub>r</sub> W<sub>r</sub> / c<sub>r</sub>)</strong><small>D is the longest dependency chain. W<sub>r</sub> is the work assigned to resource r; c<sub>r</sub> is its capacity. Queueing, retries and other overhead add to this bound.</small></p>
         </section>
         <section class="execution" id="execution" aria-labelledby="execution-title">
-          <div class="execution-heading"><div><span class="section-index">RECORDED EXAMPLE</span><h2 id="execution-title">See what reruns after a change.</h2></div><p>Fixed test responses let you inspect the actual dependencies and cache decisions. The example does not evaluate model writing.</p></div>
+          <div class="execution-heading"><div><span class="section-index">RECORDED EXAMPLE</span><h2 id="execution-title">See what reruns after a change.</h2></div><p>This saved run uses fixed responses. Select a source change or review note to see the resulting worker inputs and cache decisions.</p></div>
           <div id="method-trace" aria-live="polite"><p class="loading">Loading execution records…</p></div>
         </section>
-        <section class="overview-foot"><div><span class="section-index">EXPLORE</span><h2>Try a project or inspect the implementation.</h2><p>Open the recorded outputs, read the technical paper, or start a project with your own sources in the local app.</p></div><div class="overview-links"><button type="button" class="text-button" data-view="workflows">Open a project →</button><button type="button" class="text-button" data-view="examples">Example outputs →</button><a class="text-button" href="assets/lamina-technical-paper.pdf">Technical paper ↗</a><a class="text-button" href="https://github.com/FadiBahodi/lamina">Source code ↗</a></div></section>
+        <section class="overview-foot"><div><span class="section-index">EXPLORE</span><h2>Run a workflow with your own sources.</h2><p>Install the package and connect a model adapter. The design guide explains the source roles, worker inputs and revision choices; the paper develops their cost and scheduling models.</p></div><div class="overview-links"><button type="button" class="text-button" data-view="workflows">Open a project →</button><button type="button" class="text-button" data-view="examples">Example outputs →</button><a class="text-button" href="https://github.com/FadiBahodi/lamina/blob/main/docs/workflow-design.md">Workflow design guide</a><a class="text-button" href="assets/lamina-technical-paper.pdf">Technical paper ↗</a><a class="text-button" href="https://github.com/FadiBahodi/lamina">Source code ↗</a></div></section>
       </section>
 
       <section class="view" id="view-workflows" aria-labelledby="workflows-title" hidden>
@@ -323,7 +332,7 @@
           </div>
           <p>
             Original engineering material and a separate short-answer exercise.
-            Both are published examples, not live generation.
+            Open the published documents and their source records.
           </p>
         </div>
         <div class="example-switch" role="tablist" aria-label="Example output">

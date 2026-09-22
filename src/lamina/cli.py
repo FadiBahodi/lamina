@@ -28,12 +28,17 @@ def parser() -> argparse.ArgumentParser:
         "ingest", help="Import user-owned documents with stable provenance"
     )
     ingest.add_argument("paths", nargs="+", type=Path)
+    ingest.add_argument(
+        "--ocr",
+        action="store_true",
+        help="Run local OCRmyPDF on PDFs; preserve existing text pages",
+    )
     ingest.add_argument("--workspace", type=Path, default=Path(".lamina"))
     ingest.add_argument(
         "--role", choices=["teaching", "assessment"], default="teaching"
     )
     lookup = commands.add_parser(
-        "search", help="Retrieve teaching evidence with transparent rank fusion"
+        "search", help="Find source passages using the local text index"
     )
     lookup.add_argument("query")
     lookup.add_argument("--workspace", type=Path, default=Path(".lamina"))
@@ -133,6 +138,22 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         default=None,
         help="Merge equivalent retrieval tasks while preserving answer groups (guide or assessment)",
+    )
+    produce.add_argument(
+        "--workflow",
+        choices=["auto", "direct", "assigned", "planned"],
+        help="auto skips extraction/planning for small inputs; planned retains the full route",
+    )
+    produce.add_argument(
+        "--assignments",
+        type=Path,
+        help="Source assignment JSON from an outer agent; use --workflow assigned",
+    )
+    produce.add_argument(
+        "--workers", type=int, help="Shared maximum simultaneous calls across stages"
+    )
+    produce.add_argument(
+        "--max-input-bytes", type=int, help="Hard request limit; no source truncation"
     )
     produce.add_argument("--core-words", type=int)
     produce.add_argument("--halo-units", type=int)
@@ -240,15 +261,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         if args.command == "ingest":
-            result = ingest_paths(args.paths, Workspace(args.workspace), role=args.role)
+            result = ingest_paths(
+                args.paths, Workspace(args.workspace), role=args.role, ocr=args.ocr
+            )
         elif args.command == "search":
             vectors = json.loads(args.vectors.read_text()) if args.vectors else {}
-            result = search(
-                Workspace(args.workspace).units(),
-                args.query,
-                args.limit,
-                query_vector=vectors.get("query"),
-                vectors=vectors.get("units"),
+            workspace = Workspace(args.workspace)
+            result = (
+                search(
+                    workspace.units("teaching"),
+                    args.query,
+                    args.limit,
+                    query_vector=vectors.get("query"),
+                    vectors=vectors.get("units"),
+                )
+                if vectors
+                else workspace.search_units(args.query, args.limit)
             )
             if not args.json:
                 for unit in result:
@@ -308,6 +336,14 @@ def main(argv: list[str] | None = None) -> int:
                 key: value
                 for key, value in {
                     "format": args.format,
+                    "workflow": args.workflow,
+                    "assignments": (
+                        json.loads(args.assignments.read_text())
+                        if args.assignments
+                        else None
+                    ),
+                    "workers": args.workers,
+                    "max_input_bytes": args.max_input_bytes,
                     "reader_workers": args.readers,
                     "writer_workers": args.writers,
                     "review_workers": args.reviewers,

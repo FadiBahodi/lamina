@@ -74,7 +74,7 @@ def assessment(tmp_path):
         producer,
         "Test lease safety",
         ["s1", "s2"],
-        {"format": "assessment", "core_words": 100},
+        {"workflow": "planned", **({"format": "assessment", "core_words": 100})},
     )
     receipt = run_production(ws, producer, plan)
     assert len(receipt["sections"]) == 4

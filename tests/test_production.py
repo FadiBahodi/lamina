@@ -54,7 +54,9 @@ class FixtureProvider:
 
     identity = "fixture-production-v1"
 
-    def __init__(self, *, bad_quote=False, review_issue=False, check_issue=False, delay=0):
+    def __init__(
+        self, *, bad_quote=False, review_issue=False, check_issue=False, delay=0
+    ):
         self.bad_quote = bad_quote
         self.review_issue = review_issue
         self.check_issue = check_issue
@@ -104,6 +106,7 @@ class FixtureProvider:
                         "purpose": "Explain the source fact",
                         "idea_ids": [idea["id"]],
                         "context_section_ids": [f"sec_{i-1}"] if i > 1 else [],
+                        "candidate_context_ids": [f"sec_{j}" for j in range(1, i)],
                         "representation": {
                             "kind": "mechanism" if i == 2 else "reference",
                             "rationale": "Show the source distinction clearly",
@@ -163,15 +166,23 @@ class FixtureProvider:
             return {"answer": "Check the fencing token.", "uncertainties": []}
         if stage == "assessment_judge":
             if self.check_issue:
-                return {"findings": [{"kind": "unanswerable", "issue": "The candidate prompt lacks the condition.",
-                                      "repair_instruction": "Add the condition to the candidate prompt.",
-                                      "evidence": [data["evidence"][0]]}]}
+                return {
+                    "findings": [
+                        {
+                            "kind": "unanswerable",
+                            "issue": "The candidate prompt lacks the condition.",
+                            "repair_instruction": "Add the condition to the candidate prompt.",
+                            "evidence": [data["evidence"][0]],
+                        }
+                    ]
+                }
             return {"findings": []}
         raise AssertionError(stage)
 
 
 def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
     ws = workspace(tmp_path)
+
     class ConcurrentFixture(FixtureProvider):
         def __init__(self):
             super().__init__()
@@ -194,11 +205,16 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
         "Explain lease safety",
         ["s1", "s2"],
         {
-            "core_words": 100,
-            "halo_units": 1,
-            "reader_workers": 8,
-            "writer_workers": 8,
-            "review_workers": 8,
+            "workflow": "planned",
+            **(
+                {
+                    "core_words": 100,
+                    "halo_units": 1,
+                    "reader_workers": 8,
+                    "writer_workers": 8,
+                    "review_workers": 8,
+                }
+            ),
         },
     )
     plan = receipt["plan"]
@@ -254,16 +270,30 @@ def test_bad_quote_fails_and_assessment_source_never_reaches_provider(tmp_path):
     )
     provider = FixtureProvider(bad_quote=True)
     with pytest.raises(ProductionError, match="non-exact quote"):
-        plan_production(ws, provider, "Explain", ["s1"], {"core_words": 100})
+        plan_production(
+            ws,
+            provider,
+            "Explain",
+            ["s1"],
+            {"workflow": "planned", **({"core_words": 100})},
+        )
     with pytest.raises(ProductionError, match="not a teaching source"):
-        plan_production(ws, provider, "Explain", ["secret"])
+        plan_production(
+            ws, provider, "Explain", ["secret"], options={"workflow": "planned"}
+        )
     assert "secret_unit" not in str(provider.requests)
 
 
 def test_review_repairs_only_flagged_section_and_cache_reuse(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider(review_issue=True)
-    plan = plan_production(ws, provider, "Explain", ["s1", "s2"], {"core_words": 100})
+    plan = plan_production(
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {"workflow": "planned", **({"core_words": 100})},
+    )
     first = run_production(ws, provider, plan)
     assert first["status"] == "ready"
     assert list(first["initial_findings"]) == ["sec_2"]
@@ -279,7 +309,13 @@ def test_review_repairs_only_flagged_section_and_cache_reuse(tmp_path):
 def test_targeted_revision_changes_one_writer_and_review(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider()
-    plan = plan_production(ws, provider, "Explain", ["s1", "s2"], {"core_words": 100})
+    plan = plan_production(
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {"workflow": "planned", **({"core_words": 100})},
+    )
     first = run_production(ws, provider, plan)
     before = len(provider.requests)
     revised = run_production(
@@ -305,7 +341,7 @@ def test_assessment_candidate_artifact_excludes_marking(tmp_path):
         provider,
         "Create an assessment",
         ["s1"],
-        {"format": "assessment", "core_words": 100},
+        {"workflow": "planned", **({"format": "assessment", "core_words": 100})},
     )
     assert receipt["candidate_markdown"] == receipt["markdown"]
     assert "What makes" in receipt["candidate_markdown"]
@@ -318,21 +354,42 @@ def test_assessment_candidate_artifact_excludes_marking(tmp_path):
 def test_assessment_blind_finding_keeps_output_for_review(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider(check_issue=True)
-    receipt = build_production(ws, provider, "Create an assessment", ["s1"],
-                               {"format": "assessment", "core_words": 100})
+    receipt = build_production(
+        ws,
+        provider,
+        "Create an assessment",
+        ["s1"],
+        {"workflow": "planned", **({"format": "assessment", "core_words": 100})},
+    )
     assert receipt["status"] == "review"
     assert receipt["assessment_checks"]["status"] == "review"
-    assert receipt["assessment_checks"]["checks"][0]["findings"][0]["kind"] == "unanswerable"
+    assert (
+        receipt["assessment_checks"]["checks"][0]["findings"][0]["kind"]
+        == "unanswerable"
+    )
     assert "What makes" in receipt["candidate_markdown"]
-    solves = [request["input"] for stage, request in provider.requests if stage == "assessment_blind_solve"]
-    assert solves and all(set(row) == {"current_candidate_body", "prior_candidate_bodies"} for row in solves)
+    solves = [
+        request["input"]
+        for stage, request in provider.requests
+        if stage == "assessment_blind_solve"
+    ]
+    assert solves and all(
+        set(row) == {"current_candidate_body", "prior_candidate_bodies"}
+        for row in solves
+    )
     assert all("marking_body" not in str(row) for row in solves)
 
 
 def test_new_source_revision_reuses_unaffected_reader_windows(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider()
-    first = plan_production(ws, provider, "Explain", ["s1", "s2"], {"core_words": 100})
+    first = plan_production(
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {"workflow": "planned", **({"core_words": 100})},
+    )
     assert first["metrics"]["cache_misses"] == 5  # four windows plus global route
     ws.put_source(
         {
@@ -364,7 +421,11 @@ def test_new_source_revision_reuses_unaffected_reader_windows(tmp_path):
         )
     before = len(provider.requests)
     revised = plan_production(
-        ws, provider, "Explain", ["s1", "s2_new"], {"core_words": 100}
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2_new"],
+        {"workflow": "planned", **({"core_words": 100})},
     )
     new_reads = [
         p["input"]["source"]["id"]

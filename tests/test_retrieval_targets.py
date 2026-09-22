@@ -215,7 +215,7 @@ def test_semantic_ownership_and_artifact_consumer(tmp_path):
         provider,
         "Make a worker retrieval guide",
         ids,
-        {"format": "guide", "retrieval_targets": True},
+        {"workflow": "planned", **({"format": "guide", "retrieval_targets": True})},
     )
     catalog = plan["retrieval_targets"]
     assert len(catalog["targets"]) == 3
@@ -249,7 +249,7 @@ def test_semantic_ownership_and_artifact_consumer(tmp_path):
         provider,
         "Make a worker retrieval guide",
         ids,
-        {"format": "guide", "retrieval_targets": True},
+        {"workflow": "planned", **({"format": "guide", "retrieval_targets": True})},
     )
     assert second["metrics"]["cache_misses"] == 0
 
@@ -264,7 +264,7 @@ def test_catalog_rejects_hallucinated_answer_missing_owner_and_false_equivalent(
         provider,
         "Make a guide",
         [f"source_{n}" for n in range(1, 5)],
-        {"format": "guide", "retrieval_targets": True},
+        {"workflow": "planned", **({"format": "guide", "retrieval_targets": True})},
     )
     ideas, units = plan["ideas"], plan["units"]
     raw = _catalog(ideas)
@@ -296,7 +296,10 @@ def test_assessment_keeps_answer_catalog_examiner_only(tmp_path):
         provider,
         "Make questions",
         [f"source_{n}" for n in range(1, 5)],
-        {"format": "assessment", "retrieval_targets": True},
+        {
+            "workflow": "planned",
+            **({"format": "assessment", "retrieval_targets": True}),
+        },
     )
     receipt = run_production(ws, provider, plan)
     assert receipt["status"] == "ready"
@@ -314,7 +317,7 @@ def test_route_omission_stays_in_operator_plan_but_not_artifact(tmp_path):
         provider,
         "Make a scoped guide",
         [f"source_{n}" for n in range(1, 5)],
-        {"format": "guide", "retrieval_targets": True},
+        {"workflow": "planned", **({"format": "guide", "retrieval_targets": True})},
     )
     assert plan["route"]["omitted"] == [
         {"target_id": "recovery-stale-write", "reason": "Out of this guide's scope"}

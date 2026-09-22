@@ -45,6 +45,8 @@ def test_production_command_and_saved_plan_revision(tmp_path):
         workspace,
         "--brief",
         "Explain lease safety.",
+        "--workflow",
+        "planned",
         "--readers",
         16,
         "--adapter",

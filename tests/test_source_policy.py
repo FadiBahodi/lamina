@@ -141,7 +141,9 @@ def test_form_exemplar_is_planning_only_and_factual_roles_remain_visible(tmp_pat
     assert normalized["factual_source_ids"] == ["current", "supp", "old"]
     assert normalized["form_exemplar_ids"] == ["form"]
     assert normalized["sources"][2]["policy"] == "historical"
-    plan = plan_production(ws, provider, "Explain safe retries", IDS, options)
+    plan = plan_production(
+        ws, provider, "Explain safe retries", IDS, {"workflow": "planned", **(options)}
+    )
     assert len(plan["form_exemplars"]) == 1
     assert "Prior question form" in plan["form_exemplars"][0]["units"][0]["text"]
     assert "unit_form" not in {
@@ -198,7 +200,9 @@ def test_heldout_and_all_form_selection_rejected_before_provider(tmp_path):
             ws, ["current"], {"source_policy": {"current": ["authority"]}}
         )
     with pytest.raises(ProductionError, match="not a teaching source"):
-        plan_production(ws, provider, "Explain", ["holdout"])
+        plan_production(
+            ws, provider, "Explain", ["holdout"], options={"workflow": "planned"}
+        )
     assert not provider.requests
 
 
@@ -208,7 +212,9 @@ def test_selected_observation_reaches_planner_only_and_unselected_does_not_inval
     ws = _workspace(tmp_path)
     provider = PolicyFixture()
     base = {"source_policy": POLICY, "method_family": "document-production"}
-    first = plan_production(ws, provider, "Explain", IDS, base)
+    first = plan_production(
+        ws, provider, "Explain", IDS, {"workflow": "planned", **(base)}
+    )
     assert first["experience"] == []
     observation = record_observation(
         ws,
@@ -220,7 +226,9 @@ def test_selected_observation_reaches_planner_only_and_unselected_does_not_inval
         applicability="lease worker docs",
         note="Separate expiry and termination",
     )
-    unchanged = plan_production(ws, provider, "Explain", IDS, base)
+    unchanged = plan_production(
+        ws, provider, "Explain", IDS, {"workflow": "planned", **(base)}
+    )
     assert unchanged["metrics"]["cache_misses"] == 0
     assert unchanged["plan_digest"] == first["plan_digest"]
     chosen = plan_production(
@@ -228,7 +236,10 @@ def test_selected_observation_reaches_planner_only_and_unselected_does_not_inval
         provider,
         "Explain",
         IDS,
-        {**base, "observation_ids": [observation["observation_id"]]},
+        {
+            "workflow": "planned",
+            **({**base, "observation_ids": [observation["observation_id"]]}),
+        },
     )
     assert chosen["metrics"]["cache_misses"] == 1  # planner alone
     route_request = [
@@ -313,7 +324,7 @@ def test_assessment_candidate_does_not_inherit_private_plan_titles(tmp_path):
         provider,
         "Create practice",
         IDS,
-        {"format": "assessment", "source_policy": POLICY},
+        {"workflow": "planned", **({"format": "assessment", "source_policy": POLICY})},
     )
     receipt = run_production(ws, provider, plan)
     assert "PRIVATE" not in receipt["candidate_markdown"]

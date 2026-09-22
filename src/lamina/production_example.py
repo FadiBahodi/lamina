@@ -195,7 +195,7 @@ def production_demo() -> dict:
             provider,
             BRIEF,
             ["fixture_source_1", "fixture_source_2"],
-            OPTIONS,
+            {"workflow": "planned", **(OPTIONS)},
             events.append,
         )
         first = run_production(workspace, provider, plan, progress=events.append)

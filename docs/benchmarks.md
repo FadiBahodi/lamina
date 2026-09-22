@@ -1,5 +1,24 @@
 # Systems benchmark
 
+## Source workflow rewrite
+
+An original deterministic fixture compares baseline commit `539b7f8` with the source workflow rewrite. Both use the same 100 stored units, 25,000 words, ten section assignments and fixed responses. This isolates request construction and reader defaults; it does not score parsing or model output quality.
+
+| Measure | Baseline | Rewrite |
+| --- | ---: | ---: |
+| Reader calls | 100 | 17 |
+| Reader source words sent | 123,500 | 25,000 |
+| Reader source repetition | 4.94× | 1.00× |
+| Total cold calls | 121 | 38 |
+| Reference input tokens, all stages | 325,626 | 144,580 |
+| Provider calls on repeat writing | 0 | 0 |
+| Provider calls for one section revision | 2 | 2 |
+
+Reference tokens use `cl100k_base` over serialized requests; they are not billed tokens. Total calls fell 68.6% and reference input tokens fell 55.6% on this fixture. This result comes from removing default neighboring overlap, packing reader batches, and shortening writer context. It is not a measured wall-time, monetary-cost or quality improvement. Explicit context can still be necessary on real material.
+
+Reproduce with `python benchmarks/source_workflows.py --repo CHECKOUT --output RESULT.json` for each checkout. Raw results are in [baseline](../benchmarks/results/source-workflows-baseline.json) and [rewrite](../benchmarks/results/source-workflows-rewrite.json). Small direct workflows are separately covered by contract and browser tests: writing plus review uses two calls, with no reader or planner.
+
+
 `benchmarks/run_systems.py` uses the real `Workspace.run_cached` SQLite claim, lease, result and cache path. Handlers sleep for declared durations and return small JSON objects. They make no model calls or media files. The default graph has 24 independent extraction jobs, one reconciliation and one planning job in series, then six independent author-to-review chains.
 
 Run from a clean clone with Python 3.11 or newer; no optional dependencies are needed:

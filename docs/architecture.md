@@ -1,45 +1,55 @@
 # Architecture
 
-This page covers the structured lesson builder. The default Projects interface uses [source-aware production](production.md); [architecture status](architecture-status.md) compares both paths with the method runtime.
+Lamina separates three decisions: what material belongs together, what each call needs to see, and when that call can run. A model or calling agent decides meaning. Code stores sources, assembles context, enforces contracts and schedules work.
 
-Lamina builds learning material from local documents and exports a static reader. Python 3.11+ and SQLite handle the pipeline; plain browser assets serve the workbench. Source identity and evidence remain inspectable across semantic stages.
+## Execution
 
-## Data flow
-
-1. **Ingest.** Each document gets a SHA-256 digest, source ID, title, filename, and role. Text becomes ordered units with stable IDs and locators. Repeated writes are idempotent. PDF support extracts text; it does not read images, scanned pages, tables, or layout reliably.
-2. **Retrieve.** Search ranks units by lexical and heading signals. A caller-supplied vector lane can add cosine similarity. Scores and contributing lanes are returned; the default has no semantic embeddings.
-3. **Extract.** An adapter sees bounded teaching-unit windows and adjacent context, then proposes concepts with exact quotes. Validation rejects unknown units, invented quotes, and held-out assessment evidence.
-4. **Reconcile.** A global pass can merge raw concepts. Each raw concept belongs to one canonical concept, and all member evidence survives. Mechanical accounting protects extracted material; the model judges semantic overlap.
-5. **Plan.** A global pass assigns canonical concepts to lessons in prerequisite order or defers them with reasons. It accounts for extracted concepts, not undiscovered source ideas.
-6. **Author and review.** Lessons contain summaries, source-backed sections, optional task-appropriate practice questions, and speech/pause scripts. A separate adapter review can pass or request revision; unresolved revisions block export. The default reviewer uses the same adapter.
-7. **Export.** Validated bundles become JSON and a static workbench, with optional source-linked Markdown or paginated PDF handouts containing practice and answers. Teaching sources and units stay in the bundle. Assessment text stays out of requests and exports. This path does not synthesize or audit audio.
-
-Since v0.2, a validated data-only **procedure** supplies audience, bounded teaching instructions, outputs, and local worker width. Its content-derived revision enters semantic requests and cache keys; planning and authoring also receive its brief. Local Studio serves the curated public example and can accept new sources. It starts background builds only with an adapter configured at startup. Every run exports the base lesson bundle. SAMP adds short-answer generation and review with source-backed points and checked mark totals; an oral case needs an authored scenario. Procedures and outputs are saved together. A SAMP review is another adapter reading.
-
-## Identity, cache, and recovery
-
-Cache keys include stage, canonical request, adapter identity, and prompt/schema revision. Source, adapter, or contract changes require new results; completed stages survive retries. SQLite claims jobs atomically with a lease. Expired claims can be retried after a process disappears, with bounded attempts and visible errors. This is local recovery, not a distributed queue.
-
-Adapter identity must include its model, prompt, or workflow revision. Lamina cannot detect a semantic change hidden behind identical requests and identity. A cache hit records a prior response, not its quality.
-
-## Validation boundaries
-
-| Check | Establishes | Limit |
+| Route | Model work | When to use it |
 | --- | --- | --- |
-| Source digest and unit locator | Extracted text identity | Cannot establish visual PDF fidelity. |
-| Exact quote within a known unit | Quote occurs in an allowed source | Cannot establish clinical or scientific correctness. |
-| Reconciled member and evidence accounting | Extracted concepts and evidence survive merges | Cannot establish that distinctions remain useful. |
-| Assignment or deferral | Every extracted concept is accounted for | Cannot detect missing concepts. |
-| Question-mode requirements | Recall, contrast, and apply prompts are present where required | Cannot establish learning benefit. |
-| Review pass | Adapter reviewer accepted its rubric | Not independent expert review. |
-| Local self-rating | Learner's reported practice result | Not predicted mastery or exam performance. |
+| Direct | Write → review → optional repair/recheck | Complete source context fits one writing task. |
+| Assigned | The same chain per supplied section | A calling agent has chosen source ownership and dependencies. |
+| Planned | Read → optional target grouping → plan → section chains | The task needs model-chosen organization first. |
 
-There is no calibrated spaced-repetition scheduler. Local ratings can guide a learner's next choice. Exported material can still be thin, repetitive, or mistaken.
+`auto` selects direct for a small complete input, otherwise planned. It does not infer difficulty, choose a model, or prove that input is semantically self-contained. Every call has a request-size check. The example HTTP adapter can additionally check a configured tokenizer and model context budget with reserved output space.
 
-## Extension points
+The assigned route never silently creates a second planner. Search supplies candidates, not semantic equivalence: related passages can repeat, complement, qualify or contradict each other. Code deduplicates known source references. The planned route's global decision remains bounded; it is not a solution for an unlimited corpus.
 
-The [adapter protocol](adapters.md) handles interpretation and writing. Ingestion can add document types while retaining source/unit identity. Retrieval can use external vectors alongside lexical search. The static bundle permits alternate readers without moving authoring into the browser.
+## Context
 
-## Reusable methods in v0.3
+Writers receive their assigned original units, a short section map and explicitly needed evidence. A unit already supplied as owned evidence is not repeated as predecessor or shared evidence. Planned ideas may retain short quotes used to identify support. Source assignments need no intermediate idea prose.
 
-The CLI runs [method graphs](methods.md) with selected task fields, dependencies, resource lanes, and cached results. Guide authors in the lesson builder receive the shared lesson route and exact prerequisite evidence, not finished earlier prose. Practice forms follow the material without a universal three-mode quota.
+Source ownership differs from context. An assigned writer accounts for every owned unit as used or omitted with a reason. A planned writer accounts for its extracted ideas. These checks inspect records; neither proves that prose preserves every important distinction.
+
+Earlier evidence is separate from finished candidate prompts. `context_section_ids` shares source evidence. `candidate_context_ids` supplies earlier question text to an assessment's blind solver. Both name earlier sections; neither sends a marking key into candidate input.
+
+## Resources and time
+
+`workers` caps simultaneous production calls. Optional stage limits can lower that capacity. The executor submits bounded work and prioritizes finishing section checks. One slow writer therefore does not block reviews of unrelated sections. Assessment solve/judge pairs also run as local chains.
+
+More workers cannot shorten a dependency. Under an idealized homogeneous worker model, total work divided by worker count and the longest dependency chain are lower bounds on completion time. Provider quotas, token sizes, unequal model speed, retries and overhead can raise actual time. Token counts alone are not execution time.
+
+Queueing models describe contention and waiting for a fixed workload. A scalability curve does not establish which calls should exist, an optimal semantic split, or model accuracy. Compare complete work, elapsed time, spend and output quality when changing the workflow. See [measurement](measurement.md).
+
+## Storage
+
+SQLite stores exact source revisions, units, an FTS5 text index, jobs and method receipts. The index returns lexical candidates without rebuilding corpus statistics in Python for every query. A separate API accepts caller-provided vectors for rank fusion.
+
+Completed cache reads avoid a write transaction. Running jobs retain renewable leases and owner fencing. Source reimport atomically replaces parsed units, preventing mixed segmentation after parser changes. Saved plans retain their source text.
+
+Reader requests for newly ingested sources use local IDs and omit revision locators. Unchanged text, heading, source metadata, policy, task and adjacent context can reuse an interpretation. Results are rebound to current exact source IDs. Changes outside declared context do not cause inferred semantic invalidation.
+
+Progress is separate from the immutable plan and finished receipt. The browser polls small progress records and fetches full results when complete.
+
+## Code map
+
+| Module | Responsibility |
+| --- | --- |
+| `ingest.py`, `store.py` | Parse, locate, index and persist source material. |
+| `production.py`, `production_contract.py` | Build requests, validate results and assemble the document. |
+| `source_assignments.py` | Validate direct or caller-supplied source ownership. |
+| `execution.py` | Bound concurrent work and run section chains. |
+| `providers.py` | Dispatch configured adapters and retain usage metadata. |
+| `assessment_checks.py`, delivery/export modules | Output-specific checks and files. |
+| `method_runtime.py` | Execute caller-declared dependency graphs. |
+
+The older lesson/procedure path remains available for existing integrations. Its `pipeline.py` and `samp.py` contracts are separate from production. [System origins](system-origins.md) retains historical applications without making them current capability claims.

@@ -1,73 +1,100 @@
-# Source-aware production
+# Producing a document
 
-Python, `lamina produce`, and local Projects use the same source-to-artifact engine in `production.py`.
+The CLI, Python API and local Projects app use the same engine. Import sources, describe the result, then run. Models choose meaning and wording; code assigns source ownership, checks references and schedules calls.
 
-## Inputs and planning
+## Choose a workflow
 
-`plan_production(workspace, provider, brief, source_ids, options=None, progress=None)` returns a saved plan. The brief is text or `{goal, audience?, constraints?}`. Sources must exist in the workspace with the teaching role; held-out assessment sources cannot be selected.
-
-| Setting | Range or values | Purpose |
+| Workflow | What happens | When to use it |
 | --- | --- | --- |
-| `format` | `document`, `guide`, `podcast-script`, `assessment` | Output contract and review instructions. |
-| `reader_workers`, `writer_workers`, `review_workers` | 1 to 128 each | Concurrent model-call limits. |
-| `core_words` | 100 to 2000 | Target source-window size; indivisible units may be larger. |
-| `halo_units` | 0 to 8 | Full neighboring units on each side, within the source. |
-| `max_request_bytes` | 4096 to 2,000,000 | Reject oversized UTF-8 requests before the adapter call; not a token limit. |
-| `source_policy` | Complete selected-source ID map: `authority`, `supplement`, `historical`, `form_exemplar` | How each teaching source may be used. Omission treats all as authorities. |
-| `observation_ids` | Up to 20 distinct local IDs | Include selected observations from `method_family` in planning. |
-| `method_family` | Lowercase slug | Observation scope; defaults to `document-production`. |
-| `retrieval_targets` | `true` or `false`; `guide` or `assessment` only | Build a source-backed prompt and answer-group catalog before routing. Default `false`. |
+| `auto` (default) | Chooses direct writing for small inputs; otherwise uses the planned path | Start here |
+| `direct` | A writer receives the selected source text, then a reviewer checks its result | The collection fits one request |
+| `planned` | Readers extract cited ideas; a planner assigns them to sections; sections are written and reviewed | The collection needs a shared editorial plan |
+| `assigned` | The caller supplies sections and source assignments; sections are written and reviewed | An agent or person already knows the structure |
 
-Authority, supplement, and historical sources enter factual reading with their roles; historical claims may explain past practice or conflicts. Form exemplars guide structure but their facts and IDs stay out of factual reading and citations. Policy and selected observations are fixed in the plan. Code separates requests and evidence; reviewers assess how the model interpreted source roles.
+Automatic selection uses serialized input size, with a conservative 24 KB ceiling and space reserved for instructions and output. This is a transport decision, not an estimate of intellectual difficulty. A request that exceeds its budget fails before the model call; no text is silently dropped to fit.
 
-On the CLI, `--source-policy` reads the complete ID-to-policy JSON map. Repeat `--observation-id` for selected notes and use `--method-family` for another family. These flags create a plan; a saved `--plan` fixes its policy and experience.
+`plan_production(workspace, provider, brief, source_ids, options=None)` creates a saved plan. `run_production(workspace, provider, plan, options=None)` writes it. `build_production` does both. A brief is text or `{goal, audience?, constraints?}`. Selected sources must have the teaching role.
 
-Readers own core units and may inspect neighboring halo units. New ideas cite core-owned evidence. The model selects useful ideas at the granularity the material calls for.
+In the planned path, readers own complete source units. Optional neighboring units provide context but cannot originate a second reader's ideas. The planner sees ideas and their cited excerpts, then assigns each idea once or explains its omission. Each writer sees a short outline, its assigned ideas and source passages, and explicitly requested context. Source passages let it check qualifications and relationships that an extracted idea may omit. Repeated unit IDs are sent once per request.
 
-The planner uses extracted ideas, the goal, source metadata, form exemplars, and selected observations to choose sections and representations, record cited shared context, and assign or explain each extracted idea's omission. Representations specify kind, rationale, and requirements.
+In direct and assigned paths, there is no model-generated idea layer. Writers account for assigned source units with `used_unit_ids` and `omitted_units`. This proves explicit accounting, not that every fact reached the output.
 
-With `retrieval_targets=true`, `production_targets` runs between reading and routing. The model merges equivalent ideas, keeps variants and different contexts distinct, and groups prompts and answers. Each idea has one target; each member needs an answer item from exact quotes in its own units. The route assigns or explains each omission. Writers receive assigned targets. Selected targets appear in guide or examiner output; omissions and reasons stay in the plan and report. In assessments, the catalog appears in examiner and operator material. Enable this stage with `lamina produce --retrieval-targets` or the Projects checkbox.
+### Caller-supplied sections
 
-Plans contain source units, identities, windows, ideas, assignments, and a digest. They are tied to source content and adapter identity; JSON edits break the digest. Replan after goal or source changes, and keep private-source plans private.
+Use `workflow="assigned"` with an `assignments` object:
 
-## Writing and revision
+```json
+{
+  "title": "Wind turbines",
+  "summary": "Explain the conversion from wind to electricity.",
+  "sections": [{
+    "id": "blades",
+    "title": "Blades and rotation",
+    "purpose": "Explain how wind turns the rotor.",
+    "unit_ids": ["selected-unit-id"],
+    "context_unit_ids": [],
+    "representation": {
+      "kind": "explanation",
+      "rationale": "Describe the physical sequence.",
+      "requirements": []
+    }
+  }],
+  "omitted": [],
+  "shared_context": []
+}
+```
 
-`run_production(workspace, provider, plan, options=None, progress=None)` gives each writer the route, its assigned evidence, and selected earlier evidence. Writers share planned earlier ideas and run within the configured capacity.
+Every selected factual unit needs one section owner or an omission `{unit_id, reason}`. Context may be shared. `context_section_ids` requests earlier sections' source evidence; `candidate_context_ids` requests earlier candidate prompts during assessment checks. Neither means waiting for earlier finished prose. The general [method runtime](methods.md) supports dependencies on completed outputs.
 
-Review compares each section with its assignment, evidence, and representation through the configured model adapter. A concrete finding triggers one local repair and recheck. Remaining findings leave status `review` in the receipt.
+## Controls
 
-Use `options={"section_notes":{"section_id":"requested change"}}` for a targeted revision. The note follows its section through repair; unchanged requests reuse cached work. Browser revisions retain earlier section notes, so a later edit elsewhere does not revert them.
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `format` | `document` | Also `guide`, `assessment`, `podcast-script` |
+| `workers` | 8 | Total simultaneous model calls in a production phase |
+| `reader_workers`, `writer_workers`, `review_workers` | Inherit `workers` | Optional stage ceilings within that total |
+| `core_words` | 1600 | Approximate reading batch target; dense text also counts by byte size |
+| `halo_units` | 0 | Extra neighboring units on either side, within the source |
+| `max_input_bytes` | 120000 | Maximum serialized stage request size, including instructions |
+| `max_request_bytes` | 1500000 | Compatibility transport ceiling; the smaller ceiling applies |
 
-Receipts record sections, citations, findings, sources, request bytes, cache outcomes, per-call time, provider overlap, and wall time including overhead.
+Worker counts accept 1–128; `core_words` accepts 100–2000; `halo_units` accepts 0–8; byte ceilings accept 4096–2000000. These limits control resources. They do not choose topics or impose a lesson count. Adapters enforce the selected model's token budget separately.
 
-## Delivery and recovery
+A complete `source_policy` map can mark sources `authority`, `supplement`, `historical`, or `form_exemplar`. All default to authority. Form exemplars supply bounded structural samples and cannot support factual citations. `observation_ids` selects up to 20 saved observations within `method_family` (default `document-production`). Their interpretation remains a model decision.
 
-`export_production(receipt, plan, output_path)` writes Markdown, readable HTML, JSON report, saved plan, and a formatted PDF when the `pdf` extra is installed. Assessments have separate candidate and examiner Markdown, HTML, and PDF. `document.*` is candidate-facing, with generic question headings; planned titles and answers stay in examiner/operator material. Reports and plans may contain keys, private titles, and source text.
+For guides and assessments, `retrieval_targets=true` adds a stage that groups equivalent prompts and source-backed answers. It requires the planned path; automatic mode selects that path when enabled. It is optional because many documents do not need a question catalog.
 
-Every assessment run calls `check_assessment(workspace, provider, plan, receipt, workers=8, progress=None)` after review and repair. A blind-answer request contains the current candidate section and earlier candidate sections. A separate judge sees that answer, candidate context, marking text, and exact cited excerpts, then returns typed findings in examiner/operator-only `receipt.assessment_checks`. Findings leave the run for review.
+## Writing, review and revision
 
-For a ready `podcast-script`, `render_audio(workspace, audio_provider, receipt, output_path, progress=None)` calls an optional command adapter. It returns WAV bytes and the text submitted to synthesis. Lamina accepts uncompressed PCM WAV up to 20 MB, checks structure and nonzero duration, and writes `narration.wav`, `narration.txt`, and `audio.json` with hashes and duration. A process-safe per-user file lock serializes uncached audio calls across local projects; cache hits skip the lock.
+Each section proceeds through writing and review as soon as capacity permits. A finding triggers one repair and recheck. Unresolved findings leave the result in `review`. Sections retain their planned order in the export.
 
-The CLI and local app configure audio at startup with optional `--audio-adapter` and `--audio-adapter-version`, separate from the model adapter. Without one, a podcast script remains text.
+Pass `section_notes={section_id: "requested change"}` to revise a saved plan. Unchanged requests reuse cached results. The browser retains earlier revision notes. Plans contain source snapshots and are tied to their goal and provider configuration; changing those requires planning again. Unchanged reader input can still reuse its cached interpretation after a source-file edit, with citations rebound to the current snapshot.
 
-The local app persists project state beside artifacts. After restart, unfinished projects become `interrupted`; resume starts a new run with the saved plan when available and the exact-request cache. Completed requests survive; a model call that was interrupted restarts from its beginning. One project runs at a time, with parallel jobs inside it. SQLite uses renewable leases and owner-token fencing to prevent a superseded worker from committing over its replacement.
+Receipts record request sizes, cache hits, elapsed times and reported token usage. Logical request bytes include cached requests; `provider_request_bytes` counts only calls actually attempted. Missing provider usage is not a zero-cost claim. Timings from deterministic fixtures do not measure model quality or production latency.
 
-## HTTP interface
+## Assessments and audio
 
-The server binds to loopback and accepts same-origin requests. Model and audio adapters are set at startup, never by a browser request. Status reports whether audio is configured.
+Assessments export separate candidate and examiner files. Blind solves receive the current candidate prompt and only explicitly declared earlier candidate prompts. A separate judge receives the answer, marking guide and exact source excerpts. Solver/judge pairs run independently within the shared call limit. Findings stay in examiner/operator records.
 
-- `POST /api/projects` with `{brief, source_ids, options}` starts a project.
-- `GET /api/runs/{id}` returns progress, plan, receipt, and output links.
-- `GET /api/projects` lists recent persisted projects.
-- `POST /api/projects/{id}/revise` with `{section_notes}` starts a targeted revision.
-- `POST /api/projects/{id}/resume` with `{}` resumes retained work.
+A ready podcast script can be rendered through a separate audio adapter. The current implementation synthesizes the whole script under a per-user process lock, validates PCM WAV structure and duration, and records the submitted text. It does not yet provide section-level speech rendering or a listened audio audit.
 
-Keep the local app on loopback. The hosted example replays fixtures and offers no visitor generation.
+## Export and recovery
+
+`export_production(receipt, plan, output_path)` writes Markdown, HTML, a JSON report, the saved plan, and PDF when the `pdf` extra is installed. Plans and reports contain source text and may contain assessment keys.
+
+The local app runs one project at a time with parallel calls inside it. It persists plans and receipts separately from compact progress records. After restart, unfinished projects become `interrupted`; resume reuses completed cached requests and restarts interrupted calls. Renewable SQLite leases and owner tokens protect cache commits.
+
+| HTTP request | Result |
+| --- | --- |
+| `POST /api/projects` with `{brief, source_ids, options}` | Start a project |
+| `GET /api/progress/{id}` | Compact progress without source text or receipt |
+| `GET /api/runs/{id}` | Full plan, receipt and output links |
+| `GET /api/projects` | Recent projects |
+| `POST /api/projects/{id}/revise` with `{section_notes}` | Revise selected sections |
+| `POST /api/projects/{id}/resume` with `{}` | Resume retained work |
+
+Adapters are configured at server startup. Keep this local app on loopback; project IDs are not authentication credentials.
 
 ## Limits
 
-Quote and ID checks establish provenance and membership, while source completeness, semantic support, equivalence of retrieval targets, question quality, and factual truth still require review. Model judgments can be wrong; separate candidate and examiner calls do not guarantee that a stateful provider has forgotten earlier context or that answers stayed out of candidate fields. This is an exported assessment, not live oral-case delivery.
-
-Request bytes are measured UTF-8 size, not billed tokens or provider cost. `narration.txt` records the speech adapter's synthesis input, not recognized speech. WAV structure and duration checks do not establish pronunciation, spoken fidelity, pacing, educational quality, or device playback. Lamina does not yet provide ROUNDS' full audio factory or listened audio audit.
-
-The local queue uses leases and fencing within one app; an external provider may still have performed an effect before an interrupted call. Run IDs are not authorization tokens, so the local app must stay off public networks. This release does not include figure interpretation, PDF vision, a differential atlas, staged oral-case delivery, independent semantic verification, or automatic method learning. [System origins](system-origins.md) maps the remaining mechanisms.
+The planned path still makes one global planning request. Oversized collections need caller-supplied assignments or a narrower project; automatic hierarchical planning is not implemented. Quote checks prove exact provenance, not factual truth or semantic completeness. Separate assessment calls require a stateless provider to maintain their information boundary. PDF figures, live oral-case administration and automatic method learning remain outside this implementation. See [parsing](parsing.md) and [architecture status](architecture-status.md).

@@ -1,6 +1,6 @@
 # Procedures and operating modes
 
-A procedure is a small portable JSON document that conditions Lamina's supported production pipeline. It declares an audience, authoring instructions, selected outputs, and worker count. You can inspect, edit, import, and export it in Studio, then use it with the local engine.
+A procedure sets lesson audience, instructions, outputs, and workers in portable JSON. Studio can inspect, edit, import, and export it.
 
 ```json
 {
@@ -15,15 +15,15 @@ A procedure is a small portable JSON document that conditions Lamina's supported
 }
 ```
 
-The schema accepts only these fields. IDs are short lowercase slugs, instructions are bounded, output names come from an allowlist, and worker counts are limited. Unknown fields are rejected. A procedure cannot configure an executable adapter, credentials, or a filesystem destination. Those settings belong to the operator's local command.
+The schema allows only these fields: short lowercase IDs, bounded instructions, allowlisted outputs, and limited workers. Unknown fields fail. Executables, credentials, and destinations belong in local commands. Audience, instructions, and outputs enter semantic requests and cache keys. Procedures cannot add stages or plugins.
 
-The selected audience, instructions, and outputs enter semantic stage requests and their cache keys. Changing them therefore invalidates the affected cached requests. The procedure describes behavior within the installed pipeline; it cannot create arbitrary stages or plugins. Every run exports the shared lesson bundle and reader, including their standard practice, scenario, and script content where present. Selection adds artifacts and guides authoring; it does not isolate or conceal the other content in that shared bundle. SAMP selection adds its own generation and review stages and separate exports.
+Every run exports the shared lesson bundle and reader with practice, scenario, and script content where present. Output selection guides authoring and adds artifacts without hiding shared-bundle content. SAMP adds generation, review, and separate exports.
 
 ## Hosted Studio
 
-The [public site](https://fadibahodi.github.io/lamina/) is a static application. It displays the original engineering collection and its curated outputs. Text files selected there are previewed in the browser; the page has no public generation backend. Imported procedure files can be edited and exported. To generate from a new collection, use the local engine.
+The [public site](https://fadibahodi.github.io/lamina/) is static. It shows the original engineering collection and curated outputs. Selected text files are previewed in the browser; there is no public generation backend. Procedures can be edited and exported. Use the local engine for new collections.
 
-The example is a product walkthrough, not a hidden call to a model. Its evidence links and output artifacts are real, but its content was curated for the bundled sources. The lease diagram is an original explanatory figure, not an image-extraction result.
+The example is a curated product walkthrough with real evidence links and output artifacts. Its lease diagram is original, not extracted from an image.
 
 ## Local Studio
 
@@ -33,15 +33,13 @@ lamina studio --workspace .lamina --port 8048 \
   --adapter-version my-model-config-v1
 ```
 
-Start without `--adapter` to explore the interface and import material without generation. With an adapter configured, the Run action starts a real background build. Completed outputs are available from the run. Failed stages report their error, while successful stage results remain cached for the next attempt. The local service binds to loopback and accepts same-origin requests; it is not a multi-user hosted generation service.
+Without `--adapter`, Studio supports exploration and import. With one, Run builds in the background; failures report errors and successful stages stay cached. Studio binds to loopback with same-origin requests; it is not a multi-user host.
 
-Text/Markdown sources are supported by the base engine. PDF extraction requires the optional `pdf` dependency and cannot interpret scanned or graphical content. Source roles matter: assessment sources are held out of generation. A user-selected remote adapter can transmit teaching sources to its configured service; local hosting does not mean local inference.
-
-The sample command adapter uses environment variables described in [Adapters](adapters.md). Do not put credentials into a procedure file or a public export.
+The base engine reads text and Markdown. PDF text extraction needs the optional `pdf` dependency and cannot interpret scanned or graphical content. Assessment sources stay out of generation. A chosen remote adapter may transmit teaching text to its service; a local UI does not imply local inference. Configure the sample adapter with the environment variables in [Adapters](adapters.md). Keep credentials out of procedures and public exports.
 
 ## CLI reuse
 
-Save the example JSON as `incident-training.json`, ingest the desired documents, and run:
+Save the JSON above as `incident-training.json`, ingest documents, then run:
 
 ```bash
 lamina ingest ./notes --workspace .lamina
@@ -49,4 +47,4 @@ lamina run --procedure incident-training.json --workspace .lamina \
   --adapter 'python examples/adapter/http_chat.py' --output ./site
 ```
 
-This uses the same procedure-conditioned pipeline as local Studio. See [SAMP production](samp.md) for the separate short-answer artifact and its validation boundaries. See [Design](design.md) for the proposed richer claim graph and hierarchical reconciliation; a procedure does not imply those mechanisms already exist.
+This uses the same procedure-conditioned pipeline as local Studio. [SAMP production](samp.md) covers the short-answer artifact. [Design](design.md) describes proposed claim graphs and hierarchical reconciliation; a procedure does not implement them.

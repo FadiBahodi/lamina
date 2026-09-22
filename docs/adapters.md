@@ -1,24 +1,24 @@
 # Command adapters
 
-Lamina's core handles identities, storage, evidence checks, scheduling, and export. A command adapter handles interpretation and writing. It receives JSON on standard input and returns JSON on standard output. It should write diagnostics to standard error, never mix logs into standard output, and exit nonzero on failure. Lamina invokes the command as an argument vector without a shell.
+Lamina handles storage, evidence, scheduling, and export; command adapters interpret and write. An adapter reads JSON on standard input, returns JSON on standard output, logs to standard error, and exits nonzero on failure. Lamina invokes without a shell.
 
 ```bash
 lamina build --workspace .lamina --adapter 'python my_adapter.py' --output ./site
 ```
 
-Lamina computes the command adapter's cache identity from its argument vector, readable script-file hashes, timeout, and a configured version. Set `LAMINA_ADAPTER_VERSION` or pass `--adapter-version` when changing an endpoint, model, prompt, policy, or other behavior that those inputs do not capture. The executable returns stage JSON, not its own identity. The [HTTP example](../examples/adapter/README.md) uses `LAMINA_API_BASE`, `LAMINA_MODEL`, and `LAMINA_API_KEY`; Lamina itself does not store those values. The command adapter accepts at most 2 MB per request by default. Reconciliation and planning are global passes, so a large extracted concept set may exceed that bound and require a narrower corpus or a different adapter design.
+The command adapter's cache identity includes its argument vector, readable script-file hashes, timeout, and configured version. Set `LAMINA_ADAPTER_VERSION` or `--adapter-version` when an endpoint, model, prompt, policy, or other behavior changes without altering those inputs. The executable returns stage JSON, not its own identity. The [HTTP example](../examples/adapter/README.md) uses `LAMINA_API_BASE`, `LAMINA_MODEL`, and `LAMINA_API_KEY`; Lamina does not store their values. Requests default to a 2 MB maximum. Large global reconciliation or planning requests may require a narrower corpus or another adapter design.
 
 ## Stages
 
 | Stage | Input | Required output |
 | --- | --- | --- |
-| `extract` | One teaching unit and bounded neighboring context | Concepts with titles, explanations, and exact quote evidence |
-| `reconcile` | All extracted concepts and their evidence | Canonical concepts with member IDs; all members and their evidence accounted for exactly once |
-| `plan` | All canonical concepts | Ordered lessons with concept IDs and earlier-lesson prerequisites; explicit deferred concepts |
-| `author` | One planned lesson and its concepts/evidence | Lesson text, source-backed sections, recall/contrast/apply questions, and speech/pause script |
-| `review` | One authored lesson and the stated checks | `pass` or `revise`, with actionable issues for revision |
+| `extract` | Teaching unit and bounded neighboring context | Concepts with titles, explanations, and exact quotes |
+| `reconcile` | Extracted concepts and evidence | Canonical concepts accounting for every member and its evidence once |
+| `plan` | Canonical concepts | Ordered lessons, concept IDs, earlier prerequisites, and explicit deferrals |
+| `author` | Planned lesson and concept evidence | Text, source-backed sections, practice questions where useful, and speech/pause script |
+| `review` | Authored lesson and checks | `pass` or `revise`, with actionable issues |
 
-The JSON schemas in the installed package are authoritative for exact request envelopes and required fields. The shape below shows the central evidence rule; inspect the bundled [example adapter](../examples/adapter) for a runnable protocol implementation.
+Installed JSON schemas define exact envelopes and fields. The evidence shape is:
 
 ```json
 {
@@ -33,16 +33,12 @@ The JSON schemas in the installed package are authoritative for exact request en
 }
 ```
 
-The quote must occur exactly in a known teaching unit. Unit IDs and concept IDs must resolve within the current request or workspace. Reconciliation must include each raw concept exactly once and preserve all of its evidence. The planner then assigns or defers every canonical concept. An authored lesson must cover its planned concepts and use only supported question modes when practice is useful; no mode or question quota is imposed. A review result of `revise` blocks publication.
+See the runnable [example adapter](../examples/adapter). Quotes must occur exactly in known teaching units; IDs resolve in the request or workspace. Reconciliation preserves every raw concept and its evidence. Planning assigns or defers every canonical concept. Authored lessons cover planned concepts and use supported question modes where useful, without a mode or question quota. `revise` blocks publication.
 
 ## Assessment holdout
 
-Import question banks or assessments with `--role assessment`. Their text is excluded from extraction, planning, authoring, review requests, and the exported bundle. Use them separately for evaluation. A role flag does not by itself make a good test set: duplicates, paraphrases, or leaked answers in teaching files can still contaminate an evaluation.
+Import question banks or assessments with `--role assessment`. Their text stays out of extraction, planning, authoring, review, and export. Use them separately for evaluation. Duplicates, paraphrases, or answer leaks in teaching files can still contaminate the test set.
 
-## Operational advice
+## Operation and limits
 
-- Keep the adapter stateless where possible. Lamina may run independent extract and author requests concurrently.
-- Return complete JSON for each request. Avoid streaming partial objects to standard output.
-- Make failures explicit. A bounded retry can recover a transient process error; a persistently invalid response should fail with an actionable message.
-- Inspect a small build before scaling to a large corpus. Compare quoted evidence, lesson usefulness, and question quality yourself.
-- Keep private documents and credentials out of the adapter source you publish. An exported workbench contains teaching text and should be treated as public if hosted.
+Extract and author calls may overlap; keep adapters stateless where possible. Return complete JSON without logs on standard output. Bounded retries can recover process errors; persistent invalid output should fail clearly. Inspect evidence, lessons, and questions before scaling. Keep private documents and credentials out of published adapters; hosted workbenches expose teaching text.

@@ -1,87 +1,83 @@
-# Design: from source spans to a learning route
+# From source spans to a learning route
 
-Lamina's design problem is broader than turning a document into a summary. A useful learning system must decide **what the source says, which ideas are distinct, what deserves first-pass attention, and which form makes each idea retrievable**. Those decisions need different evidence and different checks. The v0.1 release has a working path through them; this document identifies where its guarantees stop and compares plausible next architectures.
-
-The intended data flow is:
+A learning system must determine what a source says, which ideas are distinct, what deserves first-pass attention and how each idea should be taught. This note describes the v0.1 design and compares extensions.
 
 ```text
 source spans → atomic claims and answers → canonical concept graph
              → curriculum route → lessons, practice, cases, scripts, print
 ```
 
-This is a design model, not a description of five fully implemented data structures. Today, Lamina stores ordered source **units** with locators, extracted **raw concepts** with exact quotes, a partition into **canonical concepts**, and an ordered **lesson plan**. Atomic answer tokens, typed concept edges, and hierarchical global planning are proposed extensions.
+The v0.1 implementation stores ordered source units with locations, raw concepts with quotations, canonical concept memberships and a lesson plan. Atomic answer tokens, typed concept edges and hierarchical planning are proposed extensions to that design.
 
-## What v0.1 guarantees
+## Implemented checks
 
-| Boundary | Implemented mechanism | Guarantee and limit |
-| --- | --- | --- |
-| File → units | Content digest, source role, stable unit IDs, ordered text chunks and locators | Accepted text can be traced to its input. PDF text extraction may miss figures, scans, or layout meaning. |
-| Unit → raw concepts | Bounded unit request with neighboring context; exact quote and core-unit checks | A concept must cite a real teaching unit. No check establishes that all important facts were extracted. |
-| Raw → canonical | One global reconciliation request; each raw concept assigned to exactly one canonical concept; member quotes conserved | Extracted records and their quotes cannot silently disappear. Their distinct answers or qualifiers still can. |
-| Canonical → route | One global plan; every canonical concept assigned to a lesson or explicitly deferred | The plan accounts for its input set. Order and importance remain adapter judgments. |
-| Route → output | Lesson authoring, evidence checks, review gate, validated bundle, static reader and print exports | Source links and required practice modes can be inspected. Citation presence does not prove a sentence is entailed or teachable. |
+| Stage | Mechanism |
+| --- | --- |
+| File → units | Content hashes, source roles, stable IDs, ordered chunks and locations link accepted text to its input. |
+| Unit → raw concepts | Readers receive assigned units and neighboring context. Concepts must cite quotations from their assigned teaching units. |
+| Raw → canonical | A global reconciliation assigns every raw concept to one canonical concept and preserves member quotations. |
+| Canonical → route | A global plan assigns each canonical concept to a lesson or records a deferral. |
+| Route → output | Authoring, evidence checks and review produce a validated bundle, static reader and print exports. |
 
-The assessment role is withheld from extraction, authoring requests, and public exports. Cache identity, durable jobs, leases, and bounded retries make repeated local builds recoverable. Neither mechanism proves that an evaluation set is uncontaminated or that generated material improves learning. The implementation details and field contracts are in [Architecture](architecture.md) and [Adapters](adapters.md).
+Held-out assessments stay outside extraction, authoring and public exports. Cache identity, durable jobs, leases and limited retries support recovery. Field contracts are in [Architecture](architecture.md) and [Adapters](adapters.md).
 
-## The conservation ladder
+## Coverage and answer preservation
 
-Coverage has several denominators. Conflating them makes a complete-looking artifact deceptively persuasive.
+Let `U` be accepted source units and `Wᵢ` the units owned by extraction request `i`. Structural scan coverage is `|⋃ Wᵢ| / |U|`. A value of 1 means every accepted unit reached the extractor. Parsing losses and missed meaning within those units need their own measurements. Neighboring context helps interpretation while ownership stays with the assigned unit.
 
-Let `U` be accepted source units and `Wᵢ` the units owned by extraction request `i`. **Structural scan coverage** is `|⋃ Wᵢ| / |U|`. A value of 1 says every accepted unit was offered to the extractor. It says nothing about material lost during parsing or missed within a unit. Neighboring context can clarify a boundary, but ownership should stay with the focal unit.
-
-Let `R` be extracted raw concepts and `K` canonical concepts. v0.1 enforces a partition:
+Let `R` be raw concepts and `K` canonical concepts. v0.1 enforces:
 
 ```text
 For every r in R:  Σ[k in K] 1{r is a member of k} = 1
 ```
 
-It also requires each canonical concept's evidence to be exactly the allowed quotes inherited from its members. This protects records and source pointers. It does **not** protect all answer alternatives inside a quote. If one paragraph lists four causes and the canonical explanation names three, the quote may still be conserved.
+A canonical concept must inherit exactly its members' allowed quotations. This preserves records, but an explanation can still lose an answer: a paragraph may list four causes while the generated text names three.
 
-A stronger proposed boundary would assign a stable token to each extracted **atomic source answer or claim**, retaining its wording, scope, locator, and owner. For input tokens `T` and canonical answer items `A`, require:
+The proposed answer-token model assigns a stable token to each extracted answer or claim, with its wording, scope, location and owner. For input tokens `T` and canonical answer items `A`, require:
 
 ```text
 For every t in T:  Σ[a in A] 1{t is cited by a} = 1
 For every citation t on a: owner(t) is a member of concept(a)
 ```
 
-That would catch silent deletion, duplication, and cross-cluster attribution. It would **not** prove semantic equivalence: a mistaken paraphrase can carry a valid token. Nor does a token for a compound sentence guarantee preservation of every proposition inside it. Atomic segmentation, qualifier retention, contradiction review, and independent semantic audit remain necessary. A source quote is a receipt, not a proof of entailment.
+These checks catch missing tokens, duplicate ownership and attribution across clusters. Segmentation and interpretation still matter: a token for a compound sentence can conceal several propositions, and a valid citation can accompany a mistaken paraphrase.
 
-These distinctions yield a practical order of claims: parser coverage, unit scan coverage, extraction recall, answer conservation, semantic correctness, lesson grounding, question quality, and learner effect. Success at one layer cannot be reported as success at the next.
+Measure the stages separately: parsing, unit scanning, extraction recall, answer preservation, correctness, lesson support, question quality and learner outcomes.
 
-## Three consolidation architectures
+## Consolidation choices
 
-| Architecture | Strength | Failure mode | Appropriate use |
+| Approach | Strength | Cost or failure mode | Use |
 | --- | --- | --- | --- |
-| Exact-key grouping | Cheap, deterministic, easy to audit | Synonyms remain duplicated; identical labels with different scope can be collapsed incorrectly | Baseline for obvious duplicates only |
-| Global semantic reconciliation (v0.1) | Can merge varied wording while preserving raw IDs and quotes | Whole-corpus request grows; a concept-level invariant misses answer-level loss and scope collapse | Small corpora with human review of merges |
-| Hierarchical, token-conserving reconciliation (proposed) | Bounded local decisions, answer-level accounting, global exception review | More schema and orchestration; partition boundaries can hide cross-topic duplicates | Larger, heterogeneous corpora after labelled merge tests |
+| Exact-key grouping | Cheap and easy to inspect | Misses synonyms; may collapse identical labels with different scope | Baseline for obvious duplicates |
+| Global model reconciliation (v0.1) | Merges varied wording while preserving IDs and quotations | Whole-corpus requests grow; concept membership can conceal lost answers | Small corpora with merge review |
+| Hierarchical answer-token reconciliation (proposed) | Local grouping, answer accounting and global exception review | More coordination; partitions can hide related material | Larger heterogeneous corpora after labeled merge tests |
 
-The proposed hierarchy starts with deterministic source IDs and atomic claims, partitions candidates by **retrieval task and context** rather than keyword alone, clusters locally, then sends only plausible cross-partition bridge candidates to a reconciliation pass. A compact global board holds titles, scopes, answer-token counts, evidence quality, and unresolved conflicts. Validation checks each boundary; ambiguous merges stay separate or enter a review queue. This bounds most requests without pretending every topic is independent.
+The proposed hierarchy starts with source IDs and atomic claims. It partitions by retrieval task and context, groups locally, then reconciles likely relationships across partitions. A compact global record holds titles, scopes, answer-token counts, evidence quality and unresolved conflicts. Ambiguous merges stay apart or enter a review queue.
 
-Several cases make conservative splits valuable: the same term can refer to a presenting problem, cause, complication, or treatment failure; a population-specific variant may change the answer; two sources may conflict; a broad concept may contain narrower concepts rather than being their synonym. A useful canonical structure may therefore be a **typed graph** (`same target`, `variant of`, `prerequisite`, `contrasts with`, `conflicts with`) instead of one flat set of merged records. That graph is proposed. v0.1 has canonical memberships and lesson prerequisites, not a general typed graph.
+A term may describe a presentation, cause, complication or treatment failure. Populations can change the answer; sources can conflict; a broad concept can contain narrower ones. A proposed typed graph would express `same target`, `variant of`, `prerequisite`, `contrasts with` and `conflicts with`. v0.1 implements canonical memberships and lesson prerequisites.
 
-## Retrieval relevance is not curricular priority
+## Search and curriculum order
 
-v0.1 search fuses body-text BM25, heading matches, and optional supplied-vector ranks. It answers “Which stored unit is relevant to this query?” Its reciprocal-rank score is not an estimate of importance, assessment frequency, or teaching value.
+v0.1 search combines body-text BM25, heading matches and optional supplied-vector ranks to find units relevant to a query. Curriculum ordering would use evidence such as reuse, source support, consequences of misunderstanding, documented assessment relevance, prerequisites and learner time. These factors can disagree: a rare distinction may matter more than a common term. Extraction confidence is another dimension.
 
-A curriculum ranker answers a different question: “Which concepts should a learner reconstruct first, given limited time and dependencies?” Potential evidence includes breadth of reuse, source support, consequences of misunderstanding, assessment relevance where independently documented, prerequisite centrality, and learner time cost. These features can conflict. A rare distinction can be consequential; a common term can be trivial. Extraction confidence is a separate axis from priority.
+Three routing policies are worth comparing:
 
-There are three plausible routing policies:
+1. A complete inventory maximizes discoverability at the cost of reading time.
+2. A short first-pass route with deeper and lookup material preserves access while requiring revisable selection reasons.
+3. An adaptive route could use learner performance and prerequisites. It needs outcome data, calibration, privacy controls and a tested update rule; v0.1 leaves this unimplemented.
 
-1. **Flat complete inventory:** maximal discoverability, minimal editorial risk, high reading burden.
-2. **Small first-pass spine plus deepen and lookup layers:** digestible route while preserving the archive; requires transparent, revisable inclusion reasons.
-3. **Adaptive learner route:** could use performance and prerequisites, but needs outcome data, calibration, privacy design, and a validated update rule. v0.1 does not implement this.
+Priority tiers should state the editor's rationale. A calibrated ranker would need independent relevance labels, agreement checks and held-out evaluation. Search scores and similarity to prior questions measure relevance, not future exam probability.
 
-For now, a priority tier should be labelled editorial judgment with a rationale, not a probability. A weighted formula is warranted only after independent relevance labels, agreement checks, and held-out ranking evaluation. Lexical similarity to prior questions can retrieve candidate evidence but is not itself a calibrated likelihood of future assessment.
+## Output forms
 
-## Format-specific outputs from one governed representation
+Each form has a job. Lessons explain causal models, recall prompts ask for reconstruction, contrasts distinguish confusable alternatives, and application prompts change the context. Cases reveal information in stages. Audio needs spoken pacing and pauses; print needs page structure and an answer key. The v0.1 bundle carries these forms with a common scope and source trail.
 
-The canonical layer should give every format the same scope and source trail; each format then has a distinct job. A lesson explains a causal model. Recall prompts require reconstruction. Contrast prompts expose confusable alternatives. Application prompts test a changed context. A case reveals information in stages. A listening script needs spoken pacing and pauses. Print needs page structure and a separate answer key. v0.1 implements these forms through a shared validated bundle; it does not claim they are equally effective for every concept, synthesize audited audio, or tailor a spaced-repetition schedule.
+Retrieval practice has experimental support for delayed retention and some transfer to new questions or contexts. Interleaving can aid category discrimination in suitable tasks. See [Roediger and Karpicke (2006)](https://www.psychologicalscience.org/journals/psychological-science/j.1467-9280.2006.01693.x/), [Butler (2010)](https://pubmed.ncbi.nlm.nih.gov/20804289/), and [Birnbaum and colleagues (2013)](https://pubmed.ncbi.nlm.nih.gov/23138567/).
 
-Question generation has an additional isolation boundary: held-out assessments should remain outside prompts and outputs. A role flag cannot detect duplicate or paraphrased leakage from teaching files; any performance study must audit contamination independently.
+## Limits and evaluation
 
-Retrieval practice has experimental support for delayed retention, and some studies find transfer to new questions or contexts; carefully arranged interleaving can aid category discrimination. These findings motivate recall, application, and contrast modes, but do not validate Lamina's generated items or its learner outcomes. See the original studies by [Roediger and Karpicke (2006)](https://www.psychologicalscience.org/journals/psychological-science/j.1467-9280.2006.01693.x/), [Butler (2010)](https://pubmed.ncbi.nlm.nih.gov/20804289/), and [Birnbaum and colleagues (2013)](https://pubmed.ncbi.nlm.nih.gov/23138567/). The interleaving result is task-dependent; it does not justify shuffling every lesson.
+PDF parsing may miss figures, scans and layout. Extraction can omit important facts; preserved quotations can lose qualifiers in their interpretation. Plans account for extracted concepts, while order and importance remain model judgments. Model review and citations need content review to establish support and usefulness.
 
-## What would justify stronger claims
+The v0.1 output forms have no comparative learning evaluation, audited audio synthesis or personalized spaced-repetition schedule. Source-role exclusion also needs a contamination audit for duplicates or paraphrases in teaching files. Published retrieval and interleaving studies motivate the formats; Lamina's items and learner outcomes require their own tests.
 
-The next evidence is a stratified, manually annotated source set: extraction precision and recall with parser omissions counted separately; pairwise merge/split labels and qualifier-preservation review; exact answer-token conservation; and independent judgments of first-pass route usefulness. A separate delayed learner comparison would be needed to claim improved retention or transfer. Measure these on held-out sources and questions, report disagreement, and publish denominator definitions. Until then, the release can claim inspectable accounting and repeatable artifact production, not completeness, calibrated yield, or learning efficacy.
+Use a stratified, manually annotated source set to measure extraction precision and recall, parser omissions, merge/split accuracy, qualifier preservation, answer-token conservation and route usefulness. Report disagreements and denominators. A delayed learner comparison would measure retention and transfer.

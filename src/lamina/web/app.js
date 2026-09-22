@@ -94,7 +94,7 @@
       ])
       .filter(([path]) => path);
     if (!files.length) {
-      footer.textContent = "Local by design";
+      footer.textContent = "Study guide";
       return;
     }
     add(rail, node("div", "small-label", "TAKE IT WITH YOU"));
@@ -299,7 +299,7 @@
         node(
           "p",
           "fixture-note",
-          "Curated example · This sample was written for the demo. It does not demonstrate arbitrary-source generation.",
+          "Recorded example · These lessons were written for this guide; they do not show generation from arbitrary sources.",
         ),
       );
     const art = node("img", "hero-art");
@@ -448,8 +448,8 @@
       host,
       hero(
         "DELIBERATE PRACTICE",
-        "Make the idea yours.",
-        "Write first. Compare with the suggested answer. Decide what you want to revisit.",
+        "Practice the questions.",
+        "Write an answer before opening the suggested response. Mark what needs another pass.",
         `${allQuestions().length} questions across ${lessons().length} lessons`,
       ),
     );
@@ -501,9 +501,9 @@
     add(
       head,
       sectionLead(
-        "QUESTION WORKBENCH",
+        "QUESTION",
         q.kind ? `${q.kind[0].toUpperCase()}${q.kind.slice(1)}` : "Question",
-        "Use your own words. Revealing an answer is a study action, not a graded result.",
+        "Write an answer, then reveal the suggested response to compare.",
       ),
       node("span", "practice-count", `${state.question + 1} / ${qs.length}`),
     );
@@ -589,7 +589,7 @@
       node(
         "p",
         "micro-note",
-        "Answers and self-ratings are saved only in this browser. They do not measure mastery.",
+        "Your answers and self-ratings stay in this browser; ratings are your own notes.",
       ),
     );
     const navs = node("div", "question-actions");
@@ -646,7 +646,7 @@
       sectionLead(
         "LOCAL CASE PRACTICE",
         scenario.title || lesson.title,
-        "One person can run the case as examiner while another responds. Releases appear on this screen only; there is no cross-device session.",
+        "Run the case with another person as examiner. Both roles use this screen.",
       ),
     );
     const candidate = node("section", "case-candidate");
@@ -790,7 +790,7 @@
         node(
           "p",
           "micro-note",
-          "Use these points to guide a debrief. Checking a box is a local note, not an exam mark.",
+          "Use these points to guide a debrief. The checkboxes are your notes, not exam marks.",
         ),
       );
       (scenario.checklist || []).forEach((item) => {
@@ -962,7 +962,7 @@
       hero(
         "SCOPE & BOUNDARIES",
         "See what was covered.",
-        "Coverage tracks concepts extracted from included teaching sources. It cannot prove that extraction found every important idea in a document.",
+        "See which extracted concepts were used, deferred, or left unassigned. Extraction may miss ideas in the source.",
         `${concepts.length} extracted concepts`,
       ),
     );
@@ -972,15 +972,15 @@
         node(
           "p",
           "fixture-note",
-          "Curated example · These lessons and cases are a hand-authored fixture used to show the workbench.",
+          "Recorded example · The lessons and cases in this guide are hand-authored.",
         ),
       );
     add(
       host,
       sectionLead(
         "EXTRACTION → ALLOCATION",
-        "A candid inventory",
-        "Each extracted concept is assigned to a lesson or named as deferred. Those counts are about this build, not about total knowledge in the subject.",
+        "Concepts in this guide",
+        "These counts describe this guide: concepts assigned to lessons, deferred, or unassigned.",
       ),
     );
     const metrics = node("div", "metric-row");
@@ -1036,7 +1036,7 @@
       node(
         "p",
         "",
-        "A source excerpt proves where a quoted phrase came from; it does not automatically prove the lesson is complete or correct. A completed review checks the stated rubric only. Self-ratings reflect your impression, not predicted performance. Assessment inputs, when used, are held out of this exported learning bundle.",
+        "Source excerpts show where quotations came from. Review checks the stated rubric; it does not establish that a lesson is complete. Self-ratings are personal notes. Assessment inputs, when used, are excluded from this guide.",
       ),
     );
     add(host, boundary);

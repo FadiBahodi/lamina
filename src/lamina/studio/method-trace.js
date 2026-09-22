@@ -61,7 +61,7 @@
       button.addEventListener('click', () => { selectedNode = definition.id; render(); root.querySelector('.trace-node.selected').focus({preventScroll:true}); });
       graph.append(button);
     });
-    graphWrap.append(graph, el('p', 'trace-map-note', 'The two readers can run together. The editor waits for both results.'));
+    graphWrap.append(graph, el('p', 'trace-map-note', 'The readers can run together. The editor starts after both finish.'));
     if (selectedRun === 2) {
       const observation = el('div', 'trace-observation');
       observation.append(el('span', 'trace-label', 'SELECTED OPERATOR OBSERVATION'), el('p', '', example.observation.note));
@@ -83,7 +83,7 @@
     detail.append(el('div', 'trace-label', 'RETURNED OUTPUT'), code(receipt.results[selectedNode]));
     layout.append(graphWrap, detail); root.append(layout);
     const footer = el('div', 'trace-foot');
-    footer.append(el('span', '', 'Deterministic adapter · Actual cache decisions · No model-quality or speed claim'));
+    footer.append(el('span', '', 'Recorded execution and cache decisions'));
     const download = el('a', '', 'Execution data'); download.href = 'method-example.json'; footer.append(download); root.append(footer);
   }
   fetch(new URL('method-example.json', document.baseURI), {cache:'no-store'})

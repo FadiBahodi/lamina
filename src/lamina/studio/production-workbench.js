@@ -42,7 +42,7 @@
   sourceBlock.append(sourceHead, sourceNote, sourceList, uploadLabel, uploadStatus);
   const capacityBlock = make("section", "pb-block");
   const capacityHead = make("div", "pb-block-head"); capacityHead.append(make("span", "pb-step", "03"), make("h3", "", "How much work can run together?"));
-  const capacityIntro = make("p", "pb-explain", "These are concurrency ceilings, not promises of speed. Your model provider may impose lower limits.");
+  const capacityIntro = make("p", "pb-explain", "Set the maximum tasks for each stage. Your model provider may allow fewer.");
   const capacityFields = make("div", "pb-capacity-fields");
   const workerInputs = {};
   [["reader_workers", "Reading", 16], ["writer_workers", "Writing", 8], ["review_workers", "Review", 8]].forEach(([key, label, value]) => {
@@ -62,14 +62,14 @@
   retrievalChoice.append(retrievalTargets,retrievalCopy);
   function updateRetrievalChoice(){retrievalChoice.hidden=!(["guide","assessment"].includes(format.value));if(retrievalChoice.hidden)retrievalTargets.checked=false;}
   format.addEventListener("change",updateRetrievalChoice);updateRetrievalChoice();
-  context.append(contextFields, make("p", "pb-explain", "Neighboring passages help a reader interpret the boundary of its assigned piece. The result still belongs to the passage it owns."),retrievalChoice);
+  context.append(contextFields, make("p", "pb-explain", "Neighboring passages add context; each reading result remains tied to its assigned passage."),retrievalChoice);
   capacityBlock.append(capacityHead, capacityIntro, capacityFields, context);
   const savedNotes=make("details","pb-saved-notes");savedNotes.hidden=true;
-  savedNotes.append(make("summary","","Use saved project notes"),make("p","pb-explain","Select a note only when it fits this project. Saved notes are not applied automatically."));
+  savedNotes.append(make("summary","","Use saved project notes"),make("p","pb-explain","Choose notes that apply to this project."));
   const savedNotesList=make("div","pb-saved-notes-list");savedNotes.append(savedNotesList);
   const controls = make("div", "pb-controls");
   const start = make("button", "pb-primary", "Start project"); start.type = "button";
-  const installExample = make("button", "pb-secondary", "Run original example"); installExample.type = "button"; installExample.hidden=true;
+  const installExample = make("button", "pb-secondary", "Open recorded example"); installExample.type = "button"; installExample.hidden=true;
   const mode = make("p", "pb-mode", "Checking local app…"); mode.setAttribute("role", "status");
   controls.append(start, installExample, mode); form.append(goalBlock, sourceBlock, capacityBlock, savedNotes, controls);
   const activity = make("section", "pb-activity"); activity.hidden = true;
@@ -79,7 +79,7 @@
   const output = make("div", "pb-output");
   activity.append(activityTitle, activityStatus, events, output);
   const replay = make("section", "pb-replay");
-  const replayHeading = make("div"); replayHeading.append(make("strong", "", "Explore a recorded project"), make("p", "", "This replay uses a deterministic test adapter. Its stage records are real; its writing is fixture content, not a model-quality demonstration."));
+  const replayHeading = make("div"); replayHeading.append(make("strong", "", "Recorded project"), make("p", "", "Fixed test responses show the reading, writing, review, and revision steps. They do not evaluate model writing."));
   const replayActions = make("div", "pb-replay-actions");
   const replayButton = make("button", "pb-secondary", "Initial result"); replayButton.type = "button";
   const replayRevision = make("button", "pb-secondary", "After section revision"); replayRevision.type = "button";
@@ -92,7 +92,7 @@
   function options(selected) { if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose at least one factual source. An example of output form cannot supply facts.");if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");return {format:format.value, reader_workers:safeNumber(workerInputs.reader_workers,"Reading capacity"), writer_workers:safeNumber(workerInputs.writer_workers,"Writing capacity"), review_workers:safeNumber(workerInputs.review_workers,"Review capacity"), core_words:safeNumber(coreWords,"Passage size"), halo_units:safeNumber(haloUnits,"Neighboring passages"), max_request_bytes:safeNumber(maxRequest,"Request byte limit"), retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden, source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])), observation_ids:Array.from(state.selectedObservations)}; }
   function renderSources() {
     sourceList.replaceChildren();
-    if (!state.sources.length) { sourceList.append(make("p", "pb-empty", state.local ? "No sources stored locally yet. Add files below." : "Source selection is available in the local app. Open the recorded example below to inspect a completed project.")); return; }
+    if (!state.sources.length) { sourceList.append(make("p", "pb-empty", state.local ? "No sources stored locally yet. Add files below." : "Add your own sources in the local app. You can explore the recorded project here.")); return; }
     state.sources.forEach(source => {
       const row = make("div", "pb-source");
       const identity = make("label", "pb-source-identity");
@@ -112,7 +112,7 @@
   }
   async function getJSON(path) { const response = await fetch(route(path), {cache:"no-store"}); if (!response.ok) throw Error(`HTTP ${response.status}`); return response.json(); }
   async function post(path, data) { const response = await fetch(route(path), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data)}); let value; try { value=await response.json(); } catch { throw Error(`HTTP ${response.status}: no JSON response`); } if (!response.ok) throw Error(value.error || `HTTP ${response.status}`); return value; }
-  async function refreshSources() { const status = await getJSON("api/status"); state.local=status.mode === "local"; state.adapter=Boolean(status.adapter_configured);state.audioAdapter=Boolean(status.audio_adapter_configured);updateFormatNote(); state.sources=Array.isArray(status.sources)?status.sources:[]; renderSources(); start.disabled=!state.adapter; fileInput.disabled=!state.local; installExample.hidden=false; setMessage(state.adapter ? "Local adapter ready. It may send selected source text to your configured model provider." : "Local app connected; configure a model adapter to run projects. The original example can run without one."); const badge=document.getElementById("project-mode"); if (badge) badge.textContent=state.adapter?"LOCAL / READY":"LOCAL / ADAPTER REQUIRED"; try { const projects=await getJSON("api/projects");renderRecent(projects.projects || []); } catch { recent.hidden=true; } await refreshObservations(); if (status.active_run?.kind === "production" && status.active_run.id) {state.runId=status.active_run.id; poll(status.active_run.id);} }
+  async function refreshSources() { const status = await getJSON("api/status"); state.local=status.mode === "local"; state.adapter=Boolean(status.adapter_configured);state.audioAdapter=Boolean(status.audio_adapter_configured);updateFormatNote(); state.sources=Array.isArray(status.sources)?status.sources:[]; renderSources(); start.disabled=!state.adapter; fileInput.disabled=!state.local; installExample.hidden=false; setMessage(state.adapter ? "Ready to run. Selected source text may go to your configured model provider." : "Connect a model adapter to run your own project. The recorded example opens without one."); const badge=document.getElementById("project-mode"); if (badge) badge.textContent=state.adapter?"LOCAL / READY":"LOCAL / ADAPTER NEEDED"; try { const projects=await getJSON("api/projects");renderRecent(projects.projects || []); } catch { recent.hidden=true; } await refreshObservations(); if (status.active_run?.kind === "production" && status.active_run.id) {state.runId=status.active_run.id; poll(status.active_run.id);} }
   async function refreshObservations(){try{const answer=await getJSON("api/project-observations");state.observations=Array.isArray(answer.observations)?answer.observations:[];renderObservations();}catch{savedNotes.hidden=true;}}
   function renderObservations(){savedNotesList.replaceChildren();savedNotes.hidden=!state.observations.length;state.observations.forEach(item=>{const id=item.observation_id;if(!id)return;const row=make("label","pb-note-choice");const input=make("input");input.type="checkbox";input.checked=state.selectedObservations.has(id);input.addEventListener("change",()=>{if(input.checked)state.selectedObservations.add(id);else state.selectedObservations.delete(id);});const text=make("span");text.append(make("strong","",item.note || "Saved project note"));if(item.applicability)text.append(make("small","",`Use when: ${item.applicability}`));row.append(input,text);savedNotesList.append(row);});}
   function renderRecent(projects) {
@@ -208,7 +208,7 @@
         practice.append(item);
       });output.append(practice);
     }
-    if(receipt.format==="podcast-script" && !run.outputs?.audio)output.append(make("p","pb-script-note","This result is a listening script. No audio file was produced for this run."));
+    if(receipt.format==="podcast-script" && !run.outputs?.audio)output.append(make("p","pb-script-note","Listening script only. This run has no audio file."));
     let examinerDetails=null;
     if (receipt.assessment_checks){output.append(make("p","pb-assessment-status",`Blind assessment check: ${receipt.assessment_checks.status || "unknown"} · ${receipt.assessment_checks.metrics?.flagged_sections ?? "?"} flagged section${receipt.assessment_checks.metrics?.flagged_sections===1?"":"s"}.`));}
     if (receipt.examiner_markdown || receipt.assessment_checks || isAssessment) {
@@ -238,7 +238,7 @@
       const audioBlock=make("div","pb-audio");audioBlock.append(make("strong","","Audio delivery"));
       const player=make("audio");player.controls=true;player.preload="metadata";player.src=route(audioPath).href;player.setAttribute("aria-label","Produced audio");audioBlock.append(player);
       const delivery=receipt.audio_delivery;
-      audioBlock.append(make("p","",delivery?.status==="review"?"Audio needs review. Listen and inspect the transcript before using it.":"Listen to the produced audio. The transcript is the synthesis input reported by the adapter; spoken words and sound quality have not been independently verified."));
+      audioBlock.append(make("p","",delivery?.status==="review"?"Review this audio and its transcript before using it.":"The transcript records the adapter's synthesis input; verify the spoken audio by listening."));
       output.append(audioBlock);
     }
     const linkLabels={reader:"Read formatted document",document:"Download text",pdf:"Download PDF",plan:"Inspect plan",report:"Inspect production report",candidate:"Open candidate sheet",examiner:"Open examiner sheet",examiner_pdf:"Download examiner PDF",audio:"Download audio WAV",transcript:"Download synthesis transcript",manifest:"Inspect audio report"};
@@ -247,7 +247,7 @@
     const findings=receipt.findings || receipt.initial_findings;
     if (findings) { const review=make("details","pb-review"); review.append(make("summary","",receipt.format==="assessment"?"Private review findings":"Review findings")); const pre=make("pre","",JSON.stringify(findings,null,2)); review.append(pre); if(receipt.format==="assessment" && examinerDetails)examinerDetails.append(review);else output.append(review); }
     if (sections.length && state.local && state.runId && !example) {
-      const revision=make("div","pb-revision"); revision.append(make("h4","","Change one section")); revision.append(make("p","","Record what should change. Lamina will make a new run from this project and reuse unaffected work where the inputs allow it."));
+      const revision=make("div","pb-revision"); revision.append(make("h4","","Change one section")); revision.append(make("p","","Describe the change. Lamina starts a new run and reuses unaffected work when it can."));
       const select=make("select"); select.setAttribute("aria-label","Section to revise"); sections.forEach((section,index)=>{const option=make("option","",section.title || `Section ${index+1}`); option.value=section.id || String(index); select.append(option);});
       const note=make("textarea"); note.rows=3; note.placeholder="What should change in this section?"; note.setAttribute("aria-label","Requested section change");
       const button=make("button","pb-secondary","Revise section"); button.type="button";
@@ -270,7 +270,7 @@
   function exampleSplit(events){const firstWriter=events.find(event=>event.stage==="production_write" && event.status==="started")?.item;const first=events.findIndex(event=>event.stage==="production_write" && event.status==="started" && event.item===firstWriter);return events.findIndex((event,i)=>i>first && event.stage==="production_write" && event.status==="started" && event.item===firstWriter);}
   function renderRun(run, example=false) {
     state.run=run; const wasHidden=activity.hidden; activity.hidden=false; events.replaceChildren();
-    activityStatus.textContent=example || run.example ? "Original example · deterministic adapter · no live model call" : `Project ${run.id || state.runId || ""} · ${run.status || "unknown"}`;
+    activityStatus.textContent=example || run.example ? "Recorded example · fixed responses" : `Project ${run.id || state.runId || ""} · ${run.status || "unknown"}`;
     const allRecords=Array.isArray(run.events)?run.events:[];
     const split=run.example?exampleSplit(allRecords):-1;
     const records=split>=0?allRecords.slice(0,split):allRecords;
@@ -302,12 +302,12 @@
     const base=index===0?"examples/production":"examples/production-revised";
     const sampleOutputs={reader:`${base}/index.html`,document:`${base}/document.md`,pdf:`${base}/document.pdf`,plan:`${base}/plan.json`,report:`${base}/report.json`};
     renderRun({id:record.title,status:record.receipt.status,receipt:record.receipt,plan:fixture.plan,events:chosen,outputs:sampleOutputs},true);
-    const info=make("p","pb-replay-note",`${record.title} · ${fixture.label} ${index===1?`${record.receipt.metrics?.cache_hits ?? "?"} cached stage results; ${record.receipt.metrics?.cache_misses ?? "?"} recomputed.`:""}`);
+    const info=make("p","pb-replay-note",`${record.title}${index===1?` · ${record.receipt.metrics?.cache_hits ?? "?"} stage results reused; ${record.receipt.metrics?.cache_misses ?? "?"} recomputed.`:""}`);
     output.prepend(info);
   }
   replayButton.addEventListener("click",()=>openReplay(0));
   replayRevision.addEventListener("click",()=>openReplay(1));
-  installExample.addEventListener("click",async()=>{if(!state.local)return;installExample.disabled=true;setMessage("Opening the original example locally…");try{const answer=await post("api/project-example",{});if(!answer.id)throw Error("Server returned no example run ID.");state.runId=answer.id;await refreshSources();poll(answer.id);}catch(err){setMessage(`Could not open the original example: ${err.message}`,true);}finally{installExample.disabled=false;}});
+  installExample.addEventListener("click",async()=>{if(!state.local)return;installExample.disabled=true;setMessage("Opening recorded example…");try{const answer=await post("api/project-example",{});if(!answer.id)throw Error("Server returned no example run ID.");state.runId=answer.id;await refreshSources();poll(answer.id);}catch(err){setMessage(`Could not open the recorded example: ${err.message}`,true);}finally{installExample.disabled=false;}});
   async function initialize(){
     try{state.example=await getJSON("production-example.json");}catch{replayButton.disabled=true;replayRevision.disabled=true;replayHeading.lastChild.textContent="The recorded example is unavailable in this build.";}
     try{await refreshSources();}catch{state.local=false;state.adapter=false;start.disabled=true;fileInput.disabled=true;recent.hidden=true;renderSources();setMessage("Hosted preview. Download and run Lamina locally to make a project with your sources.");const badge=document.getElementById("project-mode");if(badge)badge.textContent="HOSTED / RECORDED EXAMPLE";}

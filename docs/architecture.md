@@ -1,47 +1,45 @@
 # Architecture
 
-This page describes the structured lesson builder. The default Projects interface uses the newer [source-aware production engine](production.md); [architecture status](architecture-status.md) maps both paths and the reusable method runtime.
+This page covers the structured lesson builder. The default Projects interface uses [source-aware production](production.md); [architecture status](architecture-status.md) compares both paths with the method runtime.
 
-Lamina is a local document-to-learning pipeline with a static reader. Its central invariant is that semantic decisions may change while source identity and evidence remain inspectable. The core uses Python 3.11+ and SQLite; the exported workbench uses plain browser assets.
+Lamina builds learning material from local documents and exports a static reader. Python 3.11+ and SQLite handle the pipeline; plain browser assets serve the workbench. Source identity and evidence remain inspectable across semantic stages.
 
 ## Data flow
 
-1. **Ingest.** A document receives a SHA-256 digest, source ID, title, filename, and role. Text is divided into ordered units with stable IDs and locators. Ingestion does not claim to understand the text. Identical writes are idempotent. PDF support extracts text; it does not interpret figures, OCR scanned pages, or establish that layout survived extraction.
-2. **Retrieve.** Search ranks known units with lexical and heading signals. An optional caller-supplied vector lane can contribute cosine similarity. The default search does not pretend to provide semantic embeddings. Scores and contributing lanes are returned for inspection.
-3. **Extract.** An adapter sees bounded windows of teaching units, including adjacent context. It proposes concepts with exact quoted evidence. Validation rejects unknown units, invented quotes, and evidence from held-out assessment sources. This stage is the narrowest point where source content becomes a proposed interpretation.
-4. **Reconcile.** A global pass may merge overlapping raw concepts into a canonical concept. Every raw concept must belong to exactly one canonical concept, and all member evidence must survive. This is semantic consolidation with mechanical conservation checks, not string-similarity deduplication.
-5. **Plan.** A global pass sees the canonical concepts and creates lessons in prerequisite order. Every canonical concept must be assigned or explicitly deferred with a reason. This proves accounting over the extracted set; it cannot prove the set is complete.
-6. **Author and review.** Each lesson gets a summary, source-backed sections, task-appropriate practice questions (optional), and a script with speech/pause segments. A separate review stage can pass or request revision. A revision blocks export until the issue is addressed. The default reviewer is another call through the same adapter, so independence is not implied.
-7. **Export.** A validated bundle is written as JSON and as a static workbench. The same bundle can produce a source-linked Markdown handout or a paginated PDF with practice and answer sections. The bundle contains teaching sources and units for traceability. Assessment text is excluded from adapter requests and the exported artifacts. No stage synthesizes or audits audio.
+1. **Ingest.** Each document gets a SHA-256 digest, source ID, title, filename, and role. Text becomes ordered units with stable IDs and locators. Repeated writes are idempotent. PDF support extracts text; it does not read images, scanned pages, tables, or layout reliably.
+2. **Retrieve.** Search ranks units by lexical and heading signals. A caller-supplied vector lane can add cosine similarity. Scores and contributing lanes are returned; the default has no semantic embeddings.
+3. **Extract.** An adapter sees bounded teaching-unit windows and adjacent context, then proposes concepts with exact quotes. Validation rejects unknown units, invented quotes, and held-out assessment evidence.
+4. **Reconcile.** A global pass can merge raw concepts. Each raw concept belongs to one canonical concept, and all member evidence survives. Mechanical accounting protects extracted material; the model judges semantic overlap.
+5. **Plan.** A global pass assigns canonical concepts to lessons in prerequisite order or defers them with reasons. It accounts for extracted concepts, not undiscovered source ideas.
+6. **Author and review.** Lessons contain summaries, source-backed sections, optional task-appropriate practice questions, and speech/pause scripts. A separate adapter review can pass or request revision; unresolved revisions block export. The default reviewer uses the same adapter.
+7. **Export.** Validated bundles become JSON and a static workbench, with optional source-linked Markdown or paginated PDF handouts containing practice and answers. Teaching sources and units stay in the bundle. Assessment text stays out of requests and exports. This path does not synthesize or audit audio.
 
-Since v0.2, a validated, data-only **procedure** supplies an audience, bounded teaching instructions, selected outputs, and local worker width. Its content-derived revision enters every semantic request and cache key; planning and authoring also receive the brief as explicit guidance. The local Studio serves the same curated example as the public static site, but accepts new sources and starts real background builds only when an adapter was configured at startup. Every run produces the base lesson bundle. Selecting SAMP adds a separate short-answer generation and review pair, with source-bound answer points and checked mark totals; selecting an oral case requires an authored scenario. The procedure and finished outputs are saved together. A SAMP review is another configured-adapter reading, not independent assessment validation.
+Since v0.2, a validated data-only **procedure** supplies audience, bounded teaching instructions, outputs, and local worker width. Its content-derived revision enters semantic requests and cache keys; planning and authoring also receive its brief. Local Studio serves the curated public example and can accept new sources. It starts background builds only with an adapter configured at startup. Every run exports the base lesson bundle. SAMP adds short-answer generation and review with source-backed points and checked mark totals; an oral case needs an authored scenario. Procedures and outputs are saved together. A SAMP review is another adapter reading.
 
 ## Identity, cache, and recovery
 
-The cache key includes stage, canonical request content, adapter identity, and prompt/schema revision. A changed source, adapter, or contract therefore requires a new result. Completed stage results survive retries and can be reused. SQLite claims work atomically with a lease; after a process disappears, an expired claim can be retried. Retry counts are bounded and errors remain visible. This is a local concurrency and crash-recovery mechanism, not a distributed job system.
+Cache keys include stage, canonical request, adapter identity, and prompt/schema revision. Source, adapter, or contract changes require new results; completed stages survive retries. SQLite claims jobs atomically with a lease. Expired claims can be retried after a process disappears, with bounded attempts and visible errors. This is local recovery, not a distributed queue.
 
-The adapter must include its model, prompt, or workflow revision in its identity. Otherwise Lamina cannot know that the meaning of a returned result changed while the JSON request stayed the same. A cached result is a record of a prior stage response, not a certification that the response was good.
+Adapter identity must include its model, prompt, or workflow revision. Lamina cannot detect a semantic change hidden behind identical requests and identity. A cache hit records a prior response, not its quality.
 
 ## Validation boundaries
 
-| Check | Establishes | Does not establish |
+| Check | Establishes | Limit |
 | --- | --- | --- |
-| Source digest and unit locator | Which extracted text was processed | That PDF extraction understood images or tables |
-| Exact quote within a known unit | The quoted bytes occur in the allowed source | That the concept is clinically or scientifically correct |
-| Reconciled member and evidence accounting | No extracted concept or its evidence silently disappears in a merge | That the merge preserves every useful distinction |
-| Assigned or deferred concept accounting | No extracted concept silently disappears | That all important concepts were extracted |
-| Question-mode requirements | Recall, contrast, and apply prompts are present | That those prompts improve learning |
-| Review pass | The configured reviewer accepted its stated rubric | Independent expert review or validated assessment |
-| Local self-rating | What a learner reported after practice | Predicted mastery or exam performance |
+| Source digest and unit locator | Extracted text identity | Cannot establish visual PDF fidelity. |
+| Exact quote within a known unit | Quote occurs in an allowed source | Cannot establish clinical or scientific correctness. |
+| Reconciled member and evidence accounting | Extracted concepts and evidence survive merges | Cannot establish that distinctions remain useful. |
+| Assignment or deferral | Every extracted concept is accounted for | Cannot detect missing concepts. |
+| Question-mode requirements | Recall, contrast, and apply prompts are present where required | Cannot establish learning benefit. |
+| Review pass | Adapter reviewer accepted its rubric | Not independent expert review. |
+| Local self-rating | Learner's reported practice result | Not predicted mastery or exam performance. |
 
-Lamina does not implement a calibrated spaced-repetition scheduler. Local ratings can guide a learner's next choice, but they are not an efficacy measure.
-
-The distinction matters because a polished export can still be thin, repetitive, or mistaken. Lamina makes those failures easier to find; it does not claim to solve them automatically.
+There is no calibrated spaced-repetition scheduler. Local ratings can guide a learner's next choice. Exported material can still be thin, repetitive, or mistaken.
 
 ## Extension points
 
-The [adapter protocol](adapters.md) is the primary semantic extension point. Ingestion can later add document types while preserving stable source/unit identities. Retrieval can accept external vectors while retaining the lexical baseline. The static bundle format allows alternate readers without moving authoring logic into the browser.
+The [adapter protocol](adapters.md) handles interpretation and writing. Ingestion can add document types while retaining source/unit identity. Retrieval can use external vectors alongside lexical search. The static bundle permits alternate readers without moving authoring into the browser.
 
 ## Reusable methods in v0.3
 
-The CLI also executes user-defined method graphs with per-node task fields, explicit dependencies, resource lanes and durable cached results. This is separate from the fixed browser guide pipeline. See [Methods](methods.md) for the runnable contract and its limits. Guide authors now receive the shared lesson route and exact prerequisite evidence; this is planned context, not completed earlier prose. Practice forms are selected for the material instead of requiring three question modes in every lesson.
+The CLI runs [method graphs](methods.md) with selected task fields, dependencies, resource lanes, and cached results. Guide authors in the lesson builder receive the shared lesson route and exact prerequisite evidence, not finished earlier prose. Practice forms follow the material without a universal three-mode quota.

@@ -14,10 +14,10 @@
   const wrap = make("section", "mw-shell");
   const head = make("div", "mw-head");
   const title = make("div");
-  title.append(make("span", "mw-kicker", "CUSTOM METHOD / LOCAL WORKBENCH"), make("h3", "", "Workflow definition"));
+  title.append(make("span", "mw-kicker", "ADVANCED / WORKER DEFINITIONS"), make("h3", "", "Worker workflow"));
   const mode = make("span", "mw-mode", "Checking local availability…");
   head.append(title, mode);
-  const lead = make("p", "mw-lead", "Start from the published incident-guide method or import your own. The method declares workers, dependencies, selected task fields, and expected results. Its instructions are sent only to the adapter you configure locally.");
+  const lead = make("p", "mw-lead", "Load an example or import a method. Define each worker, what it receives, and when it runs. The configured local adapter receives these instructions.");
   const top = make("div", "mw-top");
   const summary = make("div", "mw-summary");
   const starters = make("div", "mw-starters");
@@ -43,7 +43,7 @@
   const editorDisclosure = make("details", "mw-editor-disclosure");
   editorDisclosure.append(make("summary", "", "Edit method and task JSON"), editors);
   const graph = make("div", "mw-graph");
-  const graphTitle = make("div", "mw-subhead"); graphTitle.append(make("span", "mw-label", "DEPENDENCY PREVIEW"), make("span", "mw-hint", "Select a node to inspect its work and record an observation."));
+  const graphTitle = make("div", "mw-subhead"); graphTitle.append(make("span", "mw-label", "WORKER ORDER"), make("span", "mw-hint", "Select a worker to see its inputs and instructions."));
   const graphBody = make("div", "mw-graph-body"); graph.append(graphTitle, graphBody);
   const actions = make("div", "mw-actions");
   const validate = make("button", "mw-button mw-button-secondary", "Validate method"); validate.type = "button";
@@ -121,7 +121,7 @@
     starter.version = "1.0";
     methodText.value = JSON.stringify(starter, null, 2);
     taskText.value = JSON.stringify(fixture.task.initial, null, 2);
-    state.selected = ""; renderGraph(); message("Small example loaded. This starter has no fixture-only observation reference.");
+    state.selected = ""; renderGraph(); message("Small example loaded. Review the workers and task before running.");
   });
   briefButton.addEventListener("click", async () => {
     briefButton.disabled = true; message("Loading technical brief method…");
@@ -159,7 +159,7 @@
   });
   function receiptView(runData) {
     result.hidden = false; result.replaceChildren();
-    result.append(make("span", "mw-label", "ACTUAL RUN RESULT"));
+    result.append(make("span", "mw-label", "RUN RESULT"));
     result.append(make("h4", "", `${state.runMethod?.id || "Method"} · ${runData.status || "unknown"}`));
     if (runData.error) result.append(make("p", "mw-graph-error", runData.error));
     const receipt = runData.receipt || runData.result?.receipt || runData.result;
@@ -175,10 +175,10 @@
           const chosen = Array.isArray(declared.task_keys)
             ? Object.fromEntries(declared.task_keys.filter(key => Object.hasOwn(state.runTask, key)).map(key => [key, state.runTask[key]]))
             : state.runTask;
-          item.append(make("small", "mw-declared-label", "SUBMITTED TASK FIELDS & DEPENDENCIES"));
+          item.append(make("small", "mw-declared-label", "TASK FIELDS AND DEPENDENCIES SENT"));
           item.append(codeBlock({task:chosen, depends_on:declared.depends_on || [], fixed_input:declared.input || {}, selected_observation_ids:declared.observation_ids || []}));
         }
-        if (receipt.results && Object.hasOwn(receipt.results, id)) { item.append(make("small", "mw-declared-label", "ACTUAL RETURNED RESULT")); item.append(codeBlock(receipt.results[id])); }
+        if (receipt.results && Object.hasOwn(receipt.results, id)) { item.append(make("small", "mw-declared-label", "RETURNED RESULT")); item.append(codeBlock(receipt.results[id])); }
         rows.append(item);
       });
       result.append(rows);
@@ -209,8 +209,8 @@
   });
   function showObservationForm() {
     const section = make("div", "mw-observation");
-    section.append(make("span", "mw-label", "REOPEN SELECTED WORKER"), make("h5", "", "Record an operator observation"));
-    section.append(make("p", "", "The note is stored with this run. Its returned ID is added only to the selected node in the method editor. Review the change, then run again explicitly."));
+    section.append(make("span", "mw-label", "AFTER THE RUN"), make("h5", "", "Keep a note for this worker"));
+    section.append(make("p", "", "Save a note from this run. It will be selected for this worker in the editor; review the method before running it again."));
     const note = make("textarea"); note.rows = 3; note.placeholder = "What was missing, wrong, or useful?"; note.setAttribute("aria-label", "Observation note");
     const outcome = make("input"); outcome.placeholder = "Outcome, e.g. needs revision"; outcome.setAttribute("aria-label", "Observation outcome");
     const applicability = make("input"); applicability.placeholder = "When does this observation apply?"; applicability.setAttribute("aria-label", "Observation applicability");

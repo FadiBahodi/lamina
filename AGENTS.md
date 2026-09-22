@@ -13,3 +13,7 @@ Keep bounded, independent implementation work parallel when the user requests it
 Run meaningful tests for changed behavior. Browser-facing work requires an actual connected journey, not only syntax checks. Package and deployment checks must cover the same revision. Synthetic timing and deterministic fixtures must be labeled; competitive quality claims require a matched evaluation.
 
 Public examples use original material. Do not publish private source documents, conversation dumps, credentials or local research artifacts. The source audit describes general mechanisms without exposing those inputs.
+
+## Writing
+
+Explain features with concrete subjects and verbs. Keep commands, measurements, mathematical definitions and citations precise. Put substantive limitations together in a short Limits section, with operational guidance beside the action it affects. The README should explain the problem, workflow, installation and technical references. Preserve the production history across source families. Cut repeated qualifications, rhetorical contrasts, decorative labels and claims of importance; each sentence should add information.

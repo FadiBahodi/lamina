@@ -541,7 +541,7 @@
         renderOutput();
         renderInspector();
         $("#import-note").textContent =
-          `Saved ${candidate.name} in this browser. Download JSON to keep a portable copy.`;
+          `Saved ${candidate.name} in this browser. Download the JSON for a copy.`;
       } catch (err) {
         note.textContent = `Could not save: ${errorMessage(err)}`;
       }
@@ -555,13 +555,13 @@
       pill = $("#mode-pill");
     pill.textContent = local
       ? "Local build available"
-      : "Public example · explore only";
+      : "Recorded example";
     pill.classList.toggle("local", local);
     $("#mode-description").textContent = local
       ? state.adapter
-        ? "Adapter connected. Source files and procedures can be run locally."
-        : "Local server connected. Configure a command adapter before running a procedure."
-      : "The hosted page shows real example artifacts. To produce from your own sources, run Lamina locally.";
+        ? "Adapter ready. You can run this workflow with local sources."
+        : "Connect a command adapter to run this workflow."
+      : "You can inspect the recorded outputs here. Run Lamina locally to use your own sources.";
     $("#submit-sources").disabled = !local || !state.files.length;
     $("#sources-note").textContent = local
       ? state.files.length
@@ -582,7 +582,7 @@
     if (state.mode !== "local") {
       b.textContent = "Explore the example ↗";
       b.disabled = false;
-      g.textContent = "Public demo. Run the local app to generate from your files.";
+      g.textContent = "Open the recorded output, or run the local app with your files.";
       return;
     }
     if (!state.adapter) {
@@ -602,7 +602,7 @@
     if (state.run && ["queued", "running"].includes(state.run.status)) {
       b.textContent = "Production in progress";
       b.disabled = true;
-      g.textContent = "Actual server state appears below.";
+      g.textContent = "Progress appears below.";
       return;
     }
     b.textContent = `Run ${currentProcedure().name} →`;

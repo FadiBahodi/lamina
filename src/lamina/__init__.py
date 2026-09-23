@@ -1,3 +1,3 @@
 """Evidence-preserving document pipelines for deliberate learning."""
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"

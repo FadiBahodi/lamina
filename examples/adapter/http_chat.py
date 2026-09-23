@@ -16,14 +16,17 @@ from lamina.chat_protocol import chat_messages, chat_token_count
 
 
 class AdapterFailure(Exception):
-    def __init__(self, code, retry_after=None):
+    def __init__(self, code, retry_after=None, usage=None):
         self.code, self.retry_after = code, retry_after
+        self.usage = usage or {}
         super().__init__(code)
 
     def error(self):
         result = {"code": self.code}
         if self.retry_after is not None:
             result["retry_after"] = self.retry_after
+        if self.usage:
+            result["usage"] = self.usage
         return result
 
 
@@ -71,9 +74,35 @@ def request_body(request):
     return body
 
 
+def response_usage(envelope):
+    """Preserve measured cost even when generated content cannot be accepted."""
+    if not isinstance(envelope, dict):
+        return {}
+    usage = envelope.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
+    measured = {}
+    for source_key, target_key in (
+        ("prompt_tokens", "input_tokens"),
+        ("completion_tokens", "output_tokens"),
+    ):
+        if type(usage.get(source_key)) is int and usage[source_key] >= 0:
+            measured[target_key] = usage[source_key]
+    details = usage.get("prompt_tokens_details")
+    cached = details.get("cached_tokens") if isinstance(details, dict) else None
+    if type(cached) is int and cached >= 0:
+        measured["cached_input_tokens"] = cached
+    if isinstance(envelope.get("model"), str):
+        measured["model"] = envelope["model"]
+    return measured
+
+
 def response_result(envelope, request):
+    measured = response_usage(envelope)
     try:
         choice = envelope["choices"][0]
+        if not isinstance(choice, dict):
+            raise AdapterFailure("invalid_response")
         if choice.get("finish_reason") == "length":
             raise AdapterFailure("output_truncated")
         result = json.loads(choice["message"]["content"])
@@ -84,25 +113,17 @@ def response_result(envelope, request):
 
             if not Draft202012Validator(request["response_schema"]).is_valid(result):
                 raise AdapterFailure("invalid_response")
-        usage = envelope.get("usage") or {}
-        measured = {}
-        for source_key, target_key in (
-            ("prompt_tokens", "input_tokens"),
-            ("completion_tokens", "output_tokens"),
-        ):
-            if type(usage.get(source_key)) is int and usage[source_key] >= 0:
-                measured[target_key] = usage[source_key]
-        cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
-        if type(cached) is int and cached >= 0:
-            measured["cached_input_tokens"] = cached
         return {
             "protocol": "lamina-response-1",
             "result": result,
             "model": envelope.get("model", os.environ["LAMINA_MODEL"]),
             "usage": measured,
         }
+    except AdapterFailure as exc:
+        exc.usage = measured
+        raise
     except (KeyError, IndexError, TypeError, ValueError) as exc:
-        raise AdapterFailure("invalid_response") from exc
+        raise AdapterFailure("invalid_response", usage=measured) from exc
 
 
 def http_failure(status, retry_after=None):

@@ -20,6 +20,12 @@ import tiktoken
 from lamina.production import build_production, run_production, REVISION
 from lamina.store import Workspace, canonical
 
+try:
+    from lamina.production_example import fixture_request_budget
+except ImportError:
+    # Earlier checkouts predate explicit workload profiles.
+    fixture_request_budget = None
+
 encoding = tiktoken.get_encoding("cl100k_base")
 
 
@@ -28,6 +34,14 @@ class Meter:
 
     def __init__(self):
         self.requests = []
+
+    def budget_for(self, stage):
+        # The oracle sees the fixed 100-unit fixture, not unknown model inputs.
+        return (
+            fixture_request_budget(stage, max_items=100)
+            if fixture_request_budget is not None
+            else None
+        )
 
     def call(self, stage, payload):
         self.requests.append((stage, payload))
@@ -148,6 +162,15 @@ with tempfile.TemporaryDirectory() as folder:
             "words": 25000,
             "sections": 10,
             "tokenizer": "cl100k_base",
+            "workload_policy": (
+                {
+                    "basis": "configured",
+                    "max_items_per_stage": 100,
+                    "purpose": "Finite scripted oracle; no model-quality evidence",
+                }
+                if fixture_request_budget is not None
+                else None
+            ),
         },
         "stages": stages,
         "reader_source_words": reader_words,

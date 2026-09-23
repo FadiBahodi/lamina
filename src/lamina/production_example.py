@@ -10,7 +10,9 @@ import tempfile
 import threading
 from pathlib import Path
 
+from .context_budget import RequestBudget
 from .production import plan_production, run_production
+from .workload_profiles import WorkloadProfile
 from .store import Workspace
 
 SOURCES = [
@@ -42,12 +44,29 @@ OPTIONS = {
 }
 
 
+def fixture_request_budget(stage, *, max_items, max_request_bytes=1_500_000):
+    """Declare scripted-fixture capacity for mechanics tests and examples.
+
+    The item limit describes the finite fixture selected by its caller. It is
+    operator configuration, with no observed-model evidence and no claim that
+    a language model can handle the same workload accurately.
+    """
+    return RequestBudget(
+        max_request_bytes,
+        workload=WorkloadProfile(stage, max_items=max_items, basis="configured"),
+    )
+
+
 class FixtureAdapter:
     identity = "original-production-fixture-v1"
 
     def __init__(self):
         self.lock = threading.Lock()
         self.calls: list[dict] = []
+
+    def budget_for(self, stage):
+        # Four source paragraphs plus their cross-section fixture context.
+        return fixture_request_budget(stage, max_items=16)
 
     def call(self, stage, request):
         if request.get("stage") != stage or request.get("protocol") != "lamina-stage-1":

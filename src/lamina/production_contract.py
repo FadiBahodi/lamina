@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-REVISION = "lamina-production-5"
+REVISION = "lamina-production-6"
 
 from .evidence import ValidationFailure, QuoteMatchError, resolve_quote
 from .verification import CLAIM_SHAPE, VerificationError, validate_claims
@@ -26,9 +26,11 @@ _SHAPES = {
             {
                 "title": "str",
                 "explanation": "str",
-                "unit_ids": ["core unit id"],
-                "evidence": [
-                    {"unit_id": "core unit id", "quote": "exact source substring"}
+                "evidence_refs": [
+                    {
+                        "span_id": "owned core source span ID",
+                        "end_span_id": "same ID or last span ID of a contiguous range in the same unit",
+                    }
                 ],
             }
         ]
@@ -157,7 +159,7 @@ def _options(options: dict | None) -> dict:
         "workflow": "auto",
         "assignments": None,
         "max_input_bytes": None,
-        "reading": "reusable",
+        "reading": "task",
         "max_attempts": 2,
         "document_review": False,
         "max_request_bytes": 1_500_000,
@@ -236,7 +238,9 @@ def _evidence(
         if not isinstance(row, dict) or set(row) != {"unit_id", "quote"}:
             raise ProductionError(f"{label} evidence must have unit_id and quote")
         uid = row["unit_id"]
-        quote = _str(row["quote"], f"{label}.quote", 4000)
+        quote = row["quote"]
+        if not isinstance(quote, str) or not quote.strip():
+            raise ProductionError(f"{label}.quote must be a nonempty string")
         if not isinstance(uid, str) or uid not in allowed:
             raise ProductionValidationError(
                 f"{label} has an unknown unit", code="foreign_unit", retryable=False
@@ -254,14 +258,27 @@ def _evidence(
 
 
 def _read_check(raw, core: list[dict], window_id: str) -> dict:
+    from .source_spans import index_source_spans, materialize_references
+
     if not isinstance(raw, dict) or not isinstance(raw.get("ideas"), list):
         raise ProductionError("reader must return an ideas list")
     own = {u["id"]: u for u in core}
+    references = index_source_spans(own)
 
     def check_idea(idea, n):
         if not isinstance(idea, dict):
             raise ProductionError("reader idea must be an object")
-        ids = idea.get("unit_ids")
+        if "evidence_refs" in idea:
+            if "evidence" in idea:
+                raise ProductionError(
+                    "reader ideas must use evidence_refs or legacy evidence, not both"
+                )
+            evidence = materialize_references(
+                idea["evidence_refs"], own, index=references
+            )
+        else:
+            evidence = _evidence(idea.get("evidence"), own, "reader")
+        ids = idea.get("unit_ids", list(dict.fromkeys(e["unit_id"] for e in evidence)))
         if (
             not isinstance(ids, list)
             or not ids
@@ -274,7 +291,6 @@ def _read_check(raw, core: list[dict], window_id: str) -> dict:
                 code="foreign_unit",
                 retryable=False,
             )
-        evidence = _evidence(idea.get("evidence"), own, "reader")
         if not {e["unit_id"] for e in evidence}.issubset(set(ids)):
             raise ProductionError("reader evidence must belong to its idea units")
         return {

@@ -1,13 +1,13 @@
 """Contract tests use deterministic responses, not model-quality scores."""
 
 import copy
+from dataclasses import replace
 import threading
 import time
 
 import pytest
 
 from lamina.execution import section_pipeline
-from lamina.context_budget import RequestBudget
 from lamina.ingest import ingest_paths
 from lamina.production import (
     ProductionError,
@@ -210,9 +210,22 @@ def test_local_source_edit_reuses_other_reader_interpretations(tmp_path):
         + "The shaft carries rotation. Another statement. " * 50
     )
     ws, provider = Workspace(tmp_path / "db"), FixtureProvider()
-    provider.budget_for = lambda stage: RequestBudget(
-        4096 if stage == "production_read" else 100_000
-    )
+    original_budget = provider.budget_for
+
+    def one_structure_reader(stage):
+        budget = original_budget(stage)
+        return (
+            replace(
+                budget,
+                workload=replace(budget.workload, max_items=1),
+            )
+            if stage == "production_read"
+            else budget
+        )
+
+    # Separate owned structures explicitly so this edit-locality test does
+    # not depend on incidental instruction/schema byte lengths.
+    provider.budget_for = one_structure_reader
     ingest_paths([path], ws)
     old_id = ws.sources()[0]["id"]
     options = {"workflow": "planned"}
@@ -473,12 +486,13 @@ def test_assignment_id_normalization_preserves_context(tmp_path):
 def test_requested_context_is_cached_and_never_becomes_owned_material(tmp_path):
     class ContextReader(FixtureProvider):
         def budget_for(self, stage):
+            base = replace(super().budget_for(stage), max_request_bytes=100_000)
             if stage != "production_read":
-                return RequestBudget(100_000)
+                return base
             # A deterministic capacity fixture fits one owned structure plus
             # context. These token counts are fixtures, not model measurements.
-            return RequestBudget(
-                100_000,
+            return replace(
+                base,
                 context_tokens=20,
                 output_tokens=5,
                 count_tokens=lambda request: 10 * len(request["input"]["core"])
@@ -555,11 +569,16 @@ def test_truncated_reader_splits_at_source_structures_then_finishes(tmp_path):
     } == {"u1", "u2"}
 
 
-@pytest.mark.parametrize("reading, new_reads", [("reusable", 0), ("task", 1)])
+@pytest.mark.parametrize(
+    "reading, new_reads", [(None, 1), ("reusable", 0), ("task", 1)]
+)
 def test_new_brief_reuses_only_brief_independent_reading(tmp_path, reading, new_reads):
     ws, provider = workspace(tmp_path), FixtureProvider()
-    options = {"workflow": "planned", "reading": reading}
+    options = {"workflow": "planned"}
+    if reading is not None:
+        options["reading"] = reading
     first = build_production(ws, provider, "Explain expiry", ["s1"], options)
+    assert first["plan"]["options"]["reading"] == (reading or "task")
     before = len(provider.requests)
     second = build_production(
         ws, provider, "Compare expiry with termination", ["s1"], options
@@ -655,7 +674,12 @@ def test_reader_failure_keeps_valid_rows_and_other_windows_are_cached(tmp_path):
                 and payload["input"]["source"]["id"] == "s1"
                 and self.broken
             ):
-                result["ideas"][1]["evidence"][0]["quote"] = "unsupported quotation"
+                row = (
+                    result["replacements"][0]["idea"]
+                    if "replacements" in result
+                    else result["ideas"][1]
+                )
+                row["evidence"][0]["quote"] = "unsupported quotation"
             return result
 
     ws, provider = workspace(tmp_path), PartlyInvalidReader()
@@ -723,10 +747,11 @@ def test_split_reader_requests_adjacent_sibling_before_outer_context(tmp_path):
 
     class SplitReader(FixtureProvider):
         def budget_for(self, stage):
+            base = replace(super().budget_for(stage), max_request_bytes=100_000)
             if stage != "production_read":
-                return RequestBudget(100_000)
-            return RequestBudget(
-                100_000,
+                return base
+            return replace(
+                base,
                 context_tokens=45,
                 output_tokens=2,
                 count_tokens=lambda request: 10 * len(request["input"]["core"])
@@ -788,7 +813,12 @@ def test_partial_reader_diagnostics_restore_exact_ingested_source_ids(tmp_path):
             result = super().call(stage, payload)
             if stage == "production_read":
                 assert payload["input"]["core"][0]["id"] == "u0"
-                result["ideas"][1]["evidence"][0]["quote"] = "unsupported quotation"
+                row = (
+                    result["replacements"][0]["idea"]
+                    if "replacements" in result
+                    else result["ideas"][1]
+                )
+                row["evidence"][0]["quote"] = "unsupported quotation"
             return result
 
     with pytest.raises(ProductionError) as raised:

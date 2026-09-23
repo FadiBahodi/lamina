@@ -243,6 +243,7 @@ def check_assessment(
                 data,
                 checked,
                 max_bytes,
+                workload_items=1,
             )
         except ProductionError as exc:
             raise AssessmentCheckError(str(exc)) from exc

@@ -6,28 +6,32 @@ Import sources, describe the result, and run. The CLI, Python API and local Proj
 
 | Workflow | Work performed | Use |
 | --- | --- | --- |
-| `auto` | Measures direct writing and source-review capacity; selects direct or planned | Default capacity-based choice |
-| `direct` | Write from all selected source units, review, optional repair/recheck | A complete collection fits the chosen models |
+| `auto` | Checks declared writing/review workload limits and request capacity; selects direct or planned | Default route selection |
+| `direct` | Write from all selected source units, review, optional repair/recheck | A collection is within declared workload and request limits |
 | `planned` | Read sources, organize sections, assign material, write and review each section | The collection needs decomposition and a shared outline |
 | `assigned` | Write and review caller-supplied sections with explicit source assignments | A person or another agent already chose the structure |
 
-Automatic selection checks the complete writing envelope and review/repair envelopes with empty drafts. Actual drafts and findings are checked when available. The decision and measurements are saved in `workflow_decision`. If an actual review cannot fit, the receipt remains `review` and identifies the unperformed check.
+Automatic selection checks workload policy, the complete writing envelope and review/repair envelopes with empty drafts. Actual drafts and findings are checked when available. The decision and measurements are saved in `workflow_decision`. If an actual review cannot fit, the receipt remains `review` and identifies the unperformed check.
 
-A configured provider can supply its tokenizer, model context limit and output allowance. Generic adapters supply a byte transport guard. Size measurements govern capacity. Appropriate task size and output quality require evaluation. See [Adapters](adapters.md) for configuration.
+A provider profile separates hard request capacity from workload policy. Context tokens, output allowance and transport bytes bound accepted requests. `workload` limits bound the input tokens or number of items assigned to a stage. Combining multiple items in planning, writing or review requires an explicit workload policy. Planned mode checks its route, write and review policies before starting paid reading. Automatic mode reports missing setup when it would otherwise aggregate unprofiled work. An explicitly assigned single source structure can run without a workload profile only when it has no additional source units, form exemplars or retained observations in its context. Its semantic quality remains unmeasured. Declaring a limit makes the resource decision inspectable; evaluate semantic performance separately. See [Adapters](adapters.md) for configuration.
 
 Python entry points are `plan_production(workspace, provider, brief, source_ids, options=None)`, `run_production(workspace, provider, plan, options=None)` and `build_production`, which combines both. A brief is text or `{goal, audience?, constraints?}`. Selected sources must have the teaching role.
 
 ## Reading and organization
 
-The planned route packs complete source structures into measured reader requests. Batches can cross headings within one source. Slide components stay together. Plans store units once and reference them by ID. See [Parsing](parsing.md) for the retained structures.
+The planned route reads complete source structures. Without a reading workload profile, each call owns one parser structure: for example, a paragraph, PDF page or slide group. A configured profile can combine structures within the same source while respecting both workload and request limits. Slide components stay together. Plans store units once and reference them by ID. See [Parsing](parsing.md) for the retained structures.
 
-`reading="reusable"` creates a source inventory independent of the project's brief and output format. It preserves cited statements, quantities, qualifications and relationships for later projects. `reading="task"` selects useful ideas for the current brief during reading. Original source passages accompany later writing so omitted qualifications can be checked.
+This structural fallback is provisional: a page can still be dense, poorly parsed or difficult for the selected model. A source structure exceeding a configured limit requires explicit decomposition or a revised policy. The engine does not infer faithful extraction from successful JSON decoding.
+
+`reading="task"` is the default. It asks the reader to select useful ideas for the current brief. `reading="reusable"` explicitly creates an inventory independent of that brief and output format. Its prompt asks for statements, quantities, qualifications and relationships, but cached omissions can affect every later project that reuses it. Reusable inventories remain unassessed unless evaluated on the intended tasks; no recall certificate is inferred from quotation matches or reader agreement. Original source passages accompany later writing so reviewers can inspect omitted qualifications.
+
+Readers cite bounded source references instead of copying whole quotations. Code resolves those references to exact spans in the original units. Unknown references, invalid ranges and citations outside the owned material remain validation errors. A valid reference establishes location; semantic support still requires review.
 
 A reader may request adjacent source context with a specific reason. Added context cannot originate duplicate ideas and must fit the request budget. If a reader's output is truncated, the engine divides its owned material between complete structures and retries the smaller readings. A single oversized structure requires more capacity or explicit decomposition. Failed readings remain unresolved while independent successful readings stay cached.
 
-The planner receives full idea titles and explanations with evidence references. Code removes repeated quotation text from planning requests and restores the original references afterward. When those cards exceed capacity, bounded model calls group them into a smaller outline. Final assignment revisits every original card and accounts for it once or records an omission. Models choose cross-document relationships.
+The planner receives full idea titles and explanations with evidence references. Code removes repeated quotation text from planning requests and restores the original references afterward. When those cards exceed the declared workload or request limits, bounded model calls group them into a smaller outline. Final assignment revisits every original card and accounts for it once or records an omission. Models choose cross-document relationships.
 
-The engine then measures each planned section's writing and source-review requests. Oversized assignments are subdivided into smaller coherent sections without discarding their material. The outline, each indivisible idea or target, and any required context must ultimately fit a request.
+The engine then measures each planned section's writing and source-review requests. Assignments exceeding declared limits are subdivided into smaller coherent sections without discarding their material. The outline, each indivisible idea or target, and any required context must ultimately fit the configured limits.
 
 ## What each writer and reviewer sees
 
@@ -45,7 +49,7 @@ Writers are asked to link exact output spans to supporting source quotations. Co
 | --- | --- | --- |
 | `format` | `document` | Also `guide`, `assessment`, `podcast-script`; selects the output contract. |
 | `workflow` | `auto` | Selects the route above. |
-| `reading` | `reusable` | Retains source interpretations across goals; use `task` for brief-specific reading. |
+| `reading` | `task` | Reads for the current brief. `reusable` explicitly shares an unassessed inventory across goals. |
 | `workers` | `8` | Local maximum simultaneous calls. A configurable resource ceiling, with no claim of optimal throughput. |
 | `reader_workers`, `writer_workers`, `review_workers` | Inherit `workers` | Optional stage ceilings within the same total. |
 | `max_attempts` | `2` | Original attempt plus one eligible correction/retry. A bounded resource policy; accepts 1–5. |
@@ -54,7 +58,7 @@ Writers are asked to link exact output spans to supporting source quotations. Co
 | `document_review` | `false` | Adds the explicitly scoped cross-section checks above. |
 | `retrieval_targets` | `false` | For guides/assessments, groups equivalent prompts and supported answers before section assignment. Requires planned mode. |
 
-Worker settings accept 1–128. Byte limits accept 4096–2000000. Provider context/output limits belong in the [adapter profile](adapters.md). The remaining numeric defaults bound resources and remain choices to evaluate against the actual workload.
+Worker settings accept 1–128. Byte limits accept 4096–2000000. Provider context/output limits and per-stage workload policies belong in the [adapter profile](adapters.md). The remaining numeric defaults bound resources and remain choices to evaluate against the actual workload.
 
 Legacy `core_words` and `halo_units` remain explicit overrides for comparisons with older workflows. There is no default word target. A fixed halo requires an explicit `core_words` value; its supported range is 0–8 neighboring units. The default reader requests missing context as needed.
 
@@ -95,9 +99,9 @@ Edits can change packing boundaries or required context and invalidate additiona
 
 Plans retain source snapshots and provider configuration. Changed goals, source content, format or source policy require replanning, which can reuse eligible readings.
 
-Retryable validation failures receive specific feedback. Conservative quote normalization can recover formatting differences while returning the exact original source span. Provider-declared transient failures can retry within `max_attempts`. Invalid material remains visible as unresolved work, and only a fully validated result is cached as successful. Independent jobs finish and retain their results after a sibling fails. Restarting reuses those completed requests under renewable leases and owner fencing.
+When an extraction result contains invalid rows, correction requests identify those rows while preserving accepted rows. Complete validation follows the merge. Malformed envelopes and broader contract failures can require a full replacement. Legacy quote-based replies can use conservative normalization to recover formatting differences while returning the exact original source span. Provider-declared transient failures can retry within `max_attempts`. Invalid material remains visible as unresolved work, and only a fully validated result is cached as successful. Independent jobs finish and retain their results after a sibling fails. Restarting reuses those completed requests under renewable leases and owner fencing.
 
-Receipts record request sizes, attempts, failures, cache hits, elapsed times and reported token usage. `provider_request_bytes` counts actual provider attempts, including failed attempts; missing usage remains unknown. Coverage reports distinguish source material considered, reader citations, assignment and output citations. Semantic recall and live model performance require separate evaluation.
+Receipts record request sizes, attempts, failures, cache hits, elapsed times and reported token usage. `provider_request_bytes` counts actual provider attempts, including failed attempts; missing usage remains unknown. Coverage reports distinguish source material considered, reader citations, assignment and output citations. These counts cannot detect every silently omitted fact. The [quality evaluation protocol](quality-evaluation.md) tests fragile facts across workload sizes and follows them into the finished output. Semantic recall and live model performance require those separate measurements.
 
 ## Assessments, audio and export
 
@@ -105,6 +109,6 @@ Assessments export separate candidate and examiner files. Blind solves receive t
 
 A ready podcast script can use a separate speech adapter. Current audio synthesis covers the whole script, caches results and validates PCM WAV structure and duration. Listening quality and spoken fidelity require a separate check.
 
-`export_production(receipt, plan, output_path)` writes Markdown, HTML, a JSON receipt, the plan and optional PDF. Plans and receipts contain source text and can contain assessment keys. `ready` records completion of enabled checks. Factual accuracy and delivery quality require evaluation.
+`export_production(receipt, plan, output_path)` writes Markdown, HTML, a JSON receipt, the plan and optional PDF. Plans and receipts contain source text and can contain assessment keys. `ready` records completion of enabled checks. Plans and receipts separately record `semantic_recall: "unmeasured"`; the saved declaration participates in plan validation. Factual accuracy and delivery quality require evaluation.
 
 The local app runs one project at a time with parallel calls inside it. It polls compact `/api/progress/{id}` records, fetches full `/api/runs/{id}` results, and persists plans and receipts separately. Interrupted projects can resume cached work. Keep the app on loopback; project identifiers do not provide authentication.

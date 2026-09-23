@@ -7,6 +7,7 @@ import pytest
 from lamina.method_runtime import record_observation
 from lamina.production import ProductionError, plan_production, run_production
 from lamina.source_policy import normalize_production_inputs
+from lamina.production_example import fixture_request_budget
 from lamina.store import Workspace
 
 
@@ -76,6 +77,9 @@ class PolicyFixture:
 
     def __init__(self):
         self.requests = []
+
+    def budget_for(self, stage):
+        return fixture_request_budget(stage, max_items=16)
 
     def call(self, stage, request):
         self.requests.append((stage, request))

@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 import uuid
+from dataclasses import replace
 from importlib import resources
 from pathlib import Path
 
@@ -20,16 +21,38 @@ class ProviderError(RuntimeError):
     """A public adapter failure; retry policy belongs to the calling runtime."""
 
     def __init__(
-        self, message, *, code="provider_error", retryable=False, retry_after=None
+        self,
+        message,
+        *,
+        code="provider_error",
+        retryable=False,
+        retry_after=None,
+        usage=None,
     ):
         super().__init__(message)
         self.code = code
         self.retryable = bool(retryable)
+        self.usage = _safe_usage(usage)
         self.retry_after = (
             float(retry_after)
             if type(retry_after) in {int, float} and 0 <= retry_after <= 3600
             else None
         )
+
+
+def _safe_usage(usage):
+    if not isinstance(usage, dict):
+        return {}
+    result = {
+        key: value
+        for key, value in usage.items()
+        if key in {"input_tokens", "output_tokens", "cached_input_tokens"}
+        and type(value) is int
+        and value >= 0
+    }
+    if isinstance(usage.get("model"), str):
+        result["model"] = usage["model"]
+    return result
 
 
 def _remote_error(error):
@@ -54,6 +77,7 @@ def _remote_error(error):
         code=code,
         retryable=code in {"rate_limit", "timeout", "unavailable", "connection"},
         retry_after=error.get("retry_after") if isinstance(error, dict) else None,
+        usage=error.get("usage") if isinstance(error, dict) else None,
     )
 
 
@@ -69,6 +93,7 @@ class CommandProvider:
         env: dict[str, str] | None = None,
         request_format: str | None = None,
         budget=None,
+        workload=None,
     ) -> None:
         if (
             not isinstance(command, list)
@@ -95,7 +120,17 @@ class CommandProvider:
         self._local = threading.local()
         self.version = version or self.env.get("LAMINA_ADAPTER_VERSION", "unspecified")
         self.request_format = request_format
+        from .workload_profiles import parse_workloads
+
+        self.workloads = parse_workloads(workload)
+        if budget is not None and budget.workload is not None:
+            profile = budget.workload
+            if profile.stage in self.workloads:
+                raise ValueError("stage workload supplied in both budget and workload")
+            self.workloads[profile.stage] = profile
+            budget = replace(budget, workload=None)
         self._budget = budget
+        self._stage_budgets = {}
         versions = []
         for arg in self.command:
             path = Path(arg)
@@ -119,32 +154,90 @@ class CommandProvider:
                 config,
                 env,
                 request_format,
+                (
+                    {
+                        "max_request_bytes": budget.max_request_bytes,
+                        "context_tokens": budget.context_tokens,
+                        "output_tokens": budget.output_tokens,
+                        "counting": budget.counting,
+                    }
+                    if budget is not None
+                    else None
+                ),
             ],
             sort_keys=True,
         )
-        self.identity = "command:" + hashlib.sha256(token.encode()).hexdigest()[:20]
+        self.configuration_identity = (
+            "command:" + hashlib.sha256(token.encode()).hexdigest()[:20]
+        )
+        for profile in self.workloads.values():
+            profile.validate_binding(provider_identity=self.configuration_identity)
+        workload_token = json.dumps(
+            [
+                self.configuration_identity,
+                {k: v.identity for k, v in sorted(self.workloads.items())},
+            ],
+            sort_keys=True,
+        )
+        self.identity = (
+            "command:" + hashlib.sha256(workload_token.encode()).hexdigest()[:20]
+            if self.workloads
+            else self.configuration_identity
+        )
 
     def budget_for(self, stage):
         from .context_budget import RequestBudget
 
         if self._budget is None:
-            if self.request_format == "lamina-chat-1" and self.env.get(
-                "LAMINA_CONTEXT_TOKENS"
-            ):
+            needs_token_counter = bool(self.env.get("LAMINA_CONTEXT_TOKENS")) or any(
+                profile.max_input_tokens is not None
+                for profile in self.workloads.values()
+            )
+            if self.request_format == "lamina-chat-1" and needs_token_counter:
                 from .chat_protocol import chat_token_count
                 import tiktoken
 
+                if not self.env.get("LAMINA_TOKENIZER"):
+                    raise ValueError(
+                        "token limits require an explicit LAMINA_TOKENIZER"
+                    )
                 encoding = tiktoken.get_encoding(self.env["LAMINA_TOKENIZER"])
+                context_tokens = self.env.get("LAMINA_CONTEXT_TOKENS")
                 self._budget = RequestBudget(
                     max_request_bytes=self.max_request_bytes,
-                    context_tokens=int(self.env["LAMINA_CONTEXT_TOKENS"]),
-                    output_tokens=int(self.env.get("LAMINA_MAX_OUTPUT_TOKENS", "8192")),
+                    context_tokens=int(context_tokens) if context_tokens else None,
+                    output_tokens=(
+                        int(self.env.get("LAMINA_MAX_OUTPUT_TOKENS", "8192"))
+                        if context_tokens
+                        else 0
+                    ),
                     count_tokens=lambda request: chat_token_count(request, encoding),
                     counting="adapter-tokenizer-with-framing-reserve",
                 )
             else:
                 self._budget = RequestBudget(max_request_bytes=self.max_request_bytes)
-        return self._budget
+        profile = self.workloads.get(stage, self.workloads.get("*"))
+        if profile is None:
+            return self._budget
+        if profile.stage == "*":
+            profile = replace(profile, stage=stage)
+        if stage not in self._stage_budgets:
+            self._stage_budgets[stage] = replace(self._budget, workload=profile)
+        return self._stage_budgets[stage]
+
+    def configuration_identity_for(self, stage):
+        return self.configuration_identity
+
+    def identity_for(self, stage):
+        """Changing another stage's workload leaves this stage's cache reusable."""
+        profile = self.workloads.get(stage, self.workloads.get("*"))
+        if profile is not None and profile.stage == "*":
+            profile = replace(profile, stage=stage)
+        prefix = self.identity.split(":", 1)[0]
+        if profile is None:
+            return prefix + ":" + self.configuration_identity.split(":", 1)[1]
+        token = json.dumps([self.configuration_identity, profile.identity])
+        return prefix + ":" + hashlib.sha256(token.encode()).hexdigest()[:20]
 
     def last_usage(self):
         return getattr(self._local, "usage", {})
@@ -166,20 +259,16 @@ class CommandProvider:
         if not isinstance(result, dict):
             raise ProviderError("adapter reply must be a JSON object")
         if result.get("protocol") == "lamina-error-1":
-            raise _remote_error(result.get("error", {}))
+            error = _remote_error(result.get("error", {}))
+            self._local.usage = error.usage
+            raise error
         if result.get("protocol") == "lamina-response-1":
             usage = result.get("usage", {})
             if not isinstance(usage, dict) or not isinstance(
                 result.get("result"), dict
             ):
                 raise ProviderError("response envelope needs result and usage objects")
-            self._local.usage = {
-                key: value
-                for key, value in usage.items()
-                if key in {"input_tokens", "output_tokens", "cached_input_tokens"}
-                and type(value) is int
-                and value >= 0
-            }
+            self._local.usage = _safe_usage(usage)
             if isinstance(result.get("model"), str):
                 self._local.usage["model"] = result["model"]
             return result["result"]
@@ -403,6 +492,9 @@ class PersistentCommandProvider(CommandProvider):
             remaining = max(0, self.timeout - (time.monotonic() - started))
             try:
                 result = future.result(timeout=remaining)
+            except ProviderError as exc:
+                self._local.usage = exc.usage
+                raise
             except concurrent.futures.TimeoutError as exc:
                 error = ProviderError(
                     "persistent adapter request timed out",
@@ -440,7 +532,12 @@ class StageProvider:
         )
 
     def identity_for(self, stage):
-        return self.stages.get(stage, self.default).identity
+        provider = self.stages.get(stage, self.default)
+        return getattr(provider, "identity_for", lambda _: provider.identity)(stage)
+
+    def configuration_identity_for(self, stage):
+        provider = self.stages.get(stage, self.default)
+        return getattr(provider, "configuration_identity", provider.identity)
 
     def budget_for(self, stage):
         from .context_budget import RequestBudget
@@ -497,6 +594,7 @@ def configured_provider(path):
             "env",
             "request_format",
             "transport",
+            "workload",
         }
         if not isinstance(row, dict):
             raise ValueError("invalid adapter configuration")
@@ -505,6 +603,21 @@ def configured_provider(path):
             fields |= {"max_pending", "max_response_bytes"}
         if transport not in {"command", "jsonl"} or set(row) - fields:
             raise ValueError("invalid adapter configuration")
+        row = dict(row)
+        if isinstance(row.get("workload"), dict):
+            row["workload"] = json.loads(json.dumps(row["workload"]))
+            for profile in row["workload"].values():
+                evidence = (
+                    profile.get("evidence") if isinstance(profile, dict) else None
+                )
+                if isinstance(evidence, dict) and isinstance(
+                    evidence.get("report_path"), str
+                ):
+                    location = Path(evidence["report_path"])
+                    if not location.is_absolute():
+                        evidence["report_path"] = str(
+                            Path(path).resolve().parent / location
+                        )
         factory = PersistentCommandProvider if transport == "jsonl" else CommandProvider
         return factory(
             **{key: value for key, value in row.items() if key != "transport"}

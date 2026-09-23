@@ -189,6 +189,35 @@ def _windows(units: list[dict], core_words: int, halo_units: int) -> list[dict]:
 from .call_runtime import CallTracker as _Tracker
 
 
+def _require_workload(provider, stage, options, items):
+    """Require an explicit policy before combining independent work items."""
+    from .source_reading import request_budget
+
+    budget = request_budget(provider, stage, options)
+    if (items is None or items > 1) and budget.workload is None:
+        raise ProductionError(
+            f"{stage} combines independent items and needs an explicit workload profile. "
+            "Configure workload.max_items or workload.max_input_tokens for this stage; "
+            "choose the limit from your task evaluation. Context capacity alone does "
+            "not establish a suitable workload."
+        )
+    return budget
+
+
+def _section_items(section):
+    return len(section.get("unit_ids", section["idea_ids"]))
+
+
+def _section_scope(section, data, units):
+    """Unprofiled eligibility includes visible context, beyond owned work."""
+    return max(
+        _section_items(section),
+        len(units)
+        + len(data.get("form_exemplars", []))
+        + len(data.get("experience", [])),
+    )
+
+
 def _plan_identity(plan: dict) -> str:
     """Exclude observed timings/cache receipts from the semantic plan identity."""
     keys = (
@@ -196,6 +225,7 @@ def _plan_identity(plan: dict) -> str:
         "revision",
         "brief",
         "options",
+        "quality",
         "provider_identity",
         "sources",
         "factual_source_ids",
@@ -219,6 +249,15 @@ def _read_and_plan(
 ):
     from .source_reading import read_sources
 
+    # Validate the downstream policy before paying to read a corpus.
+    for stage in (
+        "production_route",
+        "production_write",
+        "production_review",
+        "production_repair",
+    ):
+        _require_workload(provider, stage, opts, None)
+
     legacy = (
         _windows(units, opts["core_words"], opts["halo_units"])
         if opts["core_words"] is not None
@@ -235,6 +274,9 @@ def _read_and_plan(
     from .production_contract import ProductionValidationError
 
     def invoke(stage, item, instruction, shape, data, checker):
+        items = len(data.get("cards", data.get("ideas", [])))
+        _require_workload(provider, stage, opts, items)
+
         def check(raw):
             try:
                 return validated(checker, raw)
@@ -251,11 +293,13 @@ def _read_and_plan(
             data,
             check,
             request_limit(opts),
+            workload_items=items,
         )
 
     def fits(stage, instruction, shape, data):
-        return request_budget(provider, stage, opts).fits(
-            envelope(stage, instruction, shape, data)
+        items = len(data.get("cards", data.get("ideas", [])))
+        return _require_workload(provider, stage, opts, items).fits(
+            envelope(stage, instruction, shape, data, workload_items=items)
         )
 
     shared = {
@@ -390,7 +434,7 @@ def plan_production(
         decision = {
             "requested": "auto",
             "selected": selected_workflow,
-            "basis": "writing and review request capacity",
+            "basis": "declared workload limits and complete request capacity",
             "capacity": capacity,
             "retrieval_targets_require_planning": opts["retrieval_targets"],
         }
@@ -424,6 +468,16 @@ def plan_production(
         "schema_version": "1.0",
         "revision": REVISION,
         "workflow_decision": decision,
+        "quality": {
+            "semantic_recall": "unmeasured",
+            "reading": opts["reading"],
+            "reusable_extraction": (
+                "explicit opt-in; recall unmeasured"
+                if opts["reading"] == "reusable"
+                else "disabled"
+            ),
+            "scope": "Workload limits bound requests. Valid references and assignment accounting do not prove factual completeness.",
+        },
         "planning": planning_report,
         "brief": task,
         "options": opts,
@@ -713,13 +767,17 @@ def _section_capacity(plan, section, provider, options, context=None):
 
     instruction, shape, data, units = _write_request(plan, section, context)
     bound, _, _ = bind_context(data, units)
+    items = _section_items(section)
     requests = {
-        "production_write": envelope("production_write", instruction, shape, bound),
+        "production_write": envelope(
+            "production_write", instruction, shape, bound, workload_items=items
+        ),
         "production_review": envelope(
             "production_review",
             _REVIEW_INSTRUCTION + _FORM[options["format"]],
             _SHAPES["production_review"],
             {**bound, "draft": {}},
+            workload_items=items,
         ),
         "production_repair": envelope(
             "production_repair",
@@ -732,11 +790,14 @@ def _section_capacity(plan, section, provider, options, context=None):
                 "findings": [],
                 "scope": "Repair only this section's concrete findings; preserve supported work.",
             },
+            workload_items=items,
         ),
     }
     checks = {}
     for stage, request in requests.items():
-        budget = request_budget(provider, stage, options)
+        budget = _require_workload(
+            provider, stage, options, _section_scope(section, data, units)
+        )
         measured = budget.measure(request)
         checks[stage] = {**measured.__dict__, "fits": budget.accepts(measured)}
     return {
@@ -820,6 +881,12 @@ def run_production(
     }
     context_index = _context_index(plan)
     contexts = {s["id"]: _section_context(plan, s, context_index) for s in sections}
+    for section in sections:
+        data, units = contexts[section["id"]]
+        for stage in ("production_write", "production_review", "production_repair"):
+            _require_workload(
+                provider, stage, opts, _section_scope(section, data, units)
+            )
 
     def section_call(stage, section, instruction, shape, data, units, checker):
         from .context_binding import bind_context, restore_references
@@ -835,6 +902,7 @@ def run_production(
             bound,
             lambda raw: checker(raw, bound["section"], bound_units),
             request_limit(opts),
+            workload_items=_section_items(section),
         )
         return restore_references(result, reverse)
 
@@ -995,6 +1063,8 @@ def run_production(
         from .source_reading import request_budget, envelope
 
         def consistency_call(stage, item, instruction, shape, data, checker):
+            items = len(data["sections"])
+            _require_workload(provider, stage, opts, items)
             return tracker.call(
                 workspace,
                 provider,
@@ -1005,11 +1075,13 @@ def run_production(
                 data,
                 lambda raw: validated(checker, raw),
                 request_limit(opts),
+                workload_items=items,
             )
 
         def consistency_fits(stage, instruction, shape, data):
-            return request_budget(provider, stage, opts).fits(
-                envelope(stage, instruction, shape, data)
+            items = len(data["sections"])
+            return _require_workload(provider, stage, opts, items).fits(
+                envelope(stage, instruction, shape, data, workload_items=items)
             )
 
         document_checks = check_document_sections(
@@ -1044,6 +1116,7 @@ def run_production(
             else "ready"
         ),
         "document_checks": document_checks,
+        "quality": plan["quality"],
         "format": opts["format"],
         "title": output_route["title"],
         "markdown": markdown,

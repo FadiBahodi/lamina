@@ -8,6 +8,7 @@ import pytest
 
 from lamina.production import plan_production, run_production
 from lamina.retrieval_targets import RetrievalTargetError, validate_retrieval_targets
+from lamina.production_example import fixture_request_budget
 from lamina.store import Workspace
 
 TEXTS = [
@@ -118,6 +119,9 @@ class RetrievalFixture:
     def __init__(self, omit_recovery=False):
         self.requests = []
         self.omit_recovery = omit_recovery
+
+    def budget_for(self, stage):
+        return fixture_request_budget(stage, max_items=16)
 
     def call(self, stage, request):
         self.requests.append((stage, request))

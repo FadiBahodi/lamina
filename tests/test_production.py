@@ -11,6 +11,7 @@ from lamina.production import (
     plan_production,
     run_production,
 )
+from lamina.production_example import fixture_request_budget
 from lamina.store import Workspace
 
 
@@ -64,6 +65,11 @@ class FixtureProvider:
         self.requests = []
         self.lock = threading.Lock()
 
+    def budget_for(self, stage):
+        # Deliberately nonbinding for these finite fixtures: individual tests
+        # isolate byte budgets, scheduling and retries, not model quality.
+        return fixture_request_budget(stage, max_items=1024)
+
     def call(self, stage, payload):
         assert payload["protocol"] == "lamina-stage-1"
         assert payload["stage"] == stage
@@ -74,7 +80,7 @@ class FixtureProvider:
         data = payload["input"]
         if stage == "production_read":
             core = data["core"]
-            return {
+            response = {
                 "ideas": [
                     {
                         "title": unit["heading"],
@@ -94,6 +100,14 @@ class FixtureProvider:
                     for unit in core
                 ]
             }
+            if "repair" in data:
+                return {
+                    "replacements": [
+                        {"index": row["index"], "idea": response["ideas"][row["index"]]}
+                        for row in data["repair"]["invalid_ideas"]
+                    ]
+                }
+            return response
         if stage == "production_route":
             ideas = data["ideas"]
             return {

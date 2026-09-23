@@ -41,17 +41,17 @@
   function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=value===null?"":String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
   const workflowLabel = make("label", "pb-worker"); workflowLabel.append(make("span", "", "Workflow"));
   const workflow = make("select"); workflow.setAttribute("aria-label", "Workflow");
-  [["auto","Automatic: use the adapter budget"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
+  [["auto","Automatic: use declared workload limits"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
   workflowLabel.append(workflow); contextFields.append(workflowLabel);
   const totalWorkers = numericField("Maximum simultaneous model calls", 8, 1, 128);
   const totalWorkerField = totalWorkers.parentElement; totalWorkerField.remove();
   const readingLabel = make("label", "pb-worker"); readingLabel.append(make("span", "", "Source reading"));
   const reading = make("select"); reading.setAttribute("aria-label", "Source reading");
-  [["reusable","Reuse reading across project goals"],["task","Read for this project only"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
+  [["task","Read for this project"],["reusable","Reuse inventory across goals (check coverage)"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
   readingLabel.append(reading);contextFields.append(readingLabel);
   const maxAttempts = numericField("Attempts per model request", 2, 1, 5);
   const coreWords = numericField("Optional fixed reading target (words)", null, 100, 2000);
-  coreWords.placeholder="Fit complete source structures";
+  coreWords.placeholder="Use declared workload or one source structure";
   const haloUnits = numericField("Extra neighboring passages", 0, 0, 8);
   const maxRequest = numericField("Optional request byte ceiling", null, 4096, 2000000);
   maxRequest.placeholder="Use adapter budget";
@@ -61,7 +61,7 @@
   retrievalChoice.append(retrievalTargets,retrievalCopy);
   function updateRetrievalChoice(){retrievalChoice.hidden=!(["guide","assessment"].includes(format.value));if(retrievalChoice.hidden)retrievalTargets.checked=false;}
   format.addEventListener("change",updateRetrievalChoice);updateRetrievalChoice();
-  context.append(contextFields, capacityFields, make("p", "pb-explain", "Complete source structures use the adapter request budget. Configure its tokenizer and context limit for token checks. Reading can be reused across goals. Fixed word targets and neighboring passages are optional overrides."),retrievalChoice);
+  context.append(contextFields, capacityFields, make("p", "pb-explain", "Set task limits in the model adapter before combining source structures or ideas. The context limit only checks that a request fits. Reading is specific to this project by default. Check coverage before reusing an inventory across goals; missed facts can carry forward."),retrievalChoice);
   capacityBlock.append(capacityHead, capacityIntro, totalWorkerField, context);
   const savedNotes=make("details","pb-saved-notes");savedNotes.hidden=true;
   savedNotes.append(make("summary","","Use saved project notes"),make("p","pb-explain","Choose notes that apply to this project."));
@@ -95,7 +95,7 @@
       const value=setup.options[key];input.value=Number.isInteger(value)&&value>=1&&value<=128?String(value):"";
     }
     coreWords.value=setup.options.core_words??"";haloUnits.value=setup.options.halo_units??0;
-    maxRequest.value=setup.options.max_input_bytes??"";reading.value=setup.options.reading??"reusable";
+    maxRequest.value=setup.options.max_input_bytes??"";reading.value=setup.options.reading??"task";
     workflow.value=setup.options.workflow??"auto";maxAttempts.value=setup.options.max_attempts??2;
     totalWorkers.value=setup.options.workers??8;
     updateFormatNote();updateRetrievalChoice();retrievalTargets.checked=Boolean(setup.options.retrieval_targets)&&!retrievalChoice.hidden;

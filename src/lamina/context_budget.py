@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .store import canonical
+from .workload_profiles import WorkloadProfile
 
 
 class ContextBudgetError(ValueError):
@@ -27,6 +28,11 @@ class BudgetMeasurement:
     input_tokens: int | None
     available_input_tokens: int | None
     counting: str
+    workload_status: str = "unassessed"
+    workload_profile: str | None = None
+    workload_items: int | None = None
+    max_workload_input_tokens: int | None = None
+    max_workload_items: int | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +42,7 @@ class RequestBudget:
     output_tokens: int = 0
     count_tokens: Callable[[dict], int] | None = None
     counting: str = "bytes"
+    workload: WorkloadProfile | None = None
 
     def __post_init__(self):
         if type(self.max_request_bytes) is not int or self.max_request_bytes < 1:
@@ -55,8 +62,28 @@ class RequestBudget:
                 object.__setattr__(self, "counting", "adapter-token-counter")
         elif self.output_tokens:
             raise ValueError("output_tokens requires context_tokens")
+        if self.workload is not None:
+            if not isinstance(self.workload, WorkloadProfile):
+                raise ValueError("workload must be a WorkloadProfile")
+            if self.workload.max_input_tokens is not None and not callable(
+                self.count_tokens
+            ):
+                raise ValueError(
+                    "a workload token limit requires an adapter token counter"
+                )
+            if self.counting == "bytes" and callable(self.count_tokens):
+                object.__setattr__(self, "counting", "adapter-token-counter")
 
     def measure(self, request: dict) -> BudgetMeasurement:
+        items = request.get("workload_items")
+        if items is not None and (type(items) is not int or items < 0):
+            raise ValueError("workload_items must be a nonnegative integer")
+        if self.workload is not None:
+            if request.get("stage") != self.workload.stage:
+                raise ValueError("workload profile belongs to another stage")
+            self.workload.validate_binding(
+                protocol_revision=request.get("revision", "")
+            )
         tokens = self.count_tokens(request) if self.count_tokens is not None else None
         if tokens is not None and (type(tokens) is not int or tokens < 0):
             raise ValueError("adapter token counter must return a nonnegative integer")
@@ -69,12 +96,33 @@ class RequestBudget:
                 else None
             ),
             counting=self.counting,
+            workload_status=self.workload.basis if self.workload else "unassessed",
+            workload_profile=self.workload.identity if self.workload else None,
+            workload_items=items,
+            max_workload_input_tokens=(
+                self.workload.max_input_tokens if self.workload else None
+            ),
+            max_workload_items=self.workload.max_items if self.workload else None,
         )
 
     def accepts(self, measurement: BudgetMeasurement) -> bool:
-        return measurement.request_bytes <= self.max_request_bytes and (
-            measurement.available_input_tokens is None
-            or measurement.input_tokens <= measurement.available_input_tokens
+        return (
+            measurement.request_bytes <= self.max_request_bytes
+            and (
+                measurement.available_input_tokens is None
+                or measurement.input_tokens <= measurement.available_input_tokens
+            )
+            and (
+                measurement.max_workload_input_tokens is None
+                or measurement.input_tokens <= measurement.max_workload_input_tokens
+            )
+            and (
+                measurement.max_workload_items is None
+                or (
+                    measurement.workload_items is not None
+                    and measurement.workload_items <= measurement.max_workload_items
+                )
+            )
         )
 
     def fits(self, request: dict) -> bool:
@@ -87,12 +135,33 @@ class RequestBudget:
                 f"request exceeds the transport budget: {measurement.request_bytes} "
                 f"> {self.max_request_bytes} bytes"
             )
-        if not self.accepts(measurement):
+        if (
+            measurement.available_input_tokens is not None
+            and measurement.input_tokens > measurement.available_input_tokens
+        ):
             raise ContextBudgetError(
                 f"request exceeds the model input budget: {measurement.input_tokens} "
                 f"> {measurement.available_input_tokens} tokens "
                 f"({self.output_tokens} reserved for output)"
             )
+        if (
+            measurement.max_workload_input_tokens is not None
+            and measurement.input_tokens > measurement.max_workload_input_tokens
+        ):
+            raise ContextBudgetError(
+                f"request exceeds the stage workload limit: {measurement.input_tokens} "
+                f"> {measurement.max_workload_input_tokens} rendered input tokens"
+            )
+        if measurement.max_workload_items is not None:
+            if measurement.workload_items is None:
+                raise ContextBudgetError(
+                    "stage workload limit requires a workload_items annotation"
+                )
+            if measurement.workload_items > measurement.max_workload_items:
+                raise ContextBudgetError(
+                    f"request exceeds the stage workload limit: {measurement.workload_items} "
+                    f"> {measurement.max_workload_items} items"
+                )
         return measurement
 
 

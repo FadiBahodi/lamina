@@ -143,7 +143,7 @@ def parser() -> argparse.ArgumentParser:
     produce.add_argument(
         "--workflow",
         choices=["auto", "direct", "assigned", "planned"],
-        help="auto uses direct writing when complete requests fit; planned groups source ideas",
+        help="auto uses declared workload limits; planned groups source ideas",
     )
     produce.add_argument(
         "--assignments",
@@ -159,12 +159,12 @@ def parser() -> argparse.ArgumentParser:
     produce.add_argument(
         "--core-words",
         type=int,
-        help="Optional legacy reading target; default fits complete structures to the adapter budget",
+        help="Optional legacy reading target; otherwise use declared workload limits or one source structure",
     )
     produce.add_argument(
         "--reading",
-        choices=["reusable", "task"],
-        help="Reuse source reading across goals, or read for this project's brief",
+        choices=["task", "reusable"],
+        help="Read for this brief (default); reusable shares an inventory across goals and needs coverage evaluation",
     )
     produce.add_argument(
         "--max-attempts",

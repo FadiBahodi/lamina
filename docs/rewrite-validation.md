@@ -1,40 +1,43 @@
 # Rewrite validation — 2026-09-23
 
-This review covers the production workflow from import through planning, writing, checking, revision and export. Package version: 0.9.0.
+This review covers version 0.10.0 from source import through planning, writing, checking, revision and export. Its central change separates request capacity from the amount of semantic work assigned to a call.
 
 ## Decisions
 
-- Preserve complete parser structures and explicit source ownership. Reader size follows measured requests; no default word target or neighboring-unit overlap remains. Readers can request adjacent context. Truncated outputs split at structure boundaries.
-- Reuse a source inventory across briefs. Task-specific reading remains available. Planning still considers the full inventory; retrieval-based subset selection is a separate, unimplemented optimization.
-- Plan from complete titles and explanations with evidence references. Oversized inventories use bounded grouping and original-card reassignment. Oversized writing assignments are subdivided semantically. The final outline and its source metadata still need to fit.
-- Keep model corrections bounded. Valid fragments of a failed read remain diagnostic evidence; they do not make an incomplete window successful. Independent work completes and stays cached.
-- Use exact current source revisions in receipts and local content references in reusable requests. Parser-declared companion material remains context. Changes to visible meaning, policy or declared dependencies invalidate the affected requests.
-- Reuse adapter processes and HTTP connections when configured. Preserve the command transport for existing integrations.
-- Schedule independent section chains within shared capacity. Graph depth guides general method scheduling. Neither rule establishes optimal scheduling for arbitrary model durations.
-- Keep section review and optional document relationship review explicit. Claim links resolve to exported body fields and original quotations; semantic support still requires judgment.
+- Keep hard transport, context and output limits. Apply independent stage workload limits to complete input tokens or owned objects. Every configured limit has an explicit basis; an observed policy links a digest-checked report for the matching provider and protocol. These records establish provenance. Quality thresholds require matched evaluation.
+- Read for the current brief by default. Without a reading workload policy, each call owns one parser structure. Slide companions remain together. Combining structures requires declared limits; a large indivisible structure still needs explicit decomposition or a revised policy.
+- Require policies before multi-item planning, writing and review. The writer checks all visible source units and extra exemplars or retained observations when deciding whether an unprofiled call is permissible. Planned mode checks required profiles before beginning paid source reads.
+- Give readers deterministic source-span references. Code resolves exact Unicode-character offsets to original quotations. Source text appears once in the reading request. Valid location references leave semantic support and completeness to separate evaluation.
+- Preserve accepted extraction rows during local corrections. A correction supplies replacements for invalid indices under the existing attempt allowance. Malformed envelopes can still require full replacement; unresolved material never becomes a successful cache entry.
+- Make reusable inventories explicit. Changed briefs use task-specific reading unless reuse is selected. Plans and receipts retain `semantic_recall: "unmeasured"` even when all enabled workflow checks complete.
+- Bound grouping and assignments while revisiting original idea explanations. Writers receive original passages and declared context. Exact source revision binding, independent section chains, local caching and persistent transport remain in place.
+- Evaluate complete outputs across declared experimental loads. The new harness records fragile facts by source position through extraction, assignment, initial drafts and finished bodies. It can call a configured real provider; its shipped scripted case exposes a deliberate silent omission.
 
-## Checks on the published source
+## Validation evidence
+
+The following checks ran against the frozen runtime used for the release artifacts. Remote CI results are recorded on the [pull request](https://github.com/FadiBahodi/lamina/pull/1).
 
 | Check | Result |
 | --- | --- |
-| Full Python suite | 255 tests and 21 subtests passed |
-| Connected Chromium journey | Markdown/PPTX upload, automatic route, budget controls, download, compact progress, targeted revision; no browser script errors |
-| Package | Source archive and wheel built; packaged runtime files matched the source; installed-wheel demo completed |
-| Local transport | Persistent process multiplexing, connection reuse, deadlines, restarts, structured failures and schema handling |
-| OCR | Actual OCRmyPDF/Tesseract integration on an original scanned sentence; original file bytes preserved |
-| Mixed-document fixture | Required facts preserved, held-out key excluded, warm calls eliminated, failures retained honestly |
-| Capacity stress | 80 distinct records preserved through hierarchy, subdivision, writing and review; maximum request 29,897 bytes under a 30,000-byte ceiling |
+| Full Python suite | 315 tests and 21 subtests passed |
+| Independent review | 57 focused tests passed; no unresolved blocking findings |
+| Connected browser journey | Chromium 134 / Playwright 1.51: Markdown/PPTX import, task-reading default submitted and saved, direct writing, download and targeted revision passed; no script errors |
+| Package | Version 0.10.0 source archive and wheel built; all 72 packaged runtime files matched the source byte for byte |
+| Fresh wheel installation | Imported the installed package; 14-job demo and `studio-site --pdf` completed |
+| Mixed-document matrix | 22 cases passed their assertions, including the expected persistent-reader failure |
+| Workload stress | 80 required facts preserved through 179 scripted calls; largest request 29,917 bytes under a 30,000-byte ceiling |
+| Silent-omission controls | Background loads of 6 and 20 both preserved five of six canaries and failed the required preservation threshold, as intended |
 
-Raw results and reproduction commands are in [benchmarks](benchmarks.md) and [optimization evidence](optimization-evidence.md). The mixed-document result includes a fingerprint of the exact Python implementation and confirms that it stayed unchanged during the run.
+The [adversarial scripted case](../benchmarks/results/quality-silent-omission.json) returns valid records and cites every source unit. The engine reaches `ready`, while one of six specified canaries is absent from the finished prose. The quality evaluator detects that omission and returns a failing result. This establishes that operational completion and citation coverage can coexist with a known content loss.
 
-An independent agent reviewed the code and reproduced integration defects. Fixes cover real-adapter truncation codes, adjacency after reader subdivision, scoped cross-section relationships, claim links into discarded fields, target-batch metadata size, repeated context indexing, and complete failure receipts after sibling or assessment work. Regression tests exercise those boundaries.
+The [mixed-document result](../benchmarks/results/workflow-matrix.json) records runtime fingerprint `4d535d3f60ec95dda3f8dfa4a0c3026bcab5ddb6ca150784b8591a1b56b50ef1` and confirms it stayed unchanged during the run. The mixed-document and workload stress fixtures use declared scripted policies. Their request counts, cache results and exact fixture outcomes describe implementation mechanics. See [benchmarks](benchmarks.md), [optimization evidence](optimization-evidence.md) and the [quality evaluation protocol](quality-evaluation.md) for reproduction and scope.
 
-## Remaining evaluation and capacity limits
+## Remaining evaluation and limits
 
-No live model comparison was run. Scripted replies establish information flow and exact fixture outcomes; synthetic waits establish timing only for their declared service distributions. They do not rank model quality, OCR engines or educational usefulness.
+No live model workload curve, recall estimate, billing comparison or latency comparison was measured. Operator-selected limits remain provisional. A linked observation report identifies what ran; it does not certify performance on unfamiliar sources. The quality harness checks declared lexical controls and known counterfacts, so representative human review remains necessary.
 
-Writing preflight measures the complete writing request and review/repair source context. Future drafts and findings are unknown. Actual requests are checked again; an oversized review keeps the draft and reports an unperformed check. A model profile is required to measure tokens; a generic byte guard cannot establish model fit.
+A structural reading fallback can still be difficult for the selected model. Well-formed replies can omit facts without truncating. No universal density trigger, output-occupancy threshold, repeated-read rate or capture–recapture certificate is inferred.
 
-The shared outline retains a global capacity limit. Cross-batch target reconciliation preserves existing relations but does not discover every relation between targets kept separate. Cache reuse follows declared context; it cannot discover an unstated semantic dependency. Failed HTTP responses can incur usage unavailable in the receipt.
+The shared outline and required source context must fit their configured limits. Future drafts and findings are unknown during preflight; actual requests are checked when available, and an oversized review remains explicitly unperformed. Cross-batch target reconciliation does not discover every relation between targets retained separately. Cache reuse cannot discover an undeclared semantic dependency.
 
-Automatic hedging, adaptive rate control and unconditional extra audit passes were not added. Their extra requests, cancellation behavior and quality benefit need workload-specific measurement. Interactive oral cases and listened audio verification remain outside this implementation.
+Figures, PDF reading order and OCR quality need evaluation on the actual files. This release does not compare OCR engines or repeat the earlier OCR integration measurement. Interactive oral-case delivery and listened audio verification remain outside the implementation.

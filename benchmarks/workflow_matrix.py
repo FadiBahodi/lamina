@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from lamina.ingest import ingest_paths
 from lamina.production import build_production
+from lamina.production_example import fixture_request_budget
 from lamina.store import Workspace, canonical
 
 # These are invented equipment specifications, deliberately carrying a
@@ -187,6 +188,11 @@ class ScriptedProvider:
         self.lock = threading.Lock()
         self.read_fault_seen = False
 
+    def budget_for(self, stage):
+        # This oracle is deterministic. Its finite matrix allows up to 512
+        # items per request; this is not a deployable model-quality profile.
+        return fixture_request_budget(stage, max_items=512)
+
     def call(self, stage, payload):
         start = time.monotonic()
         data = payload["input"]
@@ -203,7 +209,9 @@ class ScriptedProvider:
             median = 0.008 if stage == "production_write" else 0.004
             time.sleep(random.Random(seed).lognormvariate(0, 0.7) * median)
         try:
-            return self._response(stage, data)
+            response = self._response(stage, data)
+            record["response"] = response
+            return response
         finally:
             record["end"] = time.monotonic()
 
@@ -214,7 +222,7 @@ class ScriptedProvider:
                     self.fault == "one-invalid-quote" and not self.read_fault_seen
                 )
                 self.read_fault_seen = True
-            return {
+            response = {
                 "ideas": [
                     {
                         "title": f"[{topic_of(unit)}] "
@@ -222,16 +230,34 @@ class ScriptedProvider:
                         + "Fixture source statement",
                         "explanation": unit["text"],
                         "unit_ids": [unit["id"]],
-                        "evidence": [
+                        **(
                             {
-                                "unit_id": unit["id"],
-                                "quote": "INVENTED_SPAN" if fail else unit["text"],
+                                "evidence": [
+                                    {"unit_id": unit["id"], "quote": "INVENTED_SPAN"}
+                                ]
                             }
-                        ],
+                            if fail
+                            else {
+                                "evidence_refs": [
+                                    {
+                                        "span_id": unit["spans"][0]["id"],
+                                        "end_span_id": unit["spans"][-1]["id"],
+                                    }
+                                ]
+                            }
+                        ),
                     }
                     for unit in data["core"]
                 ]
             }
+            if "repair" in data:
+                return {
+                    "replacements": [
+                        {"index": row["index"], "idea": response["ideas"][row["index"]]}
+                        for row in data["repair"]["invalid_ideas"]
+                    ]
+                }
+            return response
         if stage == "production_route":
             groups = {}
             for idea in data["ideas"]:
@@ -398,7 +424,13 @@ def measure(
     def progress(event):
         events.append({**event, "elapsed_ms": (time.monotonic() - start) * 1000})
 
-    options = {"workflow": workflow, "workers": 4, "max_input_bytes": 120_000}
+    options = {
+        "workflow": workflow,
+        "workers": 4,
+        "max_input_bytes": 120_000,
+        # The matrix explicitly evaluates reusable-reading cache mechanics.
+        "reading": "reusable",
+    }
     options.update(extra_options or {})
     if workflow == "assigned":
         options["assignments"] = assignments(workspace.units("teaching", source_ids))
@@ -440,8 +472,13 @@ def measure(
         tokens = sum(
             len(encoding.encode(canonical(row["payload"]))) for row in requests
         )
+        output_tokens = sum(
+            len(encoding.encode(canonical(row["response"])))
+            for row in requests
+            if "response" in row
+        )
     except ImportError:
-        tokens = None
+        tokens = output_tokens = None
     completed_drafts = [
         e["elapsed_ms"]
         for e in events
@@ -468,6 +505,14 @@ def measure(
     )
     result = {
         "status": receipt["status"] if receipt else "failed",
+        "reading_policy": options["reading"],
+        "fixture_workload": {
+            "basis": "configured",
+            "max_items_per_stage": provider.budget_for(
+                "production_read"
+            ).workload.max_items,
+            "purpose": "Finite scripted oracle; no model-quality evidence",
+        },
         "error": error,
         "calls": len(requests),
         "calls_by_stage": counts,
@@ -476,6 +521,12 @@ def measure(
         "request_bytes": sum(sizes),
         "largest_request_bytes": max(sizes, default=0),
         "reference_input_tokens_cl100k_base": tokens,
+        "reference_output_tokens_cl100k_base": output_tokens,
+        "response_bytes": sum(
+            len(canonical(row["response"]).encode())
+            for row in requests
+            if "response" in row
+        ),
         "provider_reported_usage": None,
         "synthetic_end_to_end_ms": round(elapsed, 3),
         "first_draft_completed_ms": (
@@ -596,6 +647,25 @@ def run_matrix(folder):
                     workflow,
                     extra_options={"format": fmt},
                 )
+    task_workspace = Workspace(folder / "task-reading")
+    ingest_paths(corpus["sources"], task_workspace)
+    task_source_ids = [row["id"] for row in task_workspace.sources()]
+    task_provider = ScriptedProvider()
+    cases["planned/task-reading-cold"] = measure(
+        task_workspace,
+        task_provider,
+        task_source_ids,
+        "planned",
+        extra_options={"reading": "task"},
+    )
+    cases["planned/task-reading-new-brief"] = measure(
+        task_workspace,
+        task_provider,
+        task_source_ids,
+        "planned",
+        brief="Create a concise reference preserving every fixture fact and qualification.",
+        extra_options={"reading": "task"},
+    )
     for fault in ("one-invalid-quote", "persistent-invalid-quote"):
         workspace = Workspace(folder / fault)
         ingest_paths(corpus["sources"], workspace)

@@ -60,14 +60,20 @@ def main():
                 )
                 assert (
                     page.get_by_placeholder(
-                        "Fit complete source structures"
+                        "Use declared workload or one source structure"
                     ).input_value()
                     == ""
                 )
                 assert page.get_by_placeholder("Use adapter budget").input_value() == ""
                 assert (
                     page.get_by_label("Source reading", exact=True).input_value()
-                    == "reusable"
+                    == "task"
+                )
+                assert (
+                    page.get_by_label("Source reading", exact=True)
+                    .locator("option:checked")
+                    .text_content()
+                    == "Read for this project"
                 )
                 page.get_by_role("button", name="Start project", exact=True).click()
                 page.get_by_role("link", name="Download text", exact=True).wait_for(
@@ -85,15 +91,13 @@ def main():
                 assert "plan" not in progress and "receipt" not in progress
                 result = page.request.get(origin + f"/api/runs/{rid}").json()
                 assert result["plan"]["options"]["workflow"] == "direct"
+                assert result["plan"]["options"]["reading"] == "task"
                 submitted = project_requests[0]["options"]
                 assert (
                     "core_words" not in submitted and "max_input_bytes" not in submitted
                 )
                 assert "max_request_bytes" not in submitted
-                assert (
-                    submitted["reading"] == "reusable"
-                    and submitted["max_attempts"] == 2
-                )
+                assert submitted["reading"] == "task" and submitted["max_attempts"] == 2
                 assert len(result["receipt"]["metrics"]["requests"]) == 2
                 page.get_by_label("Requested section change").fill(
                     "Clarify the energy transfer."
@@ -113,8 +117,9 @@ def main():
                             "checks": [
                                 "Markdown and PowerPoint upload",
                                 "automatic direct writing",
-                                "model-budget defaults without legacy overrides",
-                                "reusable reading and bounded-attempt controls",
+                                "explicit workload defaults without legacy overrides",
+                                "task-specific reading default in control and request",
+                                "bounded-attempt control",
                                 "download source-backed text",
                                 "compact progress",
                                 "targeted revision",

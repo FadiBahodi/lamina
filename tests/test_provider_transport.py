@@ -220,6 +220,27 @@ def test_http_service_reuses_keepalive_connection_and_reports_usage(endpoint):
     assert all("response_format" not in body for body in seen)
 
 
+@pytest.mark.parametrize("persistent", [False, True])
+def test_truncated_output_retains_actual_usage_on_both_transports(endpoint, persistent):
+    settings, _, _ = endpoint
+    adapter = SERVICE if persistent else SERVICE.with_name("http_chat.py")
+    factory = PersistentCommandProvider if persistent else CommandProvider
+    with factory([sys.executable, str(adapter)], env=settings, timeout=10) as provider:
+        with pytest.raises(ProviderError) as failure:
+            provider.call("test", request("truncate"))
+        assert failure.value.code == "output_truncated"
+        assert (
+            failure.value.usage
+            == provider.last_usage()
+            == {
+                "input_tokens": 10,
+                "output_tokens": 4,
+                "cached_input_tokens": 7,
+                "model": "local-test",
+            }
+        )
+
+
 def test_structured_decoding_requires_explicit_schema_and_endpoint_capability(endpoint):
     pytest.importorskip("jsonschema")
     settings, seen, _ = endpoint

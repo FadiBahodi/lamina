@@ -31,14 +31,16 @@ It cannot establish how a real model interprets unfamiliar documents.
 | --- | --- |
 | Direct, planned and supplied assignments | Can each route preserve the same required fixture facts? |
 | Identical rerun | Which exact requests are reused? |
-| Changed brief | Which source interpretation can be reused across products? |
+| Changed brief with reusable reading | Which source interpretation can be reused across products? |
+| Changed brief with task-specific reading | Does a new goal trigger fresh source interpretation? |
 | One edited PDF page | How far does an edit invalidate reading and writing? |
 | One invalid reader quote | Does bounded feedback repair recover the individual call? |
 | Persistently invalid reader quotes | Does the engine preserve an honest failure state? |
 | Deliberately unqualified draft | Does the review/repair boundary restore the known exception? |
 
-The report contains request counts by stage, transmitted bytes, a reference
-token count, cold and warm times, first draft, first review, and first terminal
+The report contains request counts by stage, request and response bytes,
+reference input and output token counts, cold and warm times, first draft,
+first review, and first terminal
 section review. A terminal review may still contain unresolved findings. The
 request delays follow a seeded lognormal distribution with four available
 workers; their values describe the fixture. They are separate from live model
@@ -56,7 +58,7 @@ restored the deliberately removed exception, and excluded the held-out key.
 | --- | ---: | ---: | ---: |
 | Cold run, including a repair and recheck | 4 | 21 | 12 |
 | Identical rerun | 0 | 0 | 0 |
-| Changed brief | 4 | 13 | 12 |
+| Changed brief, reusable reading | 4 | 13 | 12 |
 | One edited PDF page | 4 | 4 | 2 |
 
 Supplied assignments are prepared by the fixture. Their creation cost is
@@ -65,21 +67,30 @@ unless those assignments already exist. The outputs preserve the same required
 facts with different section structures. This comparison does not establish
 equal prose quality.
 
-The planned route reused all eight source reads after the brief changed. A
-single malformed quote required one extra reader call and recovered. Persistently
-invalid quotes exhausted two attempts per reader and left the plan failed;
-invalid material was never counted as completed work.
+These comparison cases explicitly select reusable reading. The planned route
+reused all eight source reads after the brief changed. A separate task-specific
+case uses the current default: both its original run and changed-brief run make
+21 calls, including eight fresh reads. Reuse saves repeated work while retaining
+the original inventory's interpretation and any omissions.
+
+The fixture declares a configured workload ceiling of 512 items per stage for
+its finite scripted responses. This ceiling is an explicit test setting, not an
+observed operating policy for a real model. Normal reader responses cite indexed
+source spans. The invalid-quote cases exercise the compatibility validator and
+correction path. A single malformed reply required one extra reader call and
+recovered. Persistently invalid quotes exhausted two attempts per reader and left
+the plan failed; invalid material was never counted as completed work.
 
 A separate stress fixture required eighty distinct apparatus records under a
 30,000-byte request ceiling. Hierarchical planning and writer subdivision
-completed with 179 calls, a largest request of 29,897 bytes, and all eighty
+completed with 179 calls, a largest request of 29,917 bytes, and all eighty
 required facts present. The fixture assigns one record per final section; that
 section count is its scripted choice. Dense Unicode cases preserved four exact
 multilingual and notation examples. Assessment and podcast-script cases retained
 the required answer/script content; the assessment solver received no source
 fact markers or examiner text.
 
-Recorded cold elapsed times were 50.5 ms direct, 95.7 ms planned and 40.7 ms
+Recorded cold elapsed times were 48.7 ms direct, 126.0 ms planned and 52.3 ms
 with supplied assignments. The synthetic provider delays are only milliseconds,
 so local database and interpreter work also contribute materially. These values
 must not be extrapolated into live model speedups. Actual provider usage and
@@ -87,6 +98,15 @@ prices remain unmeasured. An explicit continuity review added five relationship
 calls after cached section work on this fixture.
 
 ## Verification has distinct duties
+
+The separate [preservation experiment](quality-evaluation.md) includes a scripted
+silent omission that passes the engine's structural checks. Every source unit is
+cited, the reviewer returns no finding, and the engine finishes with `ready`;
+the independent lexical oracle catches a lost negation in extracted explanations
+and finished prose. Five of six canaries survive at each tested load. The
+[recorded result](../benchmarks/results/quality-silent-omission.json) demonstrates
+why a receipt or full unit citation count cannot establish semantic completeness.
+
 
 | Check | What it establishes | What still needs judgment |
 | --- | --- | --- |

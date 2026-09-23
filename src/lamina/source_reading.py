@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-from .context_budget import RequestBudget, pack_units, OversizedUnit
+import copy
+from .context_budget import pack_units, OversizedUnit
 from .execution import bounded_collect
 from .production_contract import (
     REVISION,
@@ -15,17 +15,19 @@ from .production_contract import (
     validated,
 )
 from .store import digest
+from .evidence import ValidationFailure
+from .source_spans import source_spans
 
 TASK_INSTRUCTION = (
     "Read the owned source structures completely. Select distinct useful ideas for the brief. "
     "Preserve qualifications, numbers, exceptions, disagreements and uncertainty. Each idea "
-    "needs exact evidence from owned core units. Neighboring material only explains context. "
+    "needs source references from owned core units. Neighboring material only explains context. "
     "Respect source policies: historical claims remain historical; supplements do not silently override authority. "
 )
 COMPILE_INSTRUCTION = (
     "Compile a reusable inventory of the source's substantive claims, relationships and procedures. "
     "Preserve conditions, exceptions, quantities, uncertainty, conflicts, table associations and sequences. "
-    "Keep claims from the source distinct from your interpretation. Each idea needs exact quotes from "
+    "Keep claims from the source distinct from your interpretation. Each idea needs source references from "
     "owned core units. Do not select for a particular audience or future output format. "
     "This inventory remains an interpretation; the original source will accompany later writing. "
 )
@@ -34,18 +36,23 @@ CONTEXT_INSTRUCTION = (
     "{context_request:{direction:'before'|'after',reason:'specific missing dependency'}}. "
     "Request this only when additional adjacent source text is necessary, and never fabricate it."
 )
+REFERENCE_INSTRUCTION = (
+    "Cite evidence_refs using each unit's ordered spans: span_id and, for a contiguous "
+    "range within that unit, end_span_id. Spans address paragraphs or intact structural blocks; "
+    "their Unicode-character offsets identify exact positions in the unchanged text. "
+    "Keep complete qualifying conditions, table associations and exceptions in the cited range. "
+    "An optional phrase must be an exact unique substring within that range. "
+    "Code materializes the original quotations; do not copy them into your response. "
+)
 
 
-from .call_runtime import make_envelope as envelope
+from .call_runtime import make_envelope as envelope, request_budget as _request_budget
 
 
 def request_budget(provider, stage, options):
     cap = options.get("max_input_bytes") or options["max_request_bytes"]
     cap = min(cap, options["max_request_bytes"])
-    budget = getattr(provider, "budget_for", lambda _: None)(stage)
-    if budget is None:
-        return RequestBudget(cap)
-    return replace(budget, max_request_bytes=min(cap, budget.max_request_bytes))
+    return _request_budget(provider, stage, cap)
 
 
 def reader_input(window, source, task, options):
@@ -58,14 +65,17 @@ def reader_input(window, source, task, options):
     )
 
     def local(rows):
-        if aliases is None:
-            return rows
         return [
             {
-                "id": aliases[u["id"]],
+                "id": aliases[u["id"]] if aliases else u["id"],
                 "heading": u["heading"],
                 "text": u["text"],
                 "role": u["role"],
+                "spans": source_spans(
+                    aliases[u["id"]] if aliases else u["id"],
+                    u["text"],
+                    u.get("kind"),
+                ),
                 **{
                     k: u[k]
                     for k in ("heading_path", "kind", "reference_context")
@@ -98,13 +108,111 @@ def reader_input(window, source, task, options):
     return data, aliases
 
 
+class ReaderReplyValidator:
+    """Retain valid rows and correct only the invalid indexes in this read.
+
+    The runtime owns the bounded attempts and cache lease. This validator owns
+    the row merge. Accepted rows cannot disappear or change during a repair.
+    """
+
+    def __init__(self, checker):
+        self.checker = checker
+        self.rows = None
+        self.pending = None
+        self.partial = None
+
+    def __call__(self, raw):
+        if self.pending is not None:
+            replacements = raw.get("replacements") if isinstance(raw, dict) else None
+            if not isinstance(replacements, list):
+                self._bad_delta(
+                    "reader repair must return replacements for invalid indexes"
+                )
+            indexes = [
+                row.get("index") if isinstance(row, dict) else None
+                for row in replacements
+            ]
+            if (
+                any(type(index) is not int for index in indexes)
+                or len(indexes) != len(set(indexes))
+                or set(indexes) != set(self.pending)
+                or any(set(row) != {"index", "idea"} for row in replacements)
+            ):
+                self._bad_delta(
+                    "reader repair must replace each requested invalid index exactly once"
+                )
+            rows = copy.deepcopy(self.rows)
+            for row in replacements:
+                rows[row["index"]] = row["idea"]
+            raw = {"ideas": rows}
+        try:
+            return self.checker(raw)
+        except ValidationFailure as exc:
+            partial = exc.partial
+            if (
+                isinstance(partial, dict)
+                and isinstance(partial.get("invalid_ideas"), list)
+                and isinstance(raw, dict)
+                and isinstance(raw.get("ideas"), list)
+            ):
+                self.rows = copy.deepcopy(raw["ideas"])
+                self.pending = [row["index"] for row in partial["invalid_ideas"]]
+                self.partial = copy.deepcopy(partial)
+            raise
+
+    def _bad_delta(self, message):
+        raise ProductionValidationError(
+            message,
+            code="invalid_reader_delta",
+            path="replacements",
+            partial=self.partial,
+        )
+
+    def repair_request(self, original, failure):
+        feedback = failure.feedback()
+        if self.pending is None:
+            return {**original, "validation_feedback": feedback}
+        errors = {row["index"]: row for row in self.partial["invalid_ideas"]}
+        return {
+            **original,
+            "expected_shape": {
+                "replacements": [
+                    {
+                        "index": "requested integer index",
+                        "idea": _SHAPES["production_read"]["ideas"][0],
+                    }
+                ]
+            },
+            "input": {
+                **original["input"],
+                "repair": {
+                    "invalid_ideas": [
+                        {
+                            "index": index,
+                            "idea": self.rows[index],
+                            "error": errors[index]["message"],
+                        }
+                        for index in self.pending
+                    ],
+                    "preserved_idea_count": len(self.rows) - len(self.pending),
+                },
+            },
+            "validation_feedback": {
+                **feedback,
+                "instruction": "Return replacements only for the supplied invalid indexes. Preserve each row's intended meaning and fix the reported defect. Accepted rows are retained by the engine and must not be repeated, changed, or deleted.",
+            },
+        }
+
+
 def read_sources(
     workspace, provider, task, options, sources, units, tracker, legacy_windows=None
 ):
     stage = "production_read"
     instruction = (
-        COMPILE_INSTRUCTION if options["reading"] == "reusable" else TASK_INSTRUCTION
-    ) + CONTEXT_INSTRUCTION
+        (COMPILE_INSTRUCTION if options["reading"] == "reusable" else TASK_INSTRUCTION)
+        + REFERENCE_INSTRUCTION
+        + CONTEXT_INSTRUCTION
+    )
     budget = request_budget(provider, stage, options)
     source_map = {s["id"]: s for s in sources}
 
@@ -124,12 +232,48 @@ def read_sources(
             data, _ = reader_input(
                 window(core), source_map[core[0]["source_id"]], task, options
             )
-        return envelope(stage, instruction, _SHAPES[stage], data)
+        return envelope(
+            stage,
+            instruction,
+            _SHAPES[stage],
+            data,
+            workload_items=sum(
+                len(source_spans(u["id"], u["text"], u.get("kind"))) for u in core
+            ),
+        )
 
     if legacy_windows is not None:
         windows = legacy_windows
-    else:
+    elif getattr(budget, "workload", None) is not None:
         windows = [window(batch.units) for batch in pack_units(units, request, budget)]
+    else:
+        # With no evaluated task profile, use the parser's existing work unit.
+        # The model's context limit only checks whether that unit can fit.
+        groups, seen_groups = [], set()
+        for unit in units:
+            if (
+                groups
+                and unit.get("structural_group")
+                and unit["source_id"] == groups[-1][0]["source_id"]
+                and unit["structural_group"] == groups[-1][0].get("structural_group")
+            ):
+                groups[-1].append(unit)
+            else:
+                if unit.get("structural_group"):
+                    key = (unit["source_id"], unit["structural_group"])
+                    if key in seen_groups:
+                        raise ValueError(
+                            f"structural group {key[1]!r} is not contiguous"
+                        )
+                    seen_groups.add(key)
+                groups.append([unit])
+        windows = []
+        for group in groups:
+            # Reuse the packer's exact budget/oversize diagnostics, while the
+            # grouping above prevents filling capacity with unrelated blocks.
+            windows.extend(
+                window(batch.units) for batch in pack_units(group, request, budget)
+            )
     by_source, positions = {}, {}
     for unit in units:
         local = by_source.setdefault(unit["source_id"], [])
@@ -163,6 +307,8 @@ def read_sources(
                     return {"context_request": row}
                 return validated(_read_check, raw, data["core"], data["window_id"])
 
+            validator = ReaderReplyValidator(check)
+            work_items = sum(len(u["spans"]) for u in data["core"])
             try:
                 reply = tracker.call(
                     workspace,
@@ -172,8 +318,10 @@ def read_sources(
                     instruction,
                     _SHAPES[stage],
                     data,
-                    check,
+                    validator,
                     budget.max_request_bytes,
+                    repair_request=validator.repair_request,
+                    workload_items=work_items,
                 )
                 if "ideas" in reply:
                     result = reply["ideas"]
@@ -290,7 +438,9 @@ def read_sources(
             **{k: [u["id"] for u in current[k]] for k in ("core", "before", "after")},
             "context_requests": extensions,
             "budget": budget.measure(
-                envelope(stage, instruction, _SHAPES[stage], data)
+                envelope(
+                    stage, instruction, _SHAPES[stage], data, workload_items=work_items
+                )
             ).__dict__,
         }
         return [saved], result

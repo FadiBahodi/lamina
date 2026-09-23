@@ -81,25 +81,3 @@ def source_route(task, units, options):
         section["unit_ids"] = section["idea_ids"]
         section["context_unit_ids"] = context[section["id"]]
     return refs, route
-
-
-def choose_workflow(options, units, task, sources, exemplars):
-    """Auto chooses direct only for a small complete input; never truncate."""
-    if options["workflow"] != "auto":
-        return options
-    size = len(
-        canonical(
-            {
-                "units": units,
-                "brief": task,
-                "sources": sources,
-                "form_exemplars": exemplars,
-            }
-        ).encode()
-    )
-    # Reserve space for the request contract and, in review, the finished draft.
-    # This is a transport threshold, not a prediction of semantic difficulty.
-    direct = not options["retrieval_targets"] and size <= min(
-        24_000, options["max_input_bytes"] // 3
-    )
-    return {**options, "workflow": "direct" if direct else "planned"}

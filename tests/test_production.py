@@ -119,7 +119,9 @@ class FixtureProvider:
                 "shared_context": [
                     {
                         "statement": "Expiry alone does not stop stale workers.",
-                        "evidence": [ideas[1]["evidence"][0]],
+                        "evidence_refs": [
+                            {"idea_id": ideas[1]["id"], "evidence_index": 0}
+                        ],
                     }
                 ],
             }
@@ -218,10 +220,12 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
         },
     )
     plan = receipt["plan"]
+    units = {unit["id"]: unit for unit in plan["units"]}
     assert len(plan["windows"]) == 4
-    assert plan["windows"][0]["after"][0]["text"].startswith("The old worker")
-    assert len(plan["windows"][0]["after"][0]["text"]) > 450
-    assert plan["windows"][1]["before"][0]["id"] == "u1"
+    adjacent = units[plan["windows"][0]["after"][0]]
+    assert adjacent["text"].startswith("The old worker")
+    assert len(adjacent["text"]) > 450
+    assert plan["windows"][1]["before"] == ["u1"]
     assert not plan["windows"][1]["after"]  # no cross-source halo
     assert plan["metrics"]["peak_provider_calls"]["production_read"] > 1
     assert receipt["metrics"]["peak_provider_calls"]["production_write"] > 1
@@ -231,9 +235,17 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
     writer_inputs = [
         p["input"] for stage, p in provider.requests if stage == "production_write"
     ]
-    assert all(len(x["shared_route"]) == 4 for x in writer_inputs)
     by_section = {x["section"]["id"]: x for x in writer_inputs}
-    assert by_section["sec_2"]["earlier_evidence_units"][0]["id"] == "u1"
+    for n in range(1, 5):
+        assert {row["id"] for row in by_section[f"sec_{n}"]["shared_route"]} == {
+            f"sec_{j}" for j in (n - 1, n, n + 1) if 1 <= j <= 4
+        }
+    assert (
+        by_section["sec_2"]["earlier_evidence_units"][0]["text"] == units["u1"]["text"]
+    )
+    assert by_section["sec_2"]["earlier_evidence_units"][0]["id"] not in {
+        unit["id"] for unit in by_section["sec_2"]["assigned_units"]
+    }
     assert by_section["sec_2"]["section"]["representation"]["kind"] == "mechanism"
     review_inputs = [
         p["input"] for stage, p in provider.requests if stage == "production_review"
@@ -269,7 +281,7 @@ def test_bad_quote_fails_and_assessment_source_never_reaches_provider(tmp_path):
         ]
     )
     provider = FixtureProvider(bad_quote=True)
-    with pytest.raises(ProductionError, match="non-exact quote"):
+    with pytest.raises(ProductionError, match="quote"):
         plan_production(
             ws,
             provider,

@@ -8,17 +8,12 @@ from __future__ import annotations
 
 import copy
 import time
-import threading
-from .execution import bounded_map, section_pipeline
+from .execution import section_pipeline
 from typing import Callable
 
 from .source_policy import normalize_production_inputs
-from .store import Workspace, canonical, digest
-from .retrieval_targets import (
-    TARGET_SHAPE,
-    render_retrieval_targets,
-    validate_retrieval_targets,
-)
+from .store import Workspace, digest
+from .retrieval_targets import render_retrieval_targets
 
 from .production_contract import (
     REVISION,
@@ -35,6 +30,8 @@ from .production_contract import (
     _route_check,
     _authored_check,
     _review_check,
+    validated,
+    request_limit,
 )
 
 
@@ -66,7 +63,22 @@ def _sources(
     source_order = {sid: index for index, sid in enumerate(source_ids)}
     units = [
         {
-            **({"content_id": u["content_id"]} if "content_id" in u else {}),
+            **{
+                k: u[k]
+                for k in (
+                    "content_id",
+                    "heading_path",
+                    "section_id",
+                    "kind",
+                    "structural_group",
+                    "page",
+                    "slide",
+                    "section_index",
+                    "shape",
+                    "reference_context",
+                )
+                if k in u
+            },
             **{
                 k: u[k]
                 for k in (
@@ -174,126 +186,7 @@ def _windows(units: list[dict], core_words: int, halo_units: int) -> list[dict]:
     return windows
 
 
-class _Tracker:
-    def __init__(self, progress: Callable[[dict], None] | None):
-        self.lock = threading.Lock()
-        self.progress = progress
-        self.records: list[dict] = []
-        self.active: dict[str, int] = {}
-        self.peak: dict[str, int] = {}
-
-    def event(self, stage, item, status):
-        if self.progress:
-            self.progress({"stage": stage, "item": item, "status": status})
-
-    def call(
-        self,
-        workspace,
-        provider,
-        stage,
-        item,
-        instruction,
-        expected_shape,
-        data,
-        checker,
-        max_bytes,
-    ):
-        envelope = {
-            "protocol": "lamina-stage-1",
-            "revision": REVISION,
-            "stage": stage,
-            "instruction": _BASE + instruction,
-            "expected_shape": expected_shape,
-            "input": data,
-        }
-        size = len(canonical(envelope).encode("utf-8"))
-        if size > max_bytes:
-            raise ProductionError(
-                f"{stage} request for {item} exceeds {max_bytes} bytes; reduce the window or increase the limit"
-            )
-        invoked = False
-        usage = {}
-        self.event(stage, item, "started")
-        t0 = time.monotonic()
-
-        def handler(payload):
-            nonlocal invoked, usage
-            invoked = True
-            with self.lock:
-                n = self.active.get(stage, 0) + 1
-                self.active[stage] = n
-                self.peak[stage] = max(n, self.peak.get(stage, 0))
-            try:
-                result = provider.call(stage, payload)
-                usage = getattr(provider, "last_usage", lambda: {})()
-                return checker(result)
-            finally:
-                with self.lock:
-                    self.active[stage] -= 1
-
-        try:
-            result = workspace.run_cached(
-                stage,
-                envelope,
-                handler,
-                identity=f"{REVISION}:{getattr(provider, 'identity_for', lambda _: provider.identity)(stage)}",
-                retries=0,
-            )
-        except Exception as exc:
-            with self.lock:
-                self.records.append(
-                    {
-                        "stage": stage,
-                        "item": item,
-                        "cache": "miss" if invoked else "none",
-                        "status": "failed",
-                        "request_bytes": size,
-                        "provider_request_bytes": size if invoked else 0,
-                        "wall_ms": round((time.monotonic() - t0) * 1000, 3),
-                        "error_type": type(exc).__name__,
-                        "usage": usage,
-                    }
-                )
-            self.event(stage, item, "failed")
-            raise
-        record = {
-            "stage": stage,
-            "item": item,
-            "cache": "miss" if invoked else "hit",
-            "request_bytes": size,
-            "provider_request_bytes": size if invoked else 0,
-            "status": "completed",
-            "usage": usage if invoked else {},
-            "wall_ms": round((time.monotonic() - t0) * 1000, 3),
-        }
-        with self.lock:
-            self.records.append(record)
-        self.event(stage, item, "completed")
-        return result
-
-    def metrics(self):
-        return {
-            "requests": sorted(self.records, key=lambda r: (r["stage"], r["item"])),
-            "peak_provider_calls": dict(self.peak),
-            "context_bytes_total": sum(r["request_bytes"] for r in self.records),
-            "provider_request_bytes": sum(
-                r.get("provider_request_bytes", 0) for r in self.records
-            ),
-            "failed_requests": sum(r.get("status") == "failed" for r in self.records),
-            "usage": {
-                key: sum(r.get("usage", {}).get(key, 0) for r in self.records)
-                for key in ("input_tokens", "output_tokens", "cached_input_tokens")
-            },
-            "usage_reported_calls": sum(
-                any(
-                    k in r.get("usage", {})
-                    for k in ("input_tokens", "output_tokens", "cached_input_tokens")
-                )
-                for r in self.records
-            ),
-            "cache_hits": sum(r["cache"] == "hit" for r in self.records),
-            "cache_misses": sum(r["cache"] == "miss" for r in self.records),
-        }
+from .call_runtime import CallTracker as _Tracker
 
 
 def _plan_identity(plan: dict) -> str:
@@ -324,163 +217,124 @@ def _plan_identity(plan: dict) -> str:
 def _read_and_plan(
     workspace, provider, task, opts, selection, sources, units, form_exemplars, tracker
 ):
-    windows = _windows(units, opts["core_words"], opts["halo_units"])
-    source_map = {s["id"]: s for s in sources}
+    from .source_reading import read_sources
 
-    def read(window):
-        core = window["core"]
-        data = {
-            "brief": task,
-            "format": opts["format"],
-            "source": source_map[window["source_id"]],
-            "window_id": window["id"],
-            "core": core,
-            "before": window["before"],
-            "after": window["after"],
-            "ownership": "Extract ideas only from core. Neighbor units provide full-text boundary context; do not assign their ideas here.",
-        }
-        aliases = None
-        if all("content_id" in u for u in core):
-            # Cache the interpretation separately from this revision's locators.
-            # Exact source IDs and quotes are restored after a cache hit.
-            visible = window["before"] + core + window["after"]
-            aliases = {u["id"]: f"u{n}" for n, u in enumerate(visible)}
-            reverse = {alias: uid for uid, alias in aliases.items()}
-
-            def local(rows):
-                return [
-                    {
-                        "id": aliases[u["id"]],
-                        "heading": u["heading"],
-                        "text": u["text"],
-                        "role": u["role"],
-                    }
-                    for u in rows
-                ]
-
-            data = {
-                **data,
-                "source": {
-                    k: v for k, v in data["source"].items() if k not in {"id", "sha256"}
-                },
-                "window_id": "local",
-                "core": local(core),
-                "before": local(window["before"]),
-                "after": local(window["after"]),
-            }
-        result = tracker.call(
-            workspace,
-            provider,
-            "production_read",
-            window["id"],
-            "Read the core completely in its adjacent context. Select distinct, useful ideas for the brief. "
-            "Each idea needs exact quotes from core units. Do not force an idea from every unit. "
-            "Preserve this source's operator-assigned policy: historical material can describe a former claim "
-            "or conflict but is not automatically current authority; supplements cannot silently override authority.",
-            _SHAPES["production_read"],
-            data,
-            lambda raw: _read_check(raw, data["core"], data["window_id"]),
-            min(opts["max_request_bytes"], opts["max_input_bytes"]),
-        )["ideas"]
-        if aliases is not None:
-            result = [
-                {
-                    **idea,
-                    "id": f"{window['id']}:idea_{n}",
-                    "unit_ids": [reverse[uid] for uid in idea["unit_ids"]],
-                    "evidence": [
-                        {**e, "unit_id": reverse[e["unit_id"]]}
-                        for e in idea["evidence"]
-                    ],
-                }
-                for n, idea in enumerate(result, 1)
-            ]
-        return result
-
-    groups = bounded_map(read, windows, min(opts["reader_workers"], opts["workers"]))
-    ideas = [idea for group in groups for idea in group]
+    legacy = (
+        _windows(units, opts["core_words"], opts["halo_units"])
+        if opts["core_words"] is not None
+        else None
+    )
+    windows, ideas = read_sources(
+        workspace, provider, task, opts, sources, units, tracker, legacy
+    )
     if not ideas:
         raise ProductionError("Readers found no anchored ideas in selected sources")
-    retrieval_catalog = None
-    if opts["retrieval_targets"]:
-        retrieval_catalog = tracker.call(
+    from .planning import plan_bounded, target_bounded, refine_sections
+    from .source_reading import request_budget, envelope
+    from .retrieval_targets import RetrievalTargetError
+    from .production_contract import ProductionValidationError
+
+    def invoke(stage, item, instruction, shape, data, checker):
+        def check(raw):
+            try:
+                return validated(checker, raw)
+            except RetrievalTargetError as exc:
+                raise ProductionValidationError(str(exc)) from exc
+
+        return tracker.call(
             workspace,
             provider,
-            "production_targets",
-            "global",
-            "Create canonical retrieval targets from the extracted factual ideas. Decide semantic equivalence "
-            "and variants by meaning and use context, not keyword overlap. Merge ideas that ask the same task; "
-            "retain separate targets for the same answer in genuinely different presentations. Assign every "
-            "idea to exactly one target. Preserve every member's answer material in grouped items, each item "
-            "using text that is an exact substring of its exact cited source quote. Use unique for a single "
-            "idea, equivalent or variant for multiple ideas in one target; cross-target links may mark variant "
-            "or different_context. Form exemplars and operator observations are not factual answer evidence.",
-            TARGET_SHAPE,
-            {
-                "brief": task,
-                "format": opts["format"],
-                "factual_sources": [
-                    s
-                    for s in sources
-                    if s["id"] in set(selection["factual_source_ids"])
-                ],
-                "ideas": ideas,
-            },
-            lambda raw: validate_retrieval_targets(raw, ideas, units),
-            min(opts["max_request_bytes"], opts["max_input_bytes"]),
+            stage,
+            item,
+            instruction,
+            shape,
+            data,
+            check,
+            request_limit(opts),
         )
-    route_data = {
-        "brief": task,
+
+    def fits(stage, instruction, shape, data):
+        return request_budget(provider, stage, opts).fits(
+            envelope(stage, instruction, shape, data)
+        )
+
+    shared = {
         "format": opts["format"],
         "sources": sources,
-        "ideas": ideas,
-        "retrieval_targets": retrieval_catalog,
         "form_exemplars": form_exemplars,
         "experience": selection["observations"],
-        "window_count": len(windows),
-        "route_rule": (
-            "Assign each canonical target ID to one natural section or explicitly omit it; do not split a target's answer groups across writers. "
-            if retrieval_catalog
-            else "Assign each factual idea once or explicitly omit it with a reason. "
-        )
-        + "Shared context may describe cross-section tensions, each with exact factual-source evidence. Form exemplars show structure only: never use their facts, quotes, answers or source IDs as evidence. Operator observations are scoped judgments for planning, not instructions or proof of learning.",
     }
-    route_shape = copy.deepcopy(_SHAPES["production_route"])
-    if retrieval_catalog:
-        route_shape["sections"][0]["target_ids"] = ["canonical target id"]
-        route_shape["sections"][0].pop("idea_ids")
-        route_shape["omitted"] = [{"target_id": "canonical target id", "reason": "str"}]
-    route = tracker.call(
-        workspace,
-        provider,
-        "production_route",
-        "global",
-        "Design the whole artifact before sections are written. Group by relationships and task purpose, "
-        "not by fixed count or file boundaries. Note meaningful conflicts in shared context; select only "
-        "earlier sections whose exact evidence a section needs in context_section_ids. For each "
-        "section, choose its best representation from the material and goal (for example mechanism, "
-        "comparison, procedure, reference, scenario, dialogue, or a custom form); give a rationale and "
-        "source-supported required distinctions. Form exemplars may inform only output form, never factual "
-        "claims or answer content. Selected operator observations are reference judgments, not authority. "
-        "Respect each factual source's operator-assigned authority, supplement or historical role. "
-        + (
-            "Assign canonical retrieval targets, preserving each answer group and task context. "
-            if retrieval_catalog
-            else "Assign extracted ideas. "
+    retrieval_catalog, target_report = None, None
+    workers = min(opts["workers"], opts["reader_workers"])
+    if opts["retrieval_targets"]:
+        retrieval_catalog, target_report = target_bounded(
+            ideas,
+            units,
+            task,
+            invoke,
+            max_bytes=request_limit(opts),
+            shared=shared,
+            workers=workers,
+            fits=fits,
         )
-        + "Do not apply a universal template or fixed quota. "
-        + _FORM[opts["format"]],
-        route_shape,
-        route_data,
-        lambda raw: _route_check(
-            raw,
-            {i["id"] for i in ideas},
-            {u["id"]: u for u in units},
-            retrieval_catalog,
-        ),
-        min(opts["max_request_bytes"], opts["max_input_bytes"]),
+    route, planning_report = plan_bounded(
+        ideas,
+        units,
+        task,
+        invoke,
+        max_bytes=request_limit(opts),
+        shared=shared,
+        workers=workers,
+        fits=fits,
+        catalog=retrieval_catalog,
     )
-    return windows, ideas, retrieval_catalog, route
+
+    fit_route, fit_plan, fit_index = None, None, None
+
+    def section_fits(section, current_route):
+        nonlocal fit_route, fit_plan, fit_index
+        if fit_route is not current_route:
+            fit_route = current_route
+            fit_plan = {
+                "brief": task,
+                "options": opts,
+                "sources": sources,
+                "units": units,
+                "ideas": ideas,
+                "route": current_route,
+                "retrieval_targets": retrieval_catalog,
+                "factual_source_ids": selection["factual_source_ids"],
+                "form_exemplars": form_exemplars,
+                "experience": selection["observations"],
+            }
+            fit_index = _context_index(fit_plan)
+        context = _section_context(fit_plan, section, fit_index)
+        return _section_capacity(fit_plan, section, provider, opts, context)["fits"]
+
+    route, refinement = refine_sections(
+        route,
+        ideas,
+        units,
+        task,
+        invoke,
+        section_fits=section_fits,
+        max_bytes=request_limit(opts),
+        shared=shared,
+        workers=workers,
+        fits=fits,
+        catalog=retrieval_catalog,
+    )
+    return (
+        windows,
+        ideas,
+        retrieval_catalog,
+        route,
+        {
+            "routing": planning_report,
+            "targets": target_report,
+            "writing_capacity": refinement,
+        },
+    )
 
 
 def plan_production(
@@ -491,7 +345,7 @@ def plan_production(
     options: dict | None = None,
     progress: Callable[[dict], None] | None = None,
 ) -> dict:
-    """Read selected teaching sources, then ask the model for a global natural route."""
+    """Read selected sources and plan within the configured model capacities."""
     started = time.monotonic()
     try:
         selection = normalize_production_inputs(workspace, source_ids, options)
@@ -505,28 +359,72 @@ def plan_production(
     form_exemplars = _form_exemplar_context(
         sources, all_units, selection["form_exemplar_ids"]
     )
-    from .source_assignments import choose_workflow, source_route
+    from .source_assignments import source_route
+    from .source_reading import envelope, request_budget
 
-    opts = choose_workflow(opts, units, task, sources, form_exemplars)
-    tracker = _Tracker(progress)
+    decision = {"requested": opts["workflow"], "basis": "caller"}
+    if opts["workflow"] == "auto":
+        direct_options = {**opts, "workflow": "direct"}
+        direct_ideas, direct_route = source_route(task, units, direct_options)
+        candidate = {
+            "brief": task,
+            "options": direct_options,
+            "sources": sources,
+            "units": units,
+            "ideas": direct_ideas,
+            "route": direct_route,
+            "retrieval_targets": None,
+            "factual_source_ids": selection["factual_source_ids"],
+            "form_exemplars": form_exemplars,
+            "experience": selection["observations"],
+        }
+        capacity = _section_capacity(
+            candidate, direct_route["sections"][0], provider, opts
+        )
+        selected_workflow = (
+            "direct"
+            if not opts["retrieval_targets"] and capacity["fits"]
+            else "planned"
+        )
+        opts = {**opts, "workflow": selected_workflow}
+        decision = {
+            "requested": "auto",
+            "selected": selected_workflow,
+            "basis": "writing and review request capacity",
+            "capacity": capacity,
+            "retrieval_targets_require_planning": opts["retrieval_targets"],
+        }
+
+    tracker = _Tracker(progress, max_attempts=opts["max_attempts"])
     if opts["workflow"] in {"direct", "assigned"}:
         ideas, route = source_route(task, units, opts)
-        windows, retrieval_catalog = [], None
-    else:
-        windows, ideas, retrieval_catalog, route = _read_and_plan(
-            workspace,
-            provider,
-            task,
-            opts,
-            selection,
-            sources,
-            units,
-            form_exemplars,
-            tracker,
+        windows, retrieval_catalog, planning_report = (
+            [],
+            None,
+            {"routing": {"mode": "supplied"}},
         )
+    else:
+        try:
+            windows, ideas, retrieval_catalog, route, planning_report = _read_and_plan(
+                workspace,
+                provider,
+                task,
+                opts,
+                selection,
+                sources,
+                units,
+                form_exemplars,
+                tracker,
+            )
+        except Exception as exc:
+            exc.metrics = tracker.metrics()
+            raise
+
     result = {
         "schema_version": "1.0",
         "revision": REVISION,
+        "workflow_decision": decision,
+        "planning": planning_report,
         "brief": task,
         "options": opts,
         "provider_identity": provider.identity,
@@ -576,25 +474,84 @@ def plan_production(
     return result
 
 
-def _section_context(plan: dict, section: dict) -> tuple[dict, dict[str, dict]]:
-    idea_map = {i["id"]: i for i in plan["ideas"]}
-    units = {u["id"]: u for u in plan["units"]}
+def _context_index(plan):
+    sections = plan["route"]["sections"]
+    scoped, global_rows = {section["id"]: [] for section in sections}, []
+    for row in plan["route"]["shared_context"]:
+        if "section_ids" in row:
+            for sid in row["section_ids"]:
+                scoped[sid].append(row)
+        else:
+            global_rows.append(row)
+    catalog = plan.get("retrieval_targets") or {"targets": [], "relations": []}
+    relations = {row["id"]: [] for row in catalog["targets"]}
+    for number, row in enumerate(catalog["relations"]):
+        for key in ("from_target_id", "to_target_id"):
+            relations[row[key]].append((number, row))
+    structures = {}
+    for unit in plan["units"]:
+        if unit.get("structural_group"):
+            structures.setdefault(
+                (unit["source_id"], unit["structural_group"]), []
+            ).append(unit["id"])
+    return {
+        "structures": structures,
+        "ideas": {i["id"]: i for i in plan["ideas"]},
+        "units": {u["id"]: u for u in plan["units"]},
+        "sections": {s["id"]: s for s in sections},
+        "positions": {s["id"]: n for n, s in enumerate(sections)},
+        "targets": {row["id"]: row for row in catalog["targets"]},
+        "relations": relations,
+        "shared": scoped,
+        "global_shared": global_rows,
+        "sources": {row["id"]: row for row in plan["sources"]},
+        "source_positions": {row["id"]: n for n, row in enumerate(plan["sources"])},
+    }
+
+
+def _section_context(
+    plan: dict, section: dict, index=None
+) -> tuple[dict, dict[str, dict]]:
+    index = index or _context_index(plan)
+    idea_map, units = index["ideas"], index["units"]
     chosen = [idea_map[i] for i in section["idea_ids"]]
-    own_ids = {uid for idea in chosen for uid in idea["unit_ids"]}
-    own_units = {u["id"]: u for u in plan["units"] if u["id"] in own_ids}
+    own_units = {uid: units[uid] for idea in chosen for uid in idea["unit_ids"]}
     route = plan["route"]
     retrieval_catalog = plan.get("retrieval_targets")
-    target_by_id = (
-        {t["id"]: t for t in retrieval_catalog["targets"]} if retrieval_catalog else {}
-    )
+    target_by_id = index["targets"]
     assigned_targets = [target_by_id[tid] for tid in section.get("target_ids", [])]
-    route_outline = [
-        {k: row[k] for k in ("id", "title", "purpose")} for row in route["sections"]
+    links = dict(
+        pair
+        for tid in section.get("target_ids", [])
+        for pair in index["relations"][tid]
+    )
+    target_relations = [links[n] for n in sorted(links)]
+    related_ids = {
+        relation[key]
+        for relation in target_relations
+        for key in ("from_target_id", "to_target_id")
+    } - set(section.get("target_ids", []))
+    related_targets = [
+        {key: target_by_id[tid][key] for key in ("id", "title", "prompt", "context")}
+        for tid in sorted(related_ids)
     ]
-    prior = []
-    for row in route["sections"]:
-        if row["id"] in section["context_section_ids"]:
-            prior.extend(idea_map[i] for i in row["idea_ids"])
+    position = index["positions"].get(section["id"], 0)
+    visible_sections = {section["id"], *section["context_section_ids"]}
+    for n in (position - 1, position + 1):
+        if 0 <= n < len(route["sections"]):
+            visible_sections.add(route["sections"][n]["id"])
+    route_outline = [
+        {k: row[k] for k in ("id", "title", "purpose")}
+        for row in (
+            index["sections"][sid]
+            for sid in sorted(visible_sections, key=index["positions"].get)
+        )
+    ]
+    prior = [
+        idea_map[i]
+        for sid in section["context_section_ids"]
+        for i in index["sections"][sid]["idea_ids"]
+    ]
     prior_units = {
         uid: units[uid]
         for idea in prior
@@ -608,39 +565,65 @@ def _section_context(plan: dict, section: dict) -> tuple[dict, dict[str, dict]]:
             if uid not in own_units
         }
     )
+    shared_context = index["global_shared"] + index["shared"][section["id"]]
     shared_units = {
         e["unit_id"]: units[e["unit_id"]]
-        for row in route["shared_context"]
+        for row in shared_context
         for e in row["evidence"]
         if e["unit_id"] not in own_units and e["unit_id"] not in prior_units
     }
+    # Parser-declared companions (e.g. slide text, table and notes) remain
+    # context even when an idea cites only one component. Ownership is unchanged.
+    structure_keys = list(
+        dict.fromkeys(
+            (unit["source_id"], unit["structural_group"])
+            for group in (own_units, prior_units, shared_units)
+            for unit in group.values()
+            if unit.get("structural_group")
+        )
+    )
+    source_structures = []
+    for key in structure_keys:
+        members = index["structures"][key]
+        source_structures.append(
+            {
+                "unit_ids": members,
+                "relationship": "components of the same source structure",
+            }
+        )
+        for uid in members:
+            if uid not in own_units and uid not in prior_units:
+                shared_units[uid] = units[uid]
     data = {
+        "source_structures": source_structures,
         "brief": plan["brief"],
         "format": plan["options"]["format"],
         "title": route["title"],
         "factual_sources": [
-            source
-            for source in plan["sources"]
-            if source["id"] in plan["factual_source_ids"]
+            index["sources"][sid]
+            for sid in sorted(
+                {
+                    u["source_id"]
+                    for group in (own_units, prior_units, shared_units)
+                    for u in group.values()
+                },
+                key=index["source_positions"].get,
+            )
         ],
         "section": section,
         "assigned_ideas": chosen,
         **(
             {
                 "assigned_targets": assigned_targets,
-                "target_relations": [
-                    relation
-                    for relation in retrieval_catalog["relations"]
-                    if relation["from_target_id"] in section["target_ids"]
-                    or relation["to_target_id"] in section["target_ids"]
-                ],
+                "target_relations": target_relations,
+                "related_targets": related_targets,
             }
             if retrieval_catalog
             else {}
         ),
         "assigned_units": list(own_units.values()),
         "shared_route": route_outline,
-        "shared_context": route["shared_context"],
+        "shared_context": shared_context,
         "earlier_planned_ideas": prior,
         "earlier_evidence_units": list(prior_units.values()),
         "shared_evidence_units": list(shared_units.values()),
@@ -671,6 +654,96 @@ def _markdown(route: dict, sections: list[dict], fmt: str) -> str:
         + "\n\n".join("## " + s["title"] + "\n\n" + s["body"] for s in sections)
         + "\n"
     )
+
+
+def _write_request(plan, section, context=None, note=None):
+    opts = plan["options"]
+    data, units = context or _section_context(plan, section)
+    if note:
+        data = {**data, "operator_revision_note": note}
+    shape = copy.deepcopy(_SHAPES["production_write"])
+    if "unit_ids" in section:
+        shape.pop("used_idea_ids")
+        shape.update(
+            title="document title",
+            used_unit_ids=["assigned source unit id"],
+            omitted_units=[
+                {"unit_id": "unused assigned unit id", "reason": "why excluded"}
+            ],
+        )
+    if plan.get("retrieval_targets"):
+        shape["used_target_ids"] = ["assigned canonical target id"]
+    if opts["format"] == "assessment":
+        shape.pop("body")
+        shape.update(candidate_body="Markdown str", marking_body="Markdown str")
+    instruction = (
+        "Write the finished section from its assigned sources or ideas. The outline contains this section, "
+        "its neighbors and declared dependencies; other writers' future prose is unavailable. "
+        + _FORM[opts["format"]]
+        + " Follow the planned representation and requirements. Preserve qualifications and conflicting source "
+        "claims. Return claims linking exact body spans to supporting original quotes; account for assigned "
+        "material. Historical source claims remain historical; supplements cannot silently override authority. "
+        + (
+            "Preserve each assigned retrieval target's prompt and answer groups. Report used_target_ids exactly. "
+            if plan.get("retrieval_targets")
+            else ""
+        )
+    )
+    return instruction, shape, data, units
+
+
+_REVIEW_INSTRUCTION = (
+    "Check the drafted section against its assignment and original source text. "
+    "Compare the actual body with every assigned idea/source, including conditions, quantities, "
+    "omissions and contradictions. used_idea_ids and claims are writer reports; inspect their "
+    "meaning and support. Flag unsupported claims, missing assignment meaning, broken conditions, "
+    "answer leakage and unanswerable prompts. Preserve candidate/marking boundaries. "
+)
+
+
+def _section_capacity(plan, section, provider, options, context=None):
+    """Measure canonical writing and empty-draft review/repair envelopes.
+
+    The eventual draft and findings are unknown. Their actual complete requests
+    are checked at execution; the receipt retains any unperformed verification.
+    A byte ceiling alone establishes no model context or output allowance.
+    """
+    from .context_binding import bind_context
+    from .source_reading import envelope, request_budget
+
+    instruction, shape, data, units = _write_request(plan, section, context)
+    bound, _, _ = bind_context(data, units)
+    requests = {
+        "production_write": envelope("production_write", instruction, shape, bound),
+        "production_review": envelope(
+            "production_review",
+            _REVIEW_INSTRUCTION + _FORM[options["format"]],
+            _SHAPES["production_review"],
+            {**bound, "draft": {}},
+        ),
+        "production_repair": envelope(
+            "production_repair",
+            "Repair this section's concrete findings. Preserve supported work and update claim links. "
+            + _FORM[options["format"]],
+            shape,
+            {
+                **bound,
+                "draft": {},
+                "findings": [],
+                "scope": "Repair only this section's concrete findings; preserve supported work.",
+            },
+        ),
+    }
+    checks = {}
+    for stage, request in requests.items():
+        budget = request_budget(provider, stage, options)
+        measured = budget.measure(request)
+        checks[stage] = {**measured.__dict__, "fits": budget.accepts(measured)}
+    return {
+        "fits": all(row["fits"] for row in checks.values()),
+        "stages": checks,
+        "scope": "Full writing request and review/repair source context; future draft and findings checked when available.",
+    }
 
 
 def run_production(
@@ -737,7 +810,7 @@ def run_production(
         or digest(selected["observations"]) != digest(plan["experience"])
     ):
         raise ProductionError("Selected source content changed; plan again")
-    tracker = _Tracker(progress)
+    tracker = _Tracker(progress, max_attempts=opts["max_attempts"])
     sections = plan["route"]["sections"]
     if set(section_notes) - {s["id"] for s in sections}:
         raise ProductionError("section_notes contains unknown section IDs")
@@ -745,82 +818,76 @@ def run_production(
         sid: _str(note, f"section_notes.{sid}", 8000)
         for sid, note in section_notes.items()
     }
-    contexts = {s["id"]: _section_context(plan, s) for s in sections}
+    context_index = _context_index(plan)
+    contexts = {s["id"]: _section_context(plan, s, context_index) for s in sections}
 
-    def write(section):
-        original_data, units = contexts[section["id"]]
-        data = (
-            {**original_data, "operator_revision_note": section_notes[section["id"]]}
-            if section["id"] in section_notes
-            else original_data
-        )
-        shape = copy.deepcopy(_SHAPES["production_write"])
-        if "unit_ids" in section:
-            shape.pop("used_idea_ids")
-            shape.update(
-                {
-                    "title": "document title",
-                    "used_unit_ids": ["assigned source unit id"],
-                    "omitted_units": [
-                        {"unit_id": "unused assigned unit id", "reason": "why excluded"}
-                    ],
-                }
-            )
-        if plan.get("retrieval_targets"):
-            shape["used_target_ids"] = ["assigned canonical target id"]
-        if opts["format"] == "assessment":
-            shape.pop("body")
-            shape.update(
-                {"candidate_body": "Markdown str", "marking_body": "Markdown str"}
-            )
-        return tracker.call(
+    def section_call(stage, section, instruction, shape, data, units, checker):
+        from .context_binding import bind_context, restore_references
+
+        bound, bound_units, reverse = bind_context(data, units)
+        result = tracker.call(
             workspace,
             provider,
-            "production_write",
+            stage,
             section["id"],
-            "Write the finished section from its assigned sources or ideas. All writers see a short route and exact "
-            "assigned/prior evidence; they do not see other writers' future prose. "
-            + _FORM[opts["format"]]
-            + " Follow this section's planned representation and requirements. Include exact evidence "
-            "for material claims; account for assigned ideas. Treat historical source claims as historical "
-            "or conflicting, not automatically current instructions; supplements cannot silently override authority. "
-            + (
-                "Preserve each assigned canonical retrieval target's prompt and answer groups in the section. "
-                "Report used_target_ids exactly; related targets may share an answer without becoming one task. "
-                if plan.get("retrieval_targets")
-                else ""
-            ),
+            instruction,
+            shape,
+            bound,
+            lambda raw: checker(raw, bound["section"], bound_units),
+            request_limit(opts),
+        )
+        return restore_references(result, reverse)
+
+    def write(section):
+        instruction, shape, data, units = _write_request(
+            plan, section, contexts[section["id"]], section_notes.get(section["id"])
+        )
+        return section_call(
+            "production_write",
+            section,
+            instruction,
             shape,
             data,
-            lambda raw: _authored_check(raw, section, units, opts["format"]),
-            min(opts["max_request_bytes"], opts["max_input_bytes"]),
+            units,
+            lambda raw, sec, local: validated(
+                _authored_check, raw, sec, local, opts["format"]
+            ),
         )
 
     def review(pair):
         section, draft = pair
         context, units = contexts[section["id"]]
-        data = {
-            **context,
-            "draft": draft,
-            "rubric": "Flag only concrete material errors, unsupported claims, missing assigned ideas, broken conditions/conflicts, answer leakage or unanswerable prompts where relevant. Do not rewrite for taste.",
-        }
-        return tracker.call(
-            workspace,
-            provider,
-            "production_review",
-            section["id"],
-            "Check the drafted section against exact evidence and its assignment. Findings must be actionable. "
-            "Check its planned representation and source-supported requirements. "
-            "A clear review is not a guarantee of truth, completeness, or learning. "
-            + _FORM[opts["format"]],
-            _SHAPES["production_review"],
-            data,
-            lambda raw: _review_check(raw, units),
-            min(opts["max_request_bytes"], opts["max_input_bytes"]),
-        )
+        data = {**context, "draft": draft}
+        from .context_budget import ContextBudgetError
+
+        try:
+            return section_call(
+                "production_review",
+                section,
+                _REVIEW_INSTRUCTION + _FORM[opts["format"]],
+                _SHAPES["production_review"],
+                data,
+                units,
+                lambda raw, sec, local: validated(_review_check, raw, local),
+            )
+        except ProductionError as exc:
+            if not isinstance(exc.__cause__, ContextBudgetError):
+                raise
+            return {
+                "findings": [
+                    {
+                        "issue": "Review was not performed: " + str(exc),
+                        "repair_instruction": "Use a reviewer with sufficient capacity or revise the section boundaries.",
+                        "evidence": [],
+                        "verification_unperformed": True,
+                    }
+                ]
+            }
 
     def repair(pair):
         section, draft, findings = pair
+        if any(row.get("verification_unperformed") for row in findings):
+            return draft
         context, units = contexts[section["id"]]
         data = {
             **context,
@@ -849,28 +916,33 @@ def run_production(
             shape.update(
                 {"candidate_body": "Markdown str", "marking_body": "Markdown str"}
             )
-        return tracker.call(
-            workspace,
-            provider,
+        return section_call(
             "production_repair",
-            section["id"],
-            "Repair this section only from the actual review findings and exact evidence. "
+            section,
+            "Repair this section's concrete findings. Preserve supported work and update claim links. "
             + _FORM[opts["format"]],
             shape,
             data,
-            lambda raw: _authored_check(raw, section, units, opts["format"]),
-            min(opts["max_request_bytes"], opts["max_input_bytes"]),
+            units,
+            lambda raw, sec, local: validated(
+                _authored_check, raw, sec, local, opts["format"]
+            ),
         )
 
-    authored, initial_findings, remaining = section_pipeline(
-        sections,
-        write,
-        review,
-        repair,
-        writers=opts["writer_workers"],
-        reviewers=opts["review_workers"],
-        workers=opts["workers"],
-    )
+    try:
+        authored, initial_findings, remaining = section_pipeline(
+            sections,
+            write,
+            review,
+            repair,
+            writers=opts["writer_workers"],
+            reviewers=opts["review_workers"],
+            workers=opts["workers"],
+        )
+    except Exception as exc:
+        exc.metrics = tracker.metrics()
+        raise
+
     output_route = plan["route"]
     if opts["workflow"] == "direct" and opts["format"] != "assessment":
         output_route = {
@@ -917,6 +989,37 @@ def run_production(
             examiner_markdown += "\n" + retrieval_markdown
     elif retrieval_markdown:
         markdown += "\n" + retrieval_markdown
+    document_checks = None
+    if opts["document_review"]:
+        from .verification import check_document_sections
+        from .source_reading import request_budget, envelope
+
+        def consistency_call(stage, item, instruction, shape, data, checker):
+            return tracker.call(
+                workspace,
+                provider,
+                stage,
+                item,
+                instruction,
+                shape,
+                data,
+                lambda raw: validated(checker, raw),
+                request_limit(opts),
+            )
+
+        def consistency_fits(stage, instruction, shape, data):
+            return request_budget(provider, stage, opts).fits(
+                envelope(stage, instruction, shape, data)
+            )
+
+        document_checks = check_document_sections(
+            plan,
+            authored,
+            consistency_call,
+            consistency_fits,
+            workers=min(opts["workers"], opts["review_workers"]),
+            include_adjacency=True,
+        )
     metrics = tracker.metrics()
     metrics.update(
         {
@@ -935,7 +1038,12 @@ def run_production(
     receipt = {
         "schema_version": "1.0",
         "revision": REVISION,
-        "status": "review" if remaining else "ready",
+        "status": (
+            "review"
+            if remaining or (document_checks and document_checks["status"] == "review")
+            else "ready"
+        ),
+        "document_checks": document_checks,
         "format": opts["format"],
         "title": output_route["title"],
         "markdown": markdown,
@@ -957,19 +1065,34 @@ def run_production(
         # crosses the same blind-solve/judge boundary before completion.
         from .assessment_checks import check_assessment
 
-        checks = check_assessment(
-            workspace,
-            provider,
-            plan,
-            receipt,
-            workers=min(opts["workers"], opts["review_workers"]),
-            progress=progress,
-        )
+        try:
+            checks = check_assessment(
+                workspace,
+                provider,
+                plan,
+                receipt,
+                workers=min(opts["workers"], opts["review_workers"]),
+                progress=progress,
+            )
+        except Exception as exc:
+            receipt["status"] = "review"
+            receipt["assessment_checks"] = {
+                "status": "failed",
+                "metrics": getattr(exc, "metrics", {}),
+            }
+            exc.partial_results = {
+                **getattr(exc, "partial_results", {}),
+                "production_receipt": receipt,
+            }
+            raise
         receipt["assessment_checks"] = checks
         if checks["status"] == "review":
             receipt["status"] = "review"
         receipt["metrics"]["assessment_check_wall_ms"] = checks["metrics"]["wall_ms"]
         receipt["metrics"]["wall_ms"] = round((time.monotonic() - started) * 1000, 3)
+    from .verification import coverage_report
+
+    receipt["coverage"] = coverage_report(plan, authored)
     return receipt
 
 
@@ -984,7 +1107,11 @@ def build_production(
     """Convenience route for one goal-to-artifact build; returns plan and receipt."""
     started = time.monotonic()
     plan = plan_production(workspace, provider, brief, source_ids, options, progress)
-    receipt = run_production(workspace, provider, plan, progress=progress)
+    try:
+        receipt = run_production(workspace, provider, plan, progress=progress)
+    except Exception as exc:
+        exc.partial_results = {**getattr(exc, "partial_results", {}), "plan": plan}
+        raise
     receipt["plan"] = plan
     receipt["metrics"]["end_to_end_wall_ms"] = round(
         (time.monotonic() - started) * 1000, 3

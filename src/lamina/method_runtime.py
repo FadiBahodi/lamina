@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import heapq
 import json
 import time
 import uuid
+from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
+from .execution import DependencyGraph
 from .methods import validate_method
 from .store import Workspace, canonical, digest
 
@@ -89,7 +92,12 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
     nodes = method["nodes"]
     order = {node["id"]: i for i, node in enumerate(nodes)}
     by_id = {node["id"]: node for node in nodes}
-    outstanding = set(by_id)
+    graph = DependencyGraph(nodes)
+    dependency_counts = graph.indegree.copy()
+    ready = {lane: [] for lane in method["resources"]["lanes"]}
+    ready_at = {}
+    submitted_at = {}
+    peak_active = 0
     results: dict[str, dict] = {}
     records: dict[str, dict] = {}
     occupied = {lane: 0 for lane in method["resources"]["lanes"]}
@@ -164,53 +172,83 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
             }
             return {}, record
 
-    with ThreadPoolExecutor(max_workers=method["resources"]["workers"]) as pool:
-        while outstanding or futures:
-            before_skip = len(outstanding)
-            for nid in sorted(list(outstanding), key=order.get):
-                deps = by_id[nid]["depends_on"]
-                if any(
-                    records.get(dep, {}).get("status") in {"failed", "skipped"}
-                    for dep in deps
-                ):
-                    records[nid] = {
+    def enqueue(nid):
+        ready_at[nid] = time.monotonic()
+        lane = by_id[nid]["lane"]
+        # Depth is a topology-only proxy; it makes no duration guarantee.
+        heapq.heappush(ready[lane], (-graph.depth[nid], order[nid], nid))
+
+    def complete(nid):
+        """Visit outgoing edges once, releasing or skipping direct children."""
+        settled = deque([nid])
+        while settled:
+            parent = settled.popleft()
+            failed = records[parent]["status"] in {"failed", "skipped"}
+            for child in graph.children[parent]:
+                if child in records:
+                    continue
+                if failed:
+                    node = by_id[child]
+                    records[child] = {
                         "status": "skipped",
-                        "lane": by_id[nid]["lane"],
-                        "depends_on": deps,
+                        "lane": node["lane"],
+                        "depends_on": node["depends_on"],
                         "reason": "dependency failed",
-                        "observation_ids": by_id[nid]["observation_ids"],
+                        "observation_ids": node["observation_ids"],
                         "context_bytes": 0,
                         "wall_ms": 0,
+                        "queue_ms": 0,
+                        "dependency_wait_ms": round(
+                            (time.monotonic() - started) * 1000, 3
+                        ),
                     }
-                    outstanding.remove(nid)
-            for nid in sorted(list(outstanding), key=order.get):
-                if len(futures) >= method["resources"]["workers"]:
+                    settled.append(child)
+                else:
+                    dependency_counts[child] -= 1
+                    if dependency_counts[child] == 0:
+                        enqueue(child)
+
+    for nid, count in dependency_counts.items():
+        if count == 0:
+            enqueue(nid)
+    with ThreadPoolExecutor(max_workers=method["resources"]["workers"]) as pool:
+        while len(records) < len(nodes):
+            while len(futures) < method["resources"]["workers"]:
+                eligible = [
+                    lane
+                    for lane in ready
+                    if ready[lane]
+                    and occupied[lane] < method["resources"]["lanes"][lane]
+                ]
+                if not eligible:
                     break
+                # At most 16 lane heads are examined per submission. Blocked
+                # lanes stay queued without scanning their ready nodes.
+                lane = min(eligible, key=lambda lane: ready[lane][0])
+                _, _, nid = heapq.heappop(ready[lane])
                 node = by_id[nid]
-                if not all(dep in results for dep in node["depends_on"]):
-                    continue
-                lane = node["lane"]
-                if occupied[lane] >= method["resources"]["lanes"][lane]:
-                    continue
                 dependencies = {dep: results[dep] for dep in node["depends_on"]}
-                future = pool.submit(execute, node, dependencies)
-                futures[future] = nid
+                submitted_at[nid] = time.monotonic()
+                futures[pool.submit(execute, node, dependencies)] = nid
                 occupied[lane] += 1
-                outstanding.remove(nid)
-            if futures:
-                done, _ = wait(futures, return_when=FIRST_COMPLETED)
-                for future in done:
-                    nid = futures.pop(future)
-                    occupied[by_id[nid]["lane"]] -= 1
-                    result, record = future.result()
-                    records[nid] = record
-                    if record["status"] != "failed":
-                        results[nid] = result
-            elif outstanding and len(outstanding) < before_skip:
-                continue  # propagate failure through reverse-ordered descendants
-            elif outstanding:
-                # A valid DAG can be blocked here only if the scheduler has a bug.
+                peak_active = max(peak_active, len(futures))
+            if not futures:
                 raise RuntimeError("method scheduler cannot advance")
+            done, _ = wait(futures, return_when=FIRST_COMPLETED)
+            for future in done:
+                nid = futures.pop(future)
+                occupied[by_id[nid]["lane"]] -= 1
+                result, record = future.result()
+                record["queue_ms"] = round(
+                    (submitted_at[nid] - ready_at[nid]) * 1000, 3
+                )
+                record["dependency_wait_ms"] = round(
+                    (ready_at[nid] - started) * 1000, 3
+                )
+                records[nid] = record
+                if record["status"] != "failed":
+                    results[nid] = result
+                complete(nid)
     ordered_records = {node["id"]: records[node["id"]] for node in nodes}
     ordered_results = {
         node["id"]: results[node["id"]] for node in nodes if node["id"] in results
@@ -231,6 +269,13 @@ def run_method(workspace: Workspace, provider, method: dict, task: dict) -> dict
         "task_digest": digest(task),
         "provider": provider.identity,
         "status": status,
+        "scheduling": {
+            "priority": "remaining_dependency_depth",
+            "priority_basis": "graph structure; call durations are not estimated",
+            "nodes": len(nodes),
+            "edges": sum(graph.indegree.values()),
+            "max_active": peak_active,
+        },
         "nodes": ordered_records,
         "results": ordered_results,
         "wall_ms": round((time.monotonic() - started) * 1000, 3),

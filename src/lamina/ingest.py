@@ -11,51 +11,51 @@ from pathlib import Path
 from .store import Workspace
 
 SUPPORTED = {".md", ".txt", ".pdf", ".pptx"}
-MAX_CHARS = 12000
 
 
-def _chunks(text: str, maximum: int = MAX_CHARS):
-    """Keep paragraph boundaries when possible; never drop an oversized span."""
+def _paragraphs(text: str):
+    """Keep complete paragraphs, including long multilingual paragraphs."""
     start = 0
-    while start < len(text):
-        end = min(start + maximum, len(text))
-        if end < len(text):
-            boundary = text.rfind("\n\n", start, end)
-            if boundary <= start + maximum // 3:
-                boundary = text.rfind(" ", start, end)
-            if boundary > start:
-                end = boundary
-        value = text[start:end].strip()
+    for match in re.finditer(r"\n[ \t]*\n", text):
+        value = text[start : match.start()].strip()
         if value:
-            yield start, end, value
-        start = end
-        while start < len(text) and text[start].isspace():
-            start += 1
+            yield start, match.start(), value, "paragraph"
+        start = match.end()
+    if text[start:].strip():
+        yield start, len(text), text[start:].strip(), "paragraph"
 
 
 def _text_sections(text: str, title: str):
-    """Use Markdown's parser so fenced code cannot become a section heading."""
+    """Read heading ancestry with Markdown's parser, including fenced code."""
     from markdown_it import MarkdownIt
 
     lines = text.splitlines()
     tokens = MarkdownIt("commonmark").parse(text)
-    heading, start = title, 0
+    heading, start, ancestry = title, 0, []
     for index, token in enumerate(tokens):
         if token.type != "heading_open" or token.level != 0:
             continue
         lo, hi = token.map
         body = "\n".join(lines[start:lo])
         if body.strip():
-            yield heading, body, start + 1
+            yield heading, body, start + 1, [name for _, name in ancestry] or [title]
         heading = tokens[index + 1].content
+        level = int(token.tag[1:])
+        ancestry = [(depth, name) for depth, name in ancestry if depth < level]
+        ancestry.append((level, heading))
         start = hi
     body = "\n".join(lines[start:])
     if body.strip():
-        yield heading, body, start + 1
+        yield heading, body, start + 1, [name for _, name in ancestry] or [title]
 
 
 def _structured_chunks(text):
-    """Pack complete Markdown blocks. Never slice a list, table or code fence."""
+    """Return complete parser blocks; capacity is decided when building requests.
+
+    A list, table, block quote, code fence, or paragraph stays intact regardless
+    of character count. Parser gaps (including reference definitions) remain in
+    the neighboring raw source span, so ingestion never drops their text.
+    """
     from markdown_it import MarkdownIt
 
     lines = text.splitlines(keepends=True)
@@ -64,30 +64,40 @@ def _structured_chunks(text):
         offsets.append(offsets[-1] + len(line))
     tokens = MarkdownIt("commonmark").enable("table").parse(text)
     spans = [
-        (offsets[t.map[0]], offsets[t.map[1]], t.type)
+        (offsets[t.map[0]], offsets[t.map[1]], t.type.removesuffix("_open"))
         for t in tokens
         if t.level == 0 and t.map and t.nesting != -1
     ]
-    start = end = None
     previous = 0
     for index, (_, hi, kind) in enumerate(spans):
         lo, previous = previous, hi
         if index == len(spans) - 1:
             hi = len(text)
-        if start is not None and hi - start > MAX_CHARS:
-            yield start, end, text[start:end].strip()
-            start = end = None
-        if hi - lo > MAX_CHARS and kind == "paragraph_open":
-            for a, b, value in _chunks(text[lo:hi]):
-                yield lo + a, lo + b, value
-        else:
-            if start is None:
-                start = lo
-            end = hi
-    if start is not None:
-        yield start, end, text[start:end].strip()
-    elif not spans and text.strip():
-        yield from _chunks(text)
+        value = text[lo:hi].strip()
+        if value:
+            yield lo, hi, value, kind
+    if not spans and text.strip():
+        yield 0, len(text), text.strip(), "definitions"
+
+
+def _reference_context(text, references, by_destination):
+    """Keep Markdown's resolved links available across section boundaries."""
+    if not references:
+        return []
+    from markdown_it import MarkdownIt
+
+    tokens = MarkdownIt("commonmark").parse(text, {"references": references})
+    destinations = {
+        (child.attrGet("href"), child.attrGet("title") or "")
+        for token in tokens
+        for child in (token.children or [])
+        if child.type == "link_open"
+    }
+    return [
+        entry
+        for destination in sorted(destinations)
+        for entry in by_destination.get(destination, [])
+    ]
 
 
 def _pptx_chunks(path):
@@ -134,12 +144,23 @@ def _pptx_chunks(path):
                 continue
             if value.strip():
                 found = True
-                yield heading, value.strip(), f"slide {number}, {kind} {shape.shape_id}"
+                yield heading, value.strip(), f"slide {number}, {kind} {shape.shape_id}", {
+                    "kind": kind,
+                    "slide": number,
+                    "shape": shape.shape_id,
+                    "structural_group": f"slide:{number}",
+                    "heading_path": [heading],
+                }
         if slide.has_notes_slide:
             frame = slide.notes_slide.notes_text_frame
             if frame is not None and frame.text.strip():
                 found = True
-                yield heading, frame.text.strip(), f"slide {number}, speaker notes"
+                yield heading, frame.text.strip(), f"slide {number}, speaker notes", {
+                    "kind": "speaker_notes",
+                    "slide": number,
+                    "structural_group": f"slide:{number}",
+                    "heading_path": [heading],
+                }
         if not found:
             raise ValueError(
                 f"{path.name}, slide {number}: no extractable text; inspect visuals or convert and OCR first"
@@ -207,24 +228,86 @@ def read_source(
                 raise ValueError(
                     f"{path.name}, page {page_number}: no extractable text; OCR first (image-only pages are not silently skipped)"
                 )
-            for _, _, value in _chunks(text):
-                chunks.append((title, value, f"page {page_number}"))
+            chunks.append(
+                (
+                    title,
+                    text.strip(),
+                    f"page {page_number}",
+                    {
+                        "kind": "page",
+                        "page": page_number,
+                        "structural_group": f"page:{page_number}",
+                        "heading_path": [title],
+                    },
+                )
+            )
     elif path.suffix.lower() == ".pptx":
         chunks.extend(_pptx_chunks(path))
     else:
         text = raw.decode("utf-8-sig")
-        first_title = re.search(r"^#\s+(.+)$", text, re.M)
-        if first_title:
-            title = first_title.group(1).strip()
-        for heading, body, first_line in _text_sections(text, title):
-            for start, end, value in (
+        reference_env = {}
+        reference_index = {}
+        if path.suffix.lower() == ".md":
+            from markdown_it import MarkdownIt
+
+            tokens = MarkdownIt("commonmark").parse(text, reference_env)
+            title = next(
+                (
+                    tokens[index + 1].content
+                    for index, token in enumerate(tokens)
+                    if token.type == "heading_open"
+                    and token.tag == "h1"
+                    and token.level == 0
+                ),
+                title,
+            )
+            for label, entry in reference_env.get("references", {}).items():
+                reference_index.setdefault(
+                    (entry["href"], entry.get("title", "")), []
+                ).append(
+                    {
+                        "label": label,
+                        "href": entry["href"],
+                        "title": entry.get("title", ""),
+                    }
+                )
+        for section_index, (heading, body, first_line, heading_path) in enumerate(
+            _text_sections(text, title)
+        ):
+            for start, end, value, kind in (
                 _structured_chunks(body)
                 if path.suffix.lower() == ".md"
-                else _chunks(body)
+                else _paragraphs(body)
             ):
                 lo = first_line + body[:start].count("\n")
                 hi = first_line + body[:end].count("\n")
-                chunks.append((heading, value, f"lines {lo}–{hi}"))
+                chunks.append(
+                    (
+                        heading,
+                        value,
+                        f"lines {lo}–{hi}",
+                        {
+                            "kind": kind,
+                            "heading_path": heading_path,
+                            "section_id": "section_"
+                            + hashlib.sha256(
+                                "\n".join(heading_path).encode()
+                            ).hexdigest()[:16],
+                            "section_index": section_index,
+                            **(
+                                {"reference_context": references}
+                                if (
+                                    references := _reference_context(
+                                        value,
+                                        reference_env.get("references", {}),
+                                        reference_index,
+                                    )
+                                )
+                                else {}
+                            ),
+                        },
+                    )
+                )
     if not chunks:
         raise ValueError(f"{path.name} has no readable content")
     source = {
@@ -233,12 +316,12 @@ def read_source(
         "filename": path.name,
         "sha256": checksum,
         "role": role,
-        "parser": "structured-text-2",
+        "parser": "structured-text-3",
         "ocr": bool(ocr and path.suffix.lower() == ".pdf"),
         "limits": "Text extraction does not interpret diagrams, charts, or image meaning.",
     }
     units = []
-    for ordinal, (heading, text, locator) in enumerate(chunks):
+    for ordinal, (heading, text, locator, structure) in enumerate(chunks):
         unit_id = (
             "unit_"
             + hashlib.sha256(f"{source_id}:{ordinal}:{text}".encode()).hexdigest()[:20]
@@ -252,7 +335,10 @@ def read_source(
                 "locator": locator,
                 "ordinal": ordinal,
                 "role": role,
-                "content_id": hashlib.sha256(f"{heading}\n{text}".encode()).hexdigest(),
+                "content_id": hashlib.sha256(
+                    ("\n".join(structure["heading_path"]) + "\n" + text).encode()
+                ).hexdigest(),
+                **structure,
             }
         )
     return source, units

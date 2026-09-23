@@ -133,10 +133,13 @@ class PolicyFixture:
         raise AssertionError(stage)
 
 
-def test_form_exemplar_is_planning_only_and_factual_roles_remain_visible(tmp_path):
+@pytest.mark.parametrize("reading", ["reusable", "task"])
+def test_form_exemplar_is_planning_only_and_factual_roles_remain_visible(
+    tmp_path, reading
+):
     ws = _workspace(tmp_path)
     provider = PolicyFixture()
-    options = {"format": "guide", "source_policy": POLICY}
+    options = {"format": "guide", "source_policy": POLICY, "reading": reading}
     normalized = normalize_production_inputs(ws, IDS, options)
     assert normalized["factual_source_ids"] == ["current", "supp", "old"]
     assert normalized["form_exemplar_ids"] == ["form"]
@@ -154,11 +157,17 @@ def test_form_exemplar_is_planning_only_and_factual_roles_remain_visible(tmp_pat
         for stage, request in provider.requests
         if stage == "production_read"
     ]
-    assert {data["source"]["policy"] for data in reads} == {
-        "authority",
-        "supplement",
-        "historical",
-    }
+    if reading == "task":
+        assert {data["source"]["policy"] for data in reads} == {
+            "authority",
+            "supplement",
+            "historical",
+        }
+        assert all(data["brief"]["goal"] == "Explain safe retries" for data in reads)
+    else:
+        assert all(
+            "policy" not in data["source"] and "brief" not in data for data in reads
+        )
     assert "Prior question form" not in str(reads)
     receipt = run_production(ws, provider, plan)
     assert receipt["status"] == "ready"

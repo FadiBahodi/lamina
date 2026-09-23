@@ -38,23 +38,30 @@
   });
   const context = make("details", "pb-context-options"); context.append(make("summary", "", "Advanced workflow settings"));
   const contextFields = make("div", "pb-context-fields");
-  function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
+  function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=value===null?"":String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
   const workflowLabel = make("label", "pb-worker"); workflowLabel.append(make("span", "", "Workflow"));
   const workflow = make("select"); workflow.setAttribute("aria-label", "Workflow");
-  [["auto","Automatic: direct for small inputs"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
+  [["auto","Automatic: use the adapter budget"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
   workflowLabel.append(workflow); contextFields.append(workflowLabel);
   const totalWorkers = numericField("Maximum simultaneous model calls", 8, 1, 128);
   const totalWorkerField = totalWorkers.parentElement; totalWorkerField.remove();
-  const coreWords = numericField("Reading batch target (words)", 1600, 100, 2000);
+  const readingLabel = make("label", "pb-worker"); readingLabel.append(make("span", "", "Source reading"));
+  const reading = make("select"); reading.setAttribute("aria-label", "Source reading");
+  [["reusable","Reuse reading across project goals"],["task","Read for this project only"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
+  readingLabel.append(reading);contextFields.append(readingLabel);
+  const maxAttempts = numericField("Attempts per model request", 2, 1, 5);
+  const coreWords = numericField("Optional fixed reading target (words)", null, 100, 2000);
+  coreWords.placeholder="Fit complete source structures";
   const haloUnits = numericField("Extra neighboring passages", 0, 0, 8);
-  const maxRequest = numericField("Maximum request bytes", 120000, 4096, 2000000);
+  const maxRequest = numericField("Optional request byte ceiling", null, 4096, 2000000);
+  maxRequest.placeholder="Use adapter budget";
   const retrievalChoice=make("label","pb-retrieval-choice");retrievalChoice.hidden=true;
   const retrievalTargets=make("input");retrievalTargets.type="checkbox";
   const retrievalCopy=make("span");retrievalCopy.append(make("strong","","Merge equivalent questions"),make("small","","Preserve answer groups and distinct contexts."));
   retrievalChoice.append(retrievalTargets,retrievalCopy);
   function updateRetrievalChoice(){retrievalChoice.hidden=!(["guide","assessment"].includes(format.value));if(retrievalChoice.hidden)retrievalTargets.checked=false;}
   format.addEventListener("change",updateRetrievalChoice);updateRetrievalChoice();
-  context.append(contextFields, capacityFields, make("p", "pb-explain", "Automatic mode skips extraction and planning for small inputs. Larger inputs use reading batches. Lists and tables stay together; extra neighbors are optional."),retrievalChoice);
+  context.append(contextFields, capacityFields, make("p", "pb-explain", "Complete source structures use the adapter request budget. Configure its tokenizer and context limit for token checks. Reading can be reused across goals. Fixed word targets and neighboring passages are optional overrides."),retrievalChoice);
   capacityBlock.append(capacityHead, capacityIntro, totalWorkerField, context);
   const savedNotes=make("details","pb-saved-notes");savedNotes.hidden=true;
   savedNotes.append(make("summary","","Use saved project notes"),make("p","pb-explain","Choose notes that apply to this project."));
@@ -85,16 +92,34 @@
     if(!setup || typeof setup.brief!=="string" || !["guide","assessment","podcast-script"].includes(setup.options?.format))return;
     goal.value=setup.brief; format.value=setup.options.format;
     for(const [key,input] of Object.entries(workerInputs)){
-      const value=setup.options[key];if(Number.isInteger(value)&&value>=1&&value<=128)input.value=String(value);
+      const value=setup.options[key];input.value=Number.isInteger(value)&&value>=1&&value<=128?String(value):"";
     }
-    coreWords.value=String(setup.options.core_words);haloUnits.value=String(setup.options.halo_units);
+    coreWords.value=setup.options.core_words??"";haloUnits.value=setup.options.halo_units??0;
+    maxRequest.value=setup.options.max_input_bytes??"";reading.value=setup.options.reading??"reusable";
+    workflow.value=setup.options.workflow??"auto";maxAttempts.value=setup.options.max_attempts??2;
+    totalWorkers.value=setup.options.workers??8;
     updateFormatNote();updateRetrievalChoice();retrievalTargets.checked=Boolean(setup.options.retrieval_targets)&&!retrievalChoice.hidden;
     let notice=form.querySelector('.setup-loaded');if(!notice){notice=make('p','setup-loaded');notice.setAttribute('role','status');form.prepend(notice);}
     notice.textContent=`${setup.name} setup loaded. Adjust the brief, then choose your sources.`;
     goal.focus();
   });
   function safeNumber(input, name) { const n = Number(input.value); if (!Number.isInteger(n) || n < Number(input.min) || n > Number(input.max)) throw Error(`${name} must be ${input.min}–${input.max}.`); return n; }
-  function options(selected) { if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose an authority, supplement or historical source for factual evidence.");if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");return {format:format.value, workflow:workflow.value, workers:safeNumber(totalWorkers,"Total calls"), max_input_bytes:safeNumber(maxRequest,"Request byte limit"), ...Object.fromEntries(Object.entries(workerInputs).filter(([,input])=>input.value.trim()!=="").map(([key,input])=>[key,safeNumber(input,key)])), core_words:safeNumber(coreWords,"Passage size"), halo_units:safeNumber(haloUnits,"Neighboring passages"), max_request_bytes:safeNumber(maxRequest,"Request byte limit"), retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden, source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])), observation_ids:Array.from(state.selectedObservations)}; }
+  function options(selected) {
+    if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose an authority, supplement or historical source for factual evidence.");
+    if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");
+    const halo=safeNumber(haloUnits,"Neighboring passages");
+    if(halo && !coreWords.value.trim())throw Error("Extra neighboring passages require an explicit fixed reading target.");
+    return {
+      format:format.value, workflow:workflow.value, reading:reading.value,
+      workers:safeNumber(totalWorkers,"Total calls"), max_attempts:safeNumber(maxAttempts,"Attempts"),
+      ...Object.fromEntries(Object.entries(workerInputs).filter(([,input])=>input.value.trim()!=="").map(([key,input])=>[key,safeNumber(input,key)])),
+      ...(coreWords.value.trim()?{core_words:safeNumber(coreWords,"Fixed reading target")}:{}),
+      ...(maxRequest.value.trim()?{max_input_bytes:safeNumber(maxRequest,"Request byte ceiling")}:{}),
+      halo_units:halo, retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden,
+      source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])),
+      observation_ids:Array.from(state.selectedObservations)
+    };
+  }
   function renderSources() {
     sourceList.replaceChildren();
     if (!state.sources.length) { sourceList.append(make("p", "pb-empty", state.local ? "No sources stored locally yet. Add files below." : "Add your own sources in the local app. You can explore the recorded project here.")); return; }

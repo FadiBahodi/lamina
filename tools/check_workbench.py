@@ -36,6 +36,15 @@ def main():
                 browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
                 page = browser.new_page(viewport={"width": 1280, "height": 960})
                 errors = []
+                project_requests = []
+                page.on(
+                    "request",
+                    lambda call: (
+                        project_requests.append(call.post_data_json)
+                        if call.method == "POST" and call.url.endswith("/api/projects")
+                        else None
+                    ),
+                )
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 origin = f"http://127.0.0.1:{server.server_port}"
                 page.goto(origin)
@@ -48,6 +57,17 @@ def main():
                 ).set_input_files([str(source), str(slides)])
                 page.wait_for_function(
                     "document.querySelector('.pb-upload-status').textContent.includes('Stored 2 sources')"
+                )
+                assert (
+                    page.get_by_placeholder(
+                        "Fit complete source structures"
+                    ).input_value()
+                    == ""
+                )
+                assert page.get_by_placeholder("Use adapter budget").input_value() == ""
+                assert (
+                    page.get_by_label("Source reading", exact=True).input_value()
+                    == "reusable"
                 )
                 page.get_by_role("button", name="Start project", exact=True).click()
                 page.get_by_role("link", name="Download text", exact=True).wait_for(
@@ -65,6 +85,15 @@ def main():
                 assert "plan" not in progress and "receipt" not in progress
                 result = page.request.get(origin + f"/api/runs/{rid}").json()
                 assert result["plan"]["options"]["workflow"] == "direct"
+                submitted = project_requests[0]["options"]
+                assert (
+                    "core_words" not in submitted and "max_input_bytes" not in submitted
+                )
+                assert "max_request_bytes" not in submitted
+                assert (
+                    submitted["reading"] == "reusable"
+                    and submitted["max_attempts"] == 2
+                )
                 assert len(result["receipt"]["metrics"]["requests"]) == 2
                 page.get_by_label("Requested section change").fill(
                     "Clarify the energy transfer."
@@ -84,6 +113,8 @@ def main():
                             "checks": [
                                 "Markdown and PowerPoint upload",
                                 "automatic direct writing",
+                                "model-budget defaults without legacy overrides",
+                                "reusable reading and bounded-attempt controls",
                                 "download source-backed text",
                                 "compact progress",
                                 "targeted revision",

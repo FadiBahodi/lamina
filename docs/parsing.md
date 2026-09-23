@@ -1,33 +1,40 @@
 # Parsing and OCR
 
-Use a file's existing structure before asking a model to rediscover it.
+Source structure controls what can stay together during reading. The model budget controls how many complete structures fit in one request.
 
-| Input | Library | Structure retained |
+| Input | Parser | Retained structure |
 | --- | --- | --- |
-| Markdown | `markdown-it-py` | Headings, complete lists, tables, code fences and source lines. |
-| Text | Unicode decoding and bounded spans | Paragraph boundaries where available; line locations. |
-| PDF | `pypdf` | Extractable page text and page numbers. |
-| PowerPoint | `python-pptx` | Slide titles, text levels, table rows/cells, grouped shapes and speaker notes. |
-| Scanned PDF | `ocrmypdf --skip-text`, then `pypdf` | Existing text pages remain intact; OCR supplies text on scanned pages. |
-
-Install format support with `pip install -e '.[pdf,slides]'`. Convert legacy `.ppt` to `.pptx`. OCRmyPDF needs local system dependencies; follow its installation guide.
+| Markdown | `markdown-it-py` | Complete paragraphs, lists, tables, code fences and block quotes; heading ancestry, reference links and source lines. |
+| Text | Unicode decoding and paragraph boundaries | Complete paragraphs, available heading structure and source lines. |
+| PDF | `pypdf` | Complete extracted page text and page numbers. |
+| PowerPoint | `python-pptx` | Slide title, text levels, table rows/cells, grouped shapes and speaker notes. All extracted components from one slide share a group. |
+| Scanned PDF | OCRmyPDF/Tesseract, then `pypdf` | A searchable text layer with page locations. |
 
 ```sh
+pip install -e '.[pdf,slides]'
 lamina ingest ./sources --workspace .lamina
 lamina ingest scanned.pdf --ocr --workspace .lamina
 ```
 
-`--ocr` is local and explicit. The input is not overwritten. Source identity uses original bytes; extracted text and page locations are stored separately. A PDF page or slide with no extractable text fails the import rather than disappearing. The batch is parsed before an atomic import, so failure does not publish a partial collection.
+Convert legacy `.ppt` to `.pptx`. OCRmyPDF requires local system dependencies; follow its installation guide. `--ocr` uses `--skip-text`, preserving existing text pages. It leaves the input file unchanged. Source identity uses original bytes; parsed units retain their exact source revision and locations.
 
-The parser packs complete Markdown blocks with a 12,000-character target. Oversized paragraphs can split; lists, tables and fences remain intact. A block larger than a model request budget fails rather than being truncated. This target is a packing choice, not a token budget or difficulty estimate.
+A page or slide with no extractable text stops the import with its location. All files are parsed before an atomic import, so a failed batch does not publish a partial collection.
 
-## Choosing an OCR tool
+## What is a reading unit?
 
-There is no measured universal winner in this repository. OCRmyPDF/Tesseract is the supported path for adding a searchable text layer locally. Docling is a candidate when layout, reading order and table reconstruction are central; it adds model dependencies and needs evaluation on the actual document family. Recognizing printed words does not establish that a chart or diagram was understood.
+A Markdown table remains one table even when it is long. A paragraph remains complete even when its language uses no spaces. PowerPoint text and speaker notes remain separately citable units, but the reader receives their whole slide group. PDF pages remain complete units because this parser exposes page boundaries without claiming a reconstructed document layout.
 
-Compare representative native PDFs, scans, dense tables and slides. Check missing text, reading order, row/column association, numbers, symbols, captions, elapsed time and memory. Measure downstream answer errors too: accurate word recognition can still pair a value with the wrong heading.
+There is no character-count slicing rule. Request packing combines these structures across headings within one source until the configured complete-request allowance is reached. A structure that cannot fit is reported with its locator. Increase the appropriate capacity or explicitly decompose the structure while retaining its relationships.
 
-The OCR test uses an original synthetic scanned sentence. It checks integration and preservation of input bytes, not engine rankings. Mixed visual/text pages can contain information this text path misses; inspect such material or use a visual extraction workflow.
+Heading ancestry and reference links retain known relationships. A page or slide boundary does not establish semantic independence. Readers can request adjacent source context when a dependency is missing; requested additions must also fit. Parsing does not infer the meaning of diagrams or establish which slides form one argument.
+
+## OCR choice and limits
+
+OCRmyPDF/Tesseract is the supported local route for scanned PDFs. The repository has no matched comparison establishing an OCR winner. Layout-focused alternatives such as Docling need evaluation on the actual source family before adoption.
+
+For representative documents, check missing text, reading order, table row/column associations, numbers, symbols and captions. Include downstream writing errors, elapsed time and memory in the comparison. Accurate word recognition can still associate a value with the wrong heading.
+
+The OCR integration test reads an original synthetic scanned sentence and checks that input bytes remain unchanged. Mixed visual/text pages can contain information this path misses. Inspect those sources or use a visual extraction workflow.
 
 ## References
 

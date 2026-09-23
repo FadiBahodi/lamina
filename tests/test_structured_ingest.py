@@ -42,6 +42,59 @@ def test_pptx_keeps_table_rows_and_speaker_notes(tmp_path):
         "speaker notes" in u["locator"] and "Do not generalize" in u["text"]
         for u in units
     )
+    assert {u["structural_group"] for u in units} == {"slide:1"}
+    assert {u["kind"] for u in units} == {"text", "table", "speaker_notes"}
+
+
+def test_markdown_retains_heading_ancestry_and_whole_blocks(tmp_path):
+    source = tmp_path / "wind.md"
+    paragraph = "风使叶片旋转。" * 4000
+    source.write_text(
+        "# Wind\n\n## Rotor\n\nA rotor transfers torque.\n\n"
+        "### Limits\n\n" + paragraph + "\n\n- First condition.\n- Second condition.\n"
+    )
+    _, units = read_source(source)
+    assert [u["kind"] for u in units] == ["paragraph", "paragraph", "bullet_list"]
+    assert units[1]["text"] == paragraph
+    assert units[1]["heading_path"] == ["Wind", "Rotor", "Limits"]
+    assert units[1]["section_id"] == units[2]["section_id"]
+    assert units[0]["section_id"] != units[1]["section_id"]
+
+
+def test_markdown_reference_definition_resolves_across_sections(tmp_path):
+    source = tmp_path / "wind.md"
+    source.write_text(
+        "# Wind\n\n## Design\n\nSee [blade dimensions][spec].\n\n"
+        '## References\n\n[spec]: https://example.org/blades "Blade dimensions"\n'
+    )
+    _, units = read_source(source)
+    assert units[0]["reference_context"] == [
+        {
+            "label": "SPEC",
+            "href": "https://example.org/blades",
+            "title": "Blade dimensions",
+        }
+    ]
+    assert any("[spec]: https://example.org/blades" in u["text"] for u in units)
+
+
+def test_each_slide_has_an_explicit_group_and_order(tmp_path):
+    pptx = pytest.importorskip("pptx")
+    deck = pptx.Presentation()
+    for title, note in [
+        ("Wind load", "A rotating blade sees changing load."),
+        ("Continuation", "The preceding load changes the shaft torque."),
+    ]:
+        slide = deck.slides.add_slide(deck.slide_layouts[5])
+        slide.shapes.title.text = title
+        slide.notes_slide.notes_text_frame.text = note
+    path = tmp_path / "sequence.pptx"
+    deck.save(path)
+    _, units = read_source(path)
+    assert [u["slide"] for u in units] == [1, 1, 2, 2]
+    assert units[0]["structural_group"] == units[1]["structural_group"]
+    assert units[1]["structural_group"] != units[2]["structural_group"]
+    assert "preceding load" in units[3]["text"]
 
 
 def test_local_ocr_preserves_original_identity(tmp_path):

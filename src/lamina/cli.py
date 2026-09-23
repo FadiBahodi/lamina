@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import functools
 import http.server
 import json
@@ -142,7 +143,7 @@ def parser() -> argparse.ArgumentParser:
     produce.add_argument(
         "--workflow",
         choices=["auto", "direct", "assigned", "planned"],
-        help="auto skips extraction/planning for small inputs; planned retains the full route",
+        help="auto uses direct writing when complete requests fit; planned groups source ideas",
     )
     produce.add_argument(
         "--assignments",
@@ -155,7 +156,21 @@ def parser() -> argparse.ArgumentParser:
     produce.add_argument(
         "--max-input-bytes", type=int, help="Hard request limit; no source truncation"
     )
-    produce.add_argument("--core-words", type=int)
+    produce.add_argument(
+        "--core-words",
+        type=int,
+        help="Optional legacy reading target; default fits complete structures to the adapter budget",
+    )
+    produce.add_argument(
+        "--reading",
+        choices=["reusable", "task"],
+        help="Reuse source reading across goals, or read for this project's brief",
+    )
+    produce.add_argument(
+        "--max-attempts",
+        type=int,
+        help="Maximum attempts per model request, including validation repair (1–5)",
+    )
     produce.add_argument("--halo-units", type=int)
     produce.add_argument("--output", type=Path, default=Path("output/project"))
     run = commands.add_parser(
@@ -259,6 +274,13 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    resources = ExitStack()
+
+    def own(provider):
+        if provider is not None:
+            resources.callback(getattr(provider, "close", lambda: None))
+        return provider
+
     try:
         if args.command == "ingest":
             result = ingest_paths(
@@ -290,7 +312,8 @@ def main(argv: list[str] | None = None) -> int:
             result = Workspace(args.workspace).stats()
         elif args.command in {"build", "demo"}:
             from .pipeline import build
-            from .providers import CommandProvider, DemoProvider
+            from .providers import DemoProvider
+            from .studio_server import make_provider
 
             workspace = Workspace(args.workspace)
             if args.command == "demo":
@@ -298,11 +321,10 @@ def main(argv: list[str] | None = None) -> int:
                 ingest_paths([fixture], workspace)
                 provider = DemoProvider()
             else:
-                command = shlex.split(args.adapter)
-                if not command:
-                    raise ValueError("Adapter command cannot be empty")
-                provider = CommandProvider(
-                    command, timeout=args.timeout, version=args.adapter_version
+                provider = own(
+                    make_provider(
+                        args.adapter, timeout=args.timeout, version=args.adapter_version
+                    )
                 )
             bundle = build(workspace, provider, workers=args.workers)
             from .print_export import export_markdown, export_pdf
@@ -329,8 +351,10 @@ def main(argv: list[str] | None = None) -> int:
             from .studio_server import make_provider
 
             workspace = Workspace(args.workspace)
-            provider = make_provider(
-                args.adapter, version=args.adapter_version, timeout=args.timeout
+            provider = own(
+                make_provider(
+                    args.adapter, version=args.adapter_version, timeout=args.timeout
+                )
             )
             options = {
                 key: value
@@ -348,6 +372,8 @@ def main(argv: list[str] | None = None) -> int:
                     "writer_workers": args.writers,
                     "review_workers": args.reviewers,
                     "core_words": args.core_words,
+                    "reading": args.reading,
+                    "max_attempts": args.max_attempts,
                     "halo_units": args.halo_units,
                     "source_policy": (
                         json.loads(args.source_policy.read_text(encoding="utf-8"))
@@ -385,10 +411,12 @@ def main(argv: list[str] | None = None) -> int:
                     args.section_notes.read_text(encoding="utf-8")
                 )
             receipt = run_production(workspace, provider, plan, options)
-            audio_provider = make_provider(
-                args.audio_adapter,
-                version=args.audio_adapter_version,
-                timeout=args.timeout,
+            audio_provider = own(
+                make_provider(
+                    args.audio_adapter,
+                    version=args.audio_adapter_version,
+                    timeout=args.timeout,
+                )
             )
             links = deliver_production(
                 workspace, receipt, plan, args.output, audio_provider=audio_provider
@@ -407,8 +435,10 @@ def main(argv: list[str] | None = None) -> int:
             procedure = validate_procedure(
                 json.loads(args.procedure.read_text(encoding="utf-8"))
             )
-            provider = make_provider(
-                args.adapter, version=args.adapter_version, timeout=args.timeout
+            provider = own(
+                make_provider(
+                    args.adapter, version=args.adapter_version, timeout=args.timeout
+                )
             )
             workspace = Workspace(args.workspace)
             result = run_procedure(workspace, provider, procedure, args.output)
@@ -431,8 +461,10 @@ def main(argv: list[str] | None = None) -> int:
 
                 definition = json.loads(args.method.read_text(encoding="utf-8"))
                 task = json.loads(args.task.read_text(encoding="utf-8"))
-                provider = make_provider(
-                    args.adapter, version=args.adapter_version, timeout=args.timeout
+                provider = own(
+                    make_provider(
+                        args.adapter, version=args.adapter_version, timeout=args.timeout
+                    )
                 )
                 result = run_method(
                     Workspace(args.workspace), provider, definition, task
@@ -541,6 +573,8 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError, RuntimeError, TimeoutError) as exc:
         print(f"lamina: {exc}", file=sys.stderr)
         return 1
+    finally:
+        resources.close()
 
 
 if __name__ == "__main__":

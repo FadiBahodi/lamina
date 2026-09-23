@@ -18,6 +18,7 @@ from .production import (
     _plan_identity,
     _sources,
     _Tracker,
+    request_limit,
 )
 from .source_policy import normalize_production_inputs
 from .store import Workspace, digest
@@ -218,13 +219,19 @@ def check_assessment(
         raise AssessmentCheckError("workers must be an integer from 1 to 128")
     _text(getattr(provider, "identity", None), "provider.identity", 500)
     rows = _inputs(workspace, plan, receipt)
-    max_bytes = min(
-        plan["options"]["max_request_bytes"], plan["options"]["max_input_bytes"]
-    )
+    max_bytes = request_limit(plan["options"])
     started = time.monotonic()
-    tracker = _Tracker(progress)
+    tracker = _Tracker(progress, max_attempts=plan["options"]["max_attempts"])
 
     def call(stage, section_id, instruction, shape, data, checker):
+        from .production_contract import ProductionValidationError
+
+        def checked(raw):
+            try:
+                return checker(raw)
+            except AssessmentCheckError as exc:
+                raise ProductionValidationError(str(exc)) from exc
+
         try:
             return tracker.call(
                 workspace,
@@ -234,7 +241,7 @@ def check_assessment(
                 instruction,
                 shape,
                 data,
-                checker,
+                checked,
                 max_bytes,
             )
         except ProductionError as exc:
@@ -290,7 +297,11 @@ def check_assessment(
         answer = solve(row)
         return answer, judge((row, answer))
 
-    paired = bounded_map(check, rows, workers)
+    try:
+        paired = bounded_map(check, rows, workers)
+    except Exception as exc:
+        exc.metrics = tracker.metrics()
+        raise
     answers = [pair[0] for pair in paired]
     judgments = [pair[1] for pair in paired]
     checks = [

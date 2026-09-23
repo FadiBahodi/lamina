@@ -236,31 +236,42 @@ class Workspace:
         owner = uuid.uuid4().hex
         failures = 0
         waiting_since = time.monotonic()
-        # Completed entries are immutable; warm reads need no write lock.
-        with self.connection() as db:
-            row = db.execute(
-                "SELECT result FROM jobs WHERE key=? AND status='completed'", (key,)
-            ).fetchone()
-            if row is not None:
-                return json.loads(row[0])
         while True:
             now = time.time()
             claimed = False
+            # Observe completed entries and live owners without taking SQLite's
+            # writer lock. Only a plausible claim/reclaim enters a transaction.
             with self.connection() as db:
-                db.execute("BEGIN IMMEDIATE")
-                db.execute(
-                    "INSERT OR IGNORE INTO jobs (key,stage,identity,status,created_at,updated_at) VALUES (?,?,?,'pending',?,?)",
-                    (key, stage, identity, now, now),
-                )
-                row = db.execute("SELECT * FROM jobs WHERE key=?", (key,)).fetchone()
-                if row["status"] == "completed":
-                    return json.loads(row["result"])
-                if row["status"] != "running" or (row["lease_until"] or 0) < now:
+                observed = db.execute(
+                    "SELECT status,lease_until,result FROM jobs WHERE key=?", (key,)
+                ).fetchone()
+            if observed is not None and observed["status"] == "completed":
+                return json.loads(observed["result"])
+            if (
+                observed is None
+                or observed["status"] != "running"
+                or (observed["lease_until"] or 0) < now
+            ):
+                with self.connection() as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    # The observer can race another claimant or a renewal. The
+                    # decision and lease time must use this locked, fresh state.
+                    now = time.time()
                     db.execute(
-                        "UPDATE jobs SET status='running',owner=?,lease_until=?,attempts=attempts+1,error=NULL,updated_at=? WHERE key=?",
-                        (owner, now + self.lease_seconds, now, key),
+                        "INSERT OR IGNORE INTO jobs (key,stage,identity,status,created_at,updated_at) VALUES (?,?,?,'pending',?,?)",
+                        (key, stage, identity, now, now),
                     )
-                    claimed = True
+                    row = db.execute(
+                        "SELECT * FROM jobs WHERE key=?", (key,)
+                    ).fetchone()
+                    if row["status"] == "completed":
+                        return json.loads(row["result"])
+                    if row["status"] != "running" or (row["lease_until"] or 0) < now:
+                        db.execute(
+                            "UPDATE jobs SET status='running',owner=?,lease_until=?,attempts=attempts+1,error=NULL,updated_at=? WHERE key=?",
+                            (owner, now + self.lease_seconds, now, key),
+                        )
+                        claimed = True
             if not claimed:
                 if time.monotonic() - waiting_since > 600:
                     raise TimeoutError(f"Timed out waiting for shared {stage} job")

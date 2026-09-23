@@ -114,7 +114,10 @@ class FixtureAdapter:
                 "shared_context": [
                     {
                         "statement": "A new lease does not prove that the previous worker has stopped; fencing rejects stale writes.",
-                        "evidence": [ideas[0]["evidence"][0], ideas[1]["evidence"][0]],
+                        "evidence_refs": [
+                            {"idea_id": ideas[0]["id"], "evidence_index": 0},
+                            {"idea_id": ideas[1]["id"], "evidence_index": 0},
+                        ],
                     }
                 ],
             }

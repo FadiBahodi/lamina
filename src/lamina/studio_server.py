@@ -6,6 +6,8 @@ text is reference material, not an executable instruction or filesystem path.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
+
 import base64
 import copy
 import binascii
@@ -147,24 +149,65 @@ class StudioServer(ThreadingHTTPServer):
         audio_adapter_version: str | None = None,
         timeout: float = 120,
     ):
-        self.workspace = Workspace(workspace)
-        self.provider = make_provider(adapter, version=adapter_version, timeout=timeout)
-        self.audio_provider = make_provider(
-            audio_adapter, version=audio_adapter_version, timeout=timeout
-        )
-        self.output_root = self.workspace.root / "outputs"
-        self.output_root.mkdir(parents=True, exist_ok=True)
-        from .studio_site import prepare_studio
+        self._provider_resources = ExitStack()
+        self._job_condition = threading.Condition()
+        self._jobs = set()
+        self._closing = False
+        with ExitStack() as resources:
+            self.workspace = Workspace(workspace)
+            self.provider = make_provider(
+                adapter, version=adapter_version, timeout=timeout
+            )
+            resources.callback(getattr(self.provider, "close", lambda: None))
+            self.audio_provider = make_provider(
+                audio_adapter, version=audio_adapter_version, timeout=timeout
+            )
+            resources.callback(getattr(self.audio_provider, "close", lambda: None))
+            self.output_root = self.workspace.root / "outputs"
+            self.output_root.mkdir(parents=True, exist_ok=True)
+            from .studio_site import prepare_studio
 
-        self.asset_root = prepare_studio(
-            self.workspace.root / "studio-static"
-        ).resolve()
-        self.runs: dict[str, dict] = {}
-        self.run_lock = threading.Lock()
-        from .project_api import restore_projects
+            self.asset_root = prepare_studio(
+                self.workspace.root / "studio-static"
+            ).resolve()
+            self.runs: dict[str, dict] = {}
+            self.run_lock = threading.Lock()
+            from .project_api import restore_projects
 
-        restore_projects(self)
-        super().__init__(("127.0.0.1", port), StudioHandler)
+            restore_projects(self)
+            super().__init__(("127.0.0.1", port), StudioHandler)
+            self._provider_resources = resources.pop_all()
+
+    def start_job(self, work, name):
+        """Retain job ownership until work finishes, including during shutdown."""
+
+        def run():
+            try:
+                work()
+            finally:
+                with self._job_condition:
+                    self._jobs.discard(threading.current_thread())
+                    self._job_condition.notify_all()
+
+        with self._job_condition:
+            if self._closing:
+                raise RuntimeError("The app is shutting down; new work cannot start")
+            thread = threading.Thread(target=run, name=name, daemon=True)
+            self._jobs.add(thread)
+            try:
+                thread.start()
+            except BaseException:
+                self._jobs.discard(thread)
+                raise
+
+    def server_close(self):
+        with self._job_condition:
+            self._closing = True
+            self._job_condition.notify_all()
+        super().server_close()
+        with self._job_condition:
+            self._job_condition.wait_for(lambda: not self._jobs)
+        self._provider_resources.close()
 
     def start_run(self, procedure: dict) -> dict:
         if self.provider is None:
@@ -209,9 +252,7 @@ class StudioServer(ThreadingHTTPServer):
                         error=f"{type(exc).__name__}: build failed; see the local Studio console",
                     )
 
-        threading.Thread(
-            target=work, name=f"lamina-run-{run_id[:8]}", daemon=True
-        ).start()
+        self.start_job(work, f"lamina-run-{run_id[:8]}")
         return dict(status)
 
     def start_method_run(self, method: dict, task: dict) -> dict:
@@ -285,9 +326,7 @@ class StudioServer(ThreadingHTTPServer):
                         error="Method run failed; see the local Studio console",
                     )
 
-        threading.Thread(
-            target=work, name=f"lamina-method-{run_id[:8]}", daemon=True
-        ).start()
+        self.start_job(work, f"lamina-method-{run_id[:8]}")
         return dict(status)
 
     def record_method_observation(self, body: dict) -> dict:
@@ -483,7 +522,11 @@ class StudioHandler(BaseHTTPRequestHandler):
             with self.server.run_lock:
                 run = self.server.runs.get(run_id)
                 result = (
-                    {k: v for k, v in run.items() if k not in {"plan", "receipt"}}
+                    {
+                        k: v
+                        for k, v in run.items()
+                        if k not in {"plan", "receipt", "partial_results"}
+                    }
                     if run
                     else None
                 )

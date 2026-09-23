@@ -1,0 +1,2084 @@
+{
+  "kind": "synthetic_local_executor_measurement",
+  "reproduce": "PYTHONPATH=src python benchmarks/execution_scaling.py --output results.json",
+  "assumptions": {
+    "service_distribution": "independent lognormal calls, sigma=0.7; finite_pool_tradeoff uses explicit durations",
+    "unscaled_stage_medians_seconds": {
+      "write": 20,
+      "review": 8,
+      "repair": 18,
+      "recheck": 8
+    },
+    "sleep_scale": 0.001,
+    "flag_probability": 0.4,
+    "repeats": 3,
+    "failures": "seeded stage failures; successful siblings finish under both policies",
+    "capacity": "same finite shared pool and same per-stage ceilings in each comparison"
+  },
+  "interpretation": "Ratios compare these sampled service times and capacities. A one-worker run has equal useful work; scheduling overhead can make chains slower. The unlimited-worker maximum-of-sums bound does not establish a finite-pool guarantee.",
+  "limits": "No live models, token costs, network quotas, provider retry delays or semantic output quality are measured.",
+  "graph_scaling": {
+    "workload": "synthetic chain declared in reverse order",
+    "scope": "previous repeated readiness scan versus adjacency construction, topological validation and remaining-depth calculation; excludes method shape validation and execution",
+    "rows": [
+      {
+        "nodes": 128,
+        "edges": 127,
+        "previous_validation_candidate_checks": 8256,
+        "previous_validation_ms": 0.404,
+        "indexed_validation_and_depth_ms": 0.375
+      },
+      {
+        "nodes": 256,
+        "edges": 255,
+        "previous_validation_candidate_checks": 32896,
+        "previous_validation_ms": 1.227,
+        "indexed_validation_and_depth_ms": 0.366
+      },
+      {
+        "nodes": 512,
+        "edges": 511,
+        "previous_validation_candidate_checks": 131328,
+        "previous_validation_ms": 4.894,
+        "indexed_validation_and_depth_ms": 0.632
+      },
+      {
+        "nodes": 1024,
+        "edges": 1023,
+        "previous_validation_candidate_checks": 524800,
+        "previous_validation_ms": 16.65,
+        "indexed_validation_and_depth_ms": 1.142
+      },
+      {
+        "nodes": 2048,
+        "edges": 2047,
+        "previous_validation_candidate_checks": 2098176,
+        "previous_validation_ms": 72.183,
+        "indexed_validation_and_depth_ms": 2.698
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "variable_calls",
+      "count": 32,
+      "workers": 8,
+      "writers": 8,
+      "reviewers": 8,
+      "failure_rate": 0,
+      "comparisons": [
+        {
+          "seed": 729,
+          "barriers": {
+            "wall_ms": 360.024,
+            "first_accepted_section_ms": 141.091,
+            "total_service_ms": 1695.272,
+            "assumed_work_ms": 1670.236,
+            "calls": 94,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 782.122,
+                "first_start_ms": 0.269,
+                "last_finish_ms": 135.808
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 308.369,
+                "first_start_ms": 137.249,
+                "last_finish_ms": 214.302
+              },
+              "repair": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 447.039,
+                "first_start_ms": 215.272,
+                "last_finish_ms": 330.447
+              },
+              "recheck": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 157.742,
+                "first_start_ms": 331.678,
+                "last_finish_ms": 358.936
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 255.015,
+            "first_accepted_section_ms": 12.333,
+            "total_service_ms": 1678.694,
+            "assumed_work_ms": 1670.236,
+            "calls": 94,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 781.4,
+                "first_start_ms": 0.153,
+                "last_finish_ms": 189.051
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 307.973,
+                "first_start_ms": 5.38,
+                "last_finish_ms": 226.008
+              },
+              "repair": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 431.721,
+                "first_start_ms": 17.331,
+                "last_finish_ms": 236.443
+              },
+              "recheck": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 157.6,
+                "first_start_ms": 31.315,
+                "last_finish_ms": 254.341
+              }
+            }
+          },
+          "wall_ratio": 1.4118
+        },
+        {
+          "seed": 730,
+          "chains": {
+            "wall_ms": 311.134,
+            "first_accepted_section_ms": 27.149,
+            "total_service_ms": 1876.898,
+            "assumed_work_ms": 1867.186,
+            "calls": 88,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 1087.019,
+                "first_start_ms": 0.165,
+                "last_finish_ms": 303.813
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 407.896,
+                "first_start_ms": 11.151,
+                "last_finish_ms": 310.267
+              },
+              "repair": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 272.137,
+                "first_start_ms": 18.467,
+                "last_finish_ms": 234.628
+              },
+              "recheck": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 109.846,
+                "first_start_ms": 25.051,
+                "last_finish_ms": 241.982
+              }
+            }
+          },
+          "barriers": {
+            "wall_ms": 376.101,
+            "first_accepted_section_ms": 231.381,
+            "total_service_ms": 1875.07,
+            "assumed_work_ms": 1867.186,
+            "calls": 88,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 1085.844,
+                "first_start_ms": 0.181,
+                "last_finish_ms": 226.508
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 407.575,
+                "first_start_ms": 227.57,
+                "last_finish_ms": 288.101
+              },
+              "repair": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 271.998,
+                "first_start_ms": 288.908,
+                "last_finish_ms": 352.503
+              },
+              "recheck": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 109.651,
+                "first_start_ms": 353.497,
+                "last_finish_ms": 375.44
+              }
+            }
+          },
+          "wall_ratio": 1.2088
+        },
+        {
+          "seed": 731,
+          "barriers": {
+            "wall_ms": 338.905,
+            "first_accepted_section_ms": 143.449,
+            "total_service_ms": 1746.581,
+            "assumed_work_ms": 1737.516,
+            "calls": 90,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 884.378,
+                "first_start_ms": 0.121,
+                "last_finish_ms": 137.522
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 375.806,
+                "first_start_ms": 138.408,
+                "last_finish_ms": 204.984
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 279.979,
+                "first_start_ms": 206.224,
+                "last_finish_ms": 283.4
+              },
+              "recheck": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 206.418,
+                "first_start_ms": 284.426,
+                "last_finish_ms": 338.131
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 251.113,
+            "first_accepted_section_ms": 19.768,
+            "total_service_ms": 1745.755,
+            "assumed_work_ms": 1737.516,
+            "calls": 90,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 884.18,
+                "first_start_ms": 0.161,
+                "last_finish_ms": 223.141
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 375.041,
+                "first_start_ms": 10.876,
+                "last_finish_ms": 240.082
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 280.003,
+                "first_start_ms": 55.408,
+                "last_finish_ms": 228.557
+              },
+              "recheck": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 206.531,
+                "first_start_ms": 67.321,
+                "last_finish_ms": 250.271
+              }
+            }
+          },
+          "wall_ratio": 1.3496
+        }
+      ],
+      "wall_ratio_median": 1.3496,
+      "wall_ratio_min": 1.2088,
+      "wall_ratio_max": 1.4118
+    },
+    {
+      "name": "one_worker",
+      "count": 16,
+      "workers": 1,
+      "writers": 1,
+      "reviewers": 1,
+      "failure_rate": 0,
+      "comparisons": [
+        {
+          "seed": 729,
+          "barriers": {
+            "wall_ms": 984.855,
+            "first_accepted_section_ms": 452.954,
+            "total_service_ms": 976.395,
+            "assumed_work_ms": 971.229,
+            "calls": 50,
+            "peak_active": 1,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "2": "completed",
+              "3": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 446.109,
+                "first_start_ms": 0.234,
+                "last_finish_ms": 448.746
+              },
+              "review": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 139.183,
+                "first_start_ms": 449.139,
+                "last_finish_ms": 590.383
+              },
+              "repair": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 287.409,
+                "first_start_ms": 590.893,
+                "last_finish_ms": 879.257
+              },
+              "recheck": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 103.695,
+                "first_start_ms": 879.774,
+                "last_finish_ms": 984.59
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 986.601,
+            "first_accepted_section_ms": 33.165,
+            "total_service_ms": 976.784,
+            "assumed_work_ms": 971.229,
+            "calls": 50,
+            "peak_active": 1,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "2": "completed",
+              "3": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 446.606,
+                "first_start_ms": 0.204,
+                "last_finish_ms": 956.963
+              },
+              "review": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 139.386,
+                "first_start_ms": 29.354,
+                "last_finish_ms": 986.078
+              },
+              "repair": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 287.165,
+                "first_start_ms": 64.226,
+                "last_finish_ms": 931.459
+              },
+              "recheck": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 103.627,
+                "first_start_ms": 106.964,
+                "last_finish_ms": 945.238
+              }
+            }
+          },
+          "wall_ratio": 0.9982
+        },
+        {
+          "seed": 730,
+          "chains": {
+            "wall_ms": 991.175,
+            "first_accepted_section_ms": 38.168,
+            "total_service_ms": 983.165,
+            "assumed_work_ms": 977.477,
+            "calls": 50,
+            "peak_active": 1,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "2": "completed",
+              "3": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 474.363,
+                "first_start_ms": 0.181,
+                "last_finish_ms": 922.192
+              },
+              "review": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 234.653,
+                "first_start_ms": 11.173,
+                "last_finish_ms": 964.196
+              },
+              "repair": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 182.383,
+                "first_start_ms": 85.25,
+                "last_finish_ms": 983.325
+              },
+              "recheck": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 91.766,
+                "first_start_ms": 104.923,
+                "last_finish_ms": 990.952
+              }
+            }
+          },
+          "barriers": {
+            "wall_ms": 992.247,
+            "first_accepted_section_ms": 504.269,
+            "total_service_ms": 982.751,
+            "assumed_work_ms": 977.477,
+            "calls": 50,
+            "peak_active": 1,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "2": "completed",
+              "3": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 473.927,
+                "first_start_ms": 0.211,
+                "last_finish_ms": 476.712
+              },
+              "review": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 234.629,
+                "first_start_ms": 477.297,
+                "last_finish_ms": 714.203
+              },
+              "repair": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 182.383,
+                "first_start_ms": 714.764,
+                "last_finish_ms": 898.226
+              },
+              "recheck": {
+                "calls": 9,
+                "failed": 0,
+                "service_ms": 91.812,
+                "first_start_ms": 898.727,
+                "last_finish_ms": 991.99
+              }
+            }
+          },
+          "wall_ratio": 1.0011
+        },
+        {
+          "seed": 731,
+          "barriers": {
+            "wall_ms": 1023.234,
+            "first_accepted_section_ms": 525.33,
+            "total_service_ms": 1012.453,
+            "assumed_work_ms": 1007.487,
+            "calls": 46,
+            "peak_active": 1,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "2": "completed",
+              "3": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 500.175,
+                "first_start_ms": 0.228,
+                "last_finish_ms": 503.649
+              },
+              "review": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 206.993,
+                "first_start_ms": 504.294,
+                "last_finish_ms": 713.984
+              },
+              "repair": {
+                "calls": 7,
+                "failed": 0,
+                "service_ms": 177.137,
+                "first_start_ms": 714.619,
+                "last_finish_ms": 892.972
+              },
+              "recheck": {
+                "calls": 7,
+                "failed": 0,
+                "service_ms": 128.147,
+                "first_start_ms": 893.56,
+                "last_finish_ms": 1023.015
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 1023.868,
+            "first_accepted_section_ms": 83.346,
+            "total_service_ms": 1012.912,
+            "assumed_work_ms": 1007.487,
+            "calls": 46,
+            "peak_active": 1,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "2": "completed",
+              "3": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 500.208,
+                "first_start_ms": 0.279,
+                "last_finish_ms": 1012.587
+              },
+              "review": {
+                "calls": 16,
+                "failed": 0,
+                "service_ms": 207.373,
+                "first_start_ms": 49.053,
+                "last_finish_ms": 1023.553
+              },
+              "repair": {
+                "calls": 7,
+                "failed": 0,
+                "service_ms": 177.041,
+                "first_start_ms": 55.744,
+                "last_finish_ms": 969.844
+              },
+              "recheck": {
+                "calls": 7,
+                "failed": 0,
+                "service_ms": 128.289,
+                "first_start_ms": 74.647,
+                "last_finish_ms": 972.249
+              }
+            }
+          },
+          "wall_ratio": 0.9994
+        }
+      ],
+      "wall_ratio_median": 0.9994,
+      "wall_ratio_min": 0.9982,
+      "wall_ratio_max": 1.0011
+    },
+    {
+      "name": "review_capacity_one",
+      "count": 32,
+      "workers": 8,
+      "writers": 8,
+      "reviewers": 1,
+      "failure_rate": 0,
+      "comparisons": [
+        {
+          "seed": 729,
+          "barriers": {
+            "wall_ms": 723.953,
+            "first_accepted_section_ms": 140.971,
+            "total_service_ms": 1679.35,
+            "assumed_work_ms": 1670.236,
+            "calls": 94,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 781.814,
+                "first_start_ms": 0.223,
+                "last_finish_ms": 135.57
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 307.827,
+                "first_start_ms": 137.149,
+                "last_finish_ms": 448.181
+              },
+              "repair": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 432.063,
+                "first_start_ms": 448.579,
+                "last_finish_ms": 563.041
+              },
+              "recheck": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 157.646,
+                "first_start_ms": 564.041,
+                "last_finish_ms": 723.727
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 497.313,
+            "first_accepted_section_ms": 12.904,
+            "total_service_ms": 1679.865,
+            "assumed_work_ms": 1670.236,
+            "calls": 94,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 781.459,
+                "first_start_ms": 0.322,
+                "last_finish_ms": 149.397
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 308.594,
+                "first_start_ms": 5.945,
+                "last_finish_ms": 405.648
+              },
+              "repair": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 431.894,
+                "first_start_ms": 28.606,
+                "last_finish_ms": 462.36
+              },
+              "recheck": {
+                "calls": 15,
+                "failed": 0,
+                "service_ms": 157.917,
+                "first_start_ms": 79.748,
+                "last_finish_ms": 495.758
+              }
+            }
+          },
+          "wall_ratio": 1.4557
+        },
+        {
+          "seed": 730,
+          "chains": {
+            "wall_ms": 553.052,
+            "first_accepted_section_ms": 38.971,
+            "total_service_ms": 1889.122,
+            "assumed_work_ms": 1867.186,
+            "calls": 88,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 1089.709,
+                "first_start_ms": 0.89,
+                "last_finish_ms": 247.813
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 416.754,
+                "first_start_ms": 11.995,
+                "last_finish_ms": 500.894
+              },
+              "repair": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 272.125,
+                "first_start_ms": 49.05,
+                "last_finish_ms": 452.287
+              },
+              "recheck": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 110.534,
+                "first_start_ms": 147.577,
+                "last_finish_ms": 548.804
+              }
+            }
+          },
+          "barriers": {
+            "wall_ms": 827.124,
+            "first_accepted_section_ms": 257.467,
+            "total_service_ms": 1876.687,
+            "assumed_work_ms": 1867.186,
+            "calls": 88,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 1086.619,
+                "first_start_ms": 0.691,
+                "last_finish_ms": 229.271
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 408.247,
+                "first_start_ms": 230.465,
+                "last_finish_ms": 643.583
+              },
+              "repair": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 272.167,
+                "first_start_ms": 644.533,
+                "last_finish_ms": 708.124
+              },
+              "recheck": {
+                "calls": 12,
+                "failed": 0,
+                "service_ms": 109.654,
+                "first_start_ms": 715.27,
+                "last_finish_ms": 826.867
+              }
+            }
+          },
+          "wall_ratio": 1.4956
+        },
+        {
+          "seed": 731,
+          "barriers": {
+            "wall_ms": 810.634,
+            "first_accepted_section_ms": 162.507,
+            "total_service_ms": 1747.018,
+            "assumed_work_ms": 1737.516,
+            "calls": 90,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 884.652,
+                "first_start_ms": 0.193,
+                "last_finish_ms": 137.334
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 375.637,
+                "first_start_ms": 141.474,
+                "last_finish_ms": 522.155
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 280.057,
+                "first_start_ms": 522.779,
+                "last_finish_ms": 600.068
+              },
+              "recheck": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 206.672,
+                "first_start_ms": 601.52,
+                "last_finish_ms": 810.308
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 607.267,
+            "first_accepted_section_ms": 20.283,
+            "total_service_ms": 1750.075,
+            "assumed_work_ms": 1737.516,
+            "calls": 90,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 884.519,
+                "first_start_ms": 0.267,
+                "last_finish_ms": 150.556
+              },
+              "review": {
+                "calls": 32,
+                "failed": 0,
+                "service_ms": 377.581,
+                "first_start_ms": 11.366,
+                "last_finish_ms": 429.448
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 281.101,
+                "first_start_ms": 116.86,
+                "last_finish_ms": 424.557
+              },
+              "recheck": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 206.873,
+                "first_start_ms": 374.8,
+                "last_finish_ms": 606.155
+              }
+            }
+          },
+          "wall_ratio": 1.3349
+        }
+      ],
+      "wall_ratio_median": 1.4557,
+      "wall_ratio_min": 1.3349,
+      "wall_ratio_max": 1.4956
+    },
+    {
+      "name": "finite_pool_tradeoff",
+      "count": 4,
+      "workers": 2,
+      "writers": 2,
+      "reviewers": 2,
+      "failure_rate": 0,
+      "comparisons": [
+        {
+          "seed": 729,
+          "barriers": {
+            "wall_ms": 186.551,
+            "first_accepted_section_ms": 65.385,
+            "total_service_ms": 321.357,
+            "assumed_work_ms": 320.0,
+            "calls": 8,
+            "peak_active": 2,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "2": "completed",
+              "3": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 80.809,
+                "first_start_ms": 0.179,
+                "last_finish_ms": 40.997
+              },
+              "review": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 240.548,
+                "first_start_ms": 45.262,
+                "last_finish_ms": 186.077
+              },
+              "repair": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              },
+              "recheck": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 202.691,
+            "first_accepted_section_ms": 40.645,
+            "total_service_ms": 321.502,
+            "assumed_work_ms": 320.0,
+            "calls": 8,
+            "peak_active": 2,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "2": "completed",
+              "3": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 80.488,
+                "first_start_ms": 0.237,
+                "last_finish_ms": 101.832
+              },
+              "review": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 241.014,
+                "first_start_ms": 20.532,
+                "last_finish_ms": 202.26
+              },
+              "repair": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              },
+              "recheck": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              }
+            }
+          },
+          "wall_ratio": 0.9204
+        },
+        {
+          "seed": 730,
+          "chains": {
+            "wall_ms": 202.326,
+            "first_accepted_section_ms": 40.726,
+            "total_service_ms": 320.965,
+            "assumed_work_ms": 320.0,
+            "calls": 8,
+            "peak_active": 2,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "2": "completed",
+              "3": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 80.508,
+                "first_start_ms": 0.249,
+                "last_finish_ms": 101.683
+              },
+              "review": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 240.457,
+                "first_start_ms": 20.609,
+                "last_finish_ms": 201.954
+              },
+              "repair": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              },
+              "recheck": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              }
+            }
+          },
+          "barriers": {
+            "wall_ms": 182.391,
+            "first_accepted_section_ms": 61.496,
+            "total_service_ms": 320.935,
+            "assumed_work_ms": 320.0,
+            "calls": 8,
+            "peak_active": 2,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "2": "completed",
+              "3": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 80.506,
+                "first_start_ms": 0.27,
+                "last_finish_ms": 40.833
+              },
+              "review": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 240.43,
+                "first_start_ms": 41.384,
+                "last_finish_ms": 182.014
+              },
+              "repair": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              },
+              "recheck": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              }
+            }
+          },
+          "wall_ratio": 0.9015
+        },
+        {
+          "seed": 731,
+          "barriers": {
+            "wall_ms": 182.348,
+            "first_accepted_section_ms": 61.332,
+            "total_service_ms": 321.012,
+            "assumed_work_ms": 320.0,
+            "calls": 8,
+            "peak_active": 2,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "2": "completed",
+              "3": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 80.525,
+                "first_start_ms": 0.173,
+                "last_finish_ms": 40.684
+              },
+              "review": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 240.487,
+                "first_start_ms": 41.202,
+                "last_finish_ms": 181.968
+              },
+              "repair": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              },
+              "recheck": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 205.901,
+            "first_accepted_section_ms": 40.559,
+            "total_service_ms": 320.978,
+            "assumed_work_ms": 320.0,
+            "calls": 8,
+            "peak_active": 2,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "2": "completed",
+              "3": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 80.517,
+                "first_start_ms": 0.207,
+                "last_finish_ms": 101.446
+              },
+              "review": {
+                "calls": 4,
+                "failed": 0,
+                "service_ms": 240.461,
+                "first_start_ms": 20.456,
+                "last_finish_ms": 201.733
+              },
+              "repair": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              },
+              "recheck": {
+                "calls": 0,
+                "failed": 0,
+                "service_ms": 0,
+                "first_start_ms": 0,
+                "last_finish_ms": 0
+              }
+            }
+          },
+          "wall_ratio": 0.8856
+        }
+      ],
+      "wall_ratio_median": 0.9015,
+      "wall_ratio_min": 0.8856,
+      "wall_ratio_max": 0.9204
+    },
+    {
+      "name": "independent_failures",
+      "count": 32,
+      "workers": 8,
+      "writers": 8,
+      "reviewers": 8,
+      "failure_rate": 0.15,
+      "comparisons": [
+        {
+          "seed": 729,
+          "barriers": {
+            "wall_ms": 333.375,
+            "first_accepted_section_ms": 138.005,
+            "total_service_ms": 1503.55,
+            "assumed_work_ms": 1493.343,
+            "calls": 86,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "failed",
+              "12": "failed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "failed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "failed",
+              "6": "failed",
+              "7": "completed",
+              "8": "failed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 3,
+                "service_ms": 772.295,
+                "first_start_ms": 0.386,
+                "last_finish_ms": 133.194
+              },
+              "review": {
+                "calls": 29,
+                "failed": 1,
+                "service_ms": 281.859,
+                "first_start_ms": 134.204,
+                "last_finish_ms": 181.691
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 1,
+                "service_ms": 345.045,
+                "first_start_ms": 182.585,
+                "last_finish_ms": 310.141
+              },
+              "recheck": {
+                "calls": 12,
+                "failed": 1,
+                "service_ms": 104.352,
+                "first_start_ms": 311.001,
+                "last_finish_ms": 332.693
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 245.893,
+            "first_accepted_section_ms": 12.349,
+            "total_service_ms": 1500.769,
+            "assumed_work_ms": 1493.343,
+            "calls": 86,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "failed",
+              "12": "failed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "failed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "failed",
+              "6": "failed",
+              "7": "completed",
+              "8": "failed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 3,
+                "service_ms": 769.714,
+                "first_start_ms": 0.158,
+                "last_finish_ms": 211.449
+              },
+              "review": {
+                "calls": 29,
+                "failed": 1,
+                "service_ms": 281.863,
+                "first_start_ms": 5.399,
+                "last_finish_ms": 218.295
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 1,
+                "service_ms": 345.12,
+                "first_start_ms": 17.363,
+                "last_finish_ms": 232.348
+              },
+              "recheck": {
+                "calls": 12,
+                "failed": 1,
+                "service_ms": 104.073,
+                "first_start_ms": 35.679,
+                "last_finish_ms": 245.152
+              }
+            }
+          },
+          "wall_ratio": 1.3558
+        },
+        {
+          "seed": 730,
+          "chains": {
+            "wall_ms": 239.971,
+            "first_accepted_section_ms": 27.16,
+            "total_service_ms": 1532.724,
+            "assumed_work_ms": 1524.289,
+            "calls": 86,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "failed",
+              "11": "completed",
+              "12": "failed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "failed",
+              "21": "completed",
+              "22": "failed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "failed",
+              "29": "failed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "failed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 4,
+                "service_ms": 899.663,
+                "first_start_ms": 0.17,
+                "last_finish_ms": 230.114
+              },
+              "review": {
+                "calls": 28,
+                "failed": 0,
+                "service_ms": 296.039,
+                "first_start_ms": 11.214,
+                "last_finish_ms": 239.296
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 222.867,
+                "first_start_ms": 20.212,
+                "last_finish_ms": 184.128
+              },
+              "recheck": {
+                "calls": 13,
+                "failed": 3,
+                "service_ms": 114.156,
+                "first_start_ms": 39.87,
+                "last_finish_ms": 198.35
+              }
+            }
+          },
+          "barriers": {
+            "wall_ms": 294.669,
+            "first_accepted_section_ms": 178.284,
+            "total_service_ms": 1533.744,
+            "assumed_work_ms": 1524.289,
+            "calls": 86,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "failed",
+              "11": "completed",
+              "12": "failed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "completed",
+              "20": "failed",
+              "21": "completed",
+              "22": "failed",
+              "23": "completed",
+              "24": "completed",
+              "25": "completed",
+              "26": "completed",
+              "27": "completed",
+              "28": "failed",
+              "29": "failed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "failed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 4,
+                "service_ms": 899.817,
+                "first_start_ms": 0.162,
+                "last_finish_ms": 173.395
+              },
+              "review": {
+                "calls": 28,
+                "failed": 0,
+                "service_ms": 295.871,
+                "first_start_ms": 174.555,
+                "last_finish_ms": 229.754
+              },
+              "repair": {
+                "calls": 13,
+                "failed": 0,
+                "service_ms": 222.639,
+                "first_start_ms": 230.691,
+                "last_finish_ms": 267.946
+              },
+              "recheck": {
+                "calls": 13,
+                "failed": 3,
+                "service_ms": 115.417,
+                "first_start_ms": 269.385,
+                "last_finish_ms": 292.364
+              }
+            }
+          },
+          "wall_ratio": 1.2279
+        },
+        {
+          "seed": 731,
+          "barriers": {
+            "wall_ms": 320.46,
+            "first_accepted_section_ms": 131.15,
+            "total_service_ms": 1547.099,
+            "assumed_work_ms": 1538.131,
+            "calls": 78,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "failed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "failed",
+              "25": "failed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 2,
+                "service_ms": 871.769,
+                "first_start_ms": 0.155,
+                "last_finish_ms": 124.013
+              },
+              "review": {
+                "calls": 30,
+                "failed": 1,
+                "service_ms": 315.513,
+                "first_start_ms": 127.024,
+                "last_finish_ms": 182.332
+              },
+              "repair": {
+                "calls": 8,
+                "failed": 0,
+                "service_ms": 279.102,
+                "first_start_ms": 185.299,
+                "last_finish_ms": 296.197
+              },
+              "recheck": {
+                "calls": 8,
+                "failed": 0,
+                "service_ms": 80.715,
+                "first_start_ms": 297.057,
+                "last_finish_ms": 319.244
+              }
+            }
+          },
+          "chains": {
+            "wall_ms": 219.803,
+            "first_accepted_section_ms": 14.325,
+            "total_service_ms": 1545.549,
+            "assumed_work_ms": 1538.131,
+            "calls": 78,
+            "peak_active": 8,
+            "outcomes": {
+              "0": "completed",
+              "1": "completed",
+              "10": "completed",
+              "11": "completed",
+              "12": "completed",
+              "13": "completed",
+              "14": "completed",
+              "15": "completed",
+              "16": "completed",
+              "17": "completed",
+              "18": "completed",
+              "19": "completed",
+              "2": "failed",
+              "20": "completed",
+              "21": "completed",
+              "22": "completed",
+              "23": "completed",
+              "24": "failed",
+              "25": "failed",
+              "26": "completed",
+              "27": "completed",
+              "28": "completed",
+              "29": "completed",
+              "3": "completed",
+              "30": "completed",
+              "31": "completed",
+              "4": "completed",
+              "5": "completed",
+              "6": "completed",
+              "7": "completed",
+              "8": "completed",
+              "9": "completed"
+            },
+            "stages": {
+              "write": {
+                "calls": 32,
+                "failed": 2,
+                "service_ms": 871.811,
+                "first_start_ms": 0.161,
+                "last_finish_ms": 191.245
+              },
+              "review": {
+                "calls": 30,
+                "failed": 1,
+                "service_ms": 313.864,
+                "first_start_ms": 8.767,
+                "last_finish_ms": 208.176
+              },
+              "repair": {
+                "calls": 8,
+                "failed": 0,
+                "service_ms": 279.131,
+                "first_start_ms": 55.489,
+                "last_finish_ms": 215.625
+              },
+              "recheck": {
+                "calls": 8,
+                "failed": 0,
+                "service_ms": 80.743,
+                "first_start_ms": 73.211,
+                "last_finish_ms": 219.211
+              }
+            }
+          },
+          "wall_ratio": 1.4579
+        }
+      ],
+      "wall_ratio_median": 1.3558,
+      "wall_ratio_min": 1.2279,
+      "wall_ratio_max": 1.4579
+    }
+  ]
+}

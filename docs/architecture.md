@@ -1,55 +1,59 @@
 # Architecture
 
-Lamina separates three decisions: what material belongs together, what each call needs to see, and when that call can run. A model or calling agent decides meaning. Code stores sources, assembles context, enforces contracts and schedules work.
+Lamina connects three decisions: which material belongs together, what each worker must see, and when the worker can start. Models or a calling agent decide meaning and editorial structure. Code controls provenance, ownership, resource limits and execution. [Production](production.md) specifies the direct, planned and caller-assigned routes.
 
-## Execution
+## Source structure and capacity
 
-| Route | Model work | When to use it |
-| --- | --- | --- |
-| Direct | Write → review → optional repair/recheck | Complete source context fits one writing task. |
-| Assigned | The same chain per supplied section | A calling agent has chosen source ownership and dependencies. |
-| Planned | Read → optional target grouping → plan → section chains | The task needs model-chosen organization first. |
+Ingestion preserves complete parser structures. Reading batches combine them across headings within one source, measured with the complete request envelope. PowerPoint slide components remain together. A reader can request adjacent context with a reason; output truncation divides a batch between complete structures. An indivisible structure can require a larger allowance or explicit decomposition.
 
-`auto` selects direct for a small complete input, otherwise planned. It does not infer difficulty, choose a model, or prove that input is semantically self-contained. Every call has a request-size check. The example HTTP adapter can additionally check a configured tokenizer and model context budget with reserved output space.
+Providers with a declared tokenizer and context limit expose measured input capacity with an output reserve. Generic adapters expose a byte transport guard. Automatic workflow selection measures writing and source-review requests; future drafts and findings are checked when available. These measurements describe capacity. Accuracy and appropriate task size require evaluation.
 
-The assigned route never silently creates a second planner. Search supplies candidates, not semantic equivalence: related passages can repeat, complement, qualify or contradict each other. Code deduplicates known source references. The planned route's global decision remains bounded; it is not a solution for an unlimited corpus.
+Default readings produce a reusable source inventory independently of the current goal and format. Original source passages accompany writing because an inventory can omit qualifications or relationships. Task-specific reading is also available.
 
-## Context
+## Organization and context
 
-Writers receive their assigned original units, a short section map and explicitly needed evidence. A unit already supplied as owned evidence is not repeated as predecessor or shared evidence. Planned ideas may retain short quotes used to identify support. Source assignments need no intermediate idea prose.
+Planning cards retain complete idea titles, explanations and evidence references. Repeated quotation text is removed from planning requests and restored mechanically. Oversized inventories use bounded grouping calls to create an outline; final assignment revisits every original card. Each card has one owner or an explicit omission. The saved grouping tree makes those decisions inspectable. The shared outline must still fit a request.
 
-Source ownership differs from context. An assigned writer accounts for every owned unit as used or omitted with a reason. A planned writer accounts for its extracted ideas. These checks inspect records; neither proves that prose preserves every important distinction.
+The engine measures resulting writing and source-review assignments. Models subdivide oversized planned sections without discarding owned material. Required context or one indivisible idea can still exceed capacity.
 
-Earlier evidence is separate from finished candidate prompts. `context_section_ids` shares source evidence. `candidate_context_ids` supplies earlier question text to an assessment's blind solver. Both name earlier sections; neither sends a marking key into candidate input.
+Each writer receives its assignment, original passages, declared earlier evidence, relevant shared relationships, and its neighbors' titles and purposes. Repeated source IDs appear once. Unrelated sections' assignments stay outside the request.
 
-## Resources and time
+`context_section_ids` shares earlier source evidence. `candidate_context_ids` supplies completed earlier candidate prompts during assessment checking. Work requiring completed prerequisite prose uses a method dependency graph. Ownership, context and completed outputs remain explicit boundaries.
 
-`workers` caps simultaneous production calls. Optional stage limits can lower that capacity. The executor submits bounded work and prioritizes finishing section checks. One slow writer therefore does not block reviews of unrelated sections. Assessment solve/judge pairs also run as local chains.
+## Checks and recovery
 
-More workers cannot shorten a dependency. Under an idealized homogeneous worker model, total work divided by worker count and the longest dependency chain are lower bounds on completion time. Provider quotas, token sizes, unequal model speed, retries and overhead can raise actual time. Token counts alone are not execution time.
+Code validates source membership, quotation spans, supplied output claim spans and ownership. Conservative quote normalization recovers formatting differences while storing the original source substring. Reviewers inspect the actual draft for lost meaning and unsupported claims. Different stages can use different models.
 
-Queueing models describe contention and waiting for a fixed workload. A scalability curve does not establish which calls should exist, an optimal semantic split, or model accuracy. Compare complete work, elapsed time, spend and output quality when changing the workflow. See [measurement](measurement.md).
+Production permits two attempts by default: the original call and one eligible correction/retry. This configurable resource policy covers validator feedback and provider-declared transient failures. Only fully validated results become successful cache entries. Independent jobs can finish after another fails.
 
-## Storage
+Each section proceeds through writing, review and one possible repair/recheck. Optional document review examines completed neighbors and declared relationships, recording unchecked pairs. Coverage reports distinguish material considered, cited by readers, assigned and cited in output. Semantic completeness remains a separate evaluation.
 
-SQLite stores exact source revisions, units, an FTS5 text index, jobs and method receipts. The index returns lexical candidates without rebuilding corpus statistics in Python for every query. A separate API accepts caller-provided vectors for rank fusion.
+## Scheduling and latency
 
-Completed cache reads avoid a write transaction. Running jobs retain renewable leases and owner fencing. Source reimport atomically replaces parsed units, preventing mixed segmentation after parser changes. Saved plans retain their source text.
+One worker limit bounds simultaneous production calls; stage limits can reduce it. Review begins as individual sections finish. The method runtime builds dependency counts once, starts ready work within lane limits, and prioritizes longer remaining paths using graph depth. This priority uses structure without estimating model duration.
 
-Reader requests for newly ingested sources use local IDs and omit revision locators. Unchanged text, heading, source metadata, policy, task and adjacent context can reuse an interpretation. Results are rebound to current exact source IDs. Changes outside declared context do not cause inferred semantic invalidation.
+With total service work W, worker capacity P and longest dependency chain D, ideal completion takes at least max(W/P, D). Real runs also incur provider waiting, network/process overhead, retries and unequal call lengths. Measure complete-run latency and delivered quality alongside call counts and usage.
 
-Progress is separate from the immutable plan and finished receipt. The browser polls small progress records and fetches full results when complete.
+Persistent adapters share a process and HTTP connection pool. Stable prompt ordering preserves repeated prefixes where endpoints support caching. Provider receipts establish actual cache usage; no universal discount or speedup is assumed.
+
+## Identity and reuse
+
+SQLite stores exact source revisions, parsed units, an FTS5 index, jobs and receipts. Completed cache reads avoid write transactions. Renewable leases and owner fencing protect running jobs. Atomic import prevents mixed parser output.
+
+Local request identities allow unchanged readings and section context to reuse results while rebinding citations to the current exact revision. Changing packing boundaries, headings, dependencies or relevant model configuration can invalidate additional work. Source edits have no constant-cost guarantee. New goals reuse matching readings but still plan across the inventory.
+
+Plans hold source units once and use IDs in reading batches. Browser progress records remain separate from full plans and receipts.
 
 ## Code map
 
-| Module | Responsibility |
+| Modules | Responsibility |
 | --- | --- |
-| `ingest.py`, `store.py` | Parse, locate, index and persist source material. |
-| `production.py`, `production_contract.py` | Build requests, validate results and assemble the document. |
-| `source_assignments.py` | Validate direct or caller-supplied source ownership. |
-| `execution.py` | Bound concurrent work and run section chains. |
-| `providers.py` | Dispatch configured adapters and retain usage metadata. |
-| `assessment_checks.py`, delivery/export modules | Output-specific checks and files. |
-| `method_runtime.py` | Execute caller-declared dependency graphs. |
+| `ingest`, `store` | Parse, locate, index and retain sources. |
+| `context_budget`, `source_reading` | Measure requests, pack structures and read sources. |
+| `planning`, `source_assignments` | Organize bounded plans or validate supplied assignments. |
+| `production`, `production_contract`, `context_binding` | Assemble requests, enforce contracts and bind references. |
+| `call_runtime`, `execution`, `providers` | Cache, retry, schedule and transport calls. |
+| `verification`, `assessment_checks` | Check output links, section relationships and assessment behavior. |
+| `method_runtime` | Run declared graphs and retain observations. |
 
-The older lesson/procedure path remains available for existing integrations. Its `pipeline.py` and `samp.py` contracts are separate from production. [System origins](system-origins.md) retains historical applications without making them current capability claims.
+Older lesson/procedure APIs retain separate contracts. See [system origins](system-origins.md) for their source families and [measurement](measurement.md) for evaluation boundaries.

@@ -137,7 +137,11 @@ class RetrievalFixture:
         if stage == "production_targets":
             return _catalog(data["ideas"])
         if stage == "production_route":
-            targets = data["retrieval_targets"]["targets"]
+            targets = data["ideas"]
+            assert all(
+                "evidence_refs" in target and "explanation" in target
+                for target in targets
+            )
             chosen = [
                 t
                 for t in targets
@@ -151,7 +155,7 @@ class RetrievalFixture:
                         "id": "s1",
                         "title": "Worker handoff and recovery",
                         "purpose": "Answer the owned retrieval tasks",
-                        "target_ids": [t["id"] for t in chosen],
+                        "idea_ids": [t["id"] for t in chosen],
                         "context_section_ids": [],
                         "representation": {
                             "kind": "question-and-answer",
@@ -163,7 +167,7 @@ class RetrievalFixture:
                 "omitted": (
                     [
                         {
-                            "target_id": "recovery-stale-write",
+                            "idea_id": "recovery-stale-write",
                             "reason": "Out of this guide's scope",
                         }
                     ]
@@ -339,3 +343,145 @@ def test_route_omission_stays_in_operator_plan_but_not_artifact(tmp_path):
         request for stage, request in provider.requests if stage == "production_write"
     )
     assert len(writer["input"]["assigned_targets"]) == 2
+
+
+def test_large_aggregate_keeps_exact_support_without_per_call_count_caps():
+    count = 1500
+    text = "Pitch adjustment reduces lift."
+    units = [{"id": f"unit_{n}", "text": text} for n in range(count)]
+    ideas = [{"id": f"idea_{n}", "unit_ids": [f"unit_{n}"]} for n in range(count)]
+    item = {
+        "text": text,
+        "supports_idea_ids": [idea["id"] for idea in ideas],
+        "evidence": [{"unit_id": unit["id"], "quote": text} for unit in units],
+    }
+    target = {
+        "id": "pitch",
+        "title": "Pitch control",
+        "prompt": "What changes lift?",
+        "context": "Shared operating conditions",
+        "member_idea_ids": [idea["id"] for idea in ideas],
+        "membership_relation": "equivalent",
+        "answer_groups": [{"label": "Control", "items": [item]}],
+    }
+    catalog = validate_retrieval_targets(
+        {"targets": [target], "relations": []}, ideas, units
+    )
+    assert len(catalog["targets"][0]["member_idea_ids"]) == count
+    assert (
+        len(catalog["targets"][0]["answer_groups"][0]["items"][0]["evidence"]) == count
+    )
+
+
+def test_answer_cannot_borrow_support_from_another_members_unrelated_quote():
+    units = [
+        {"id": "u1", "text": "Pitch adjustment reduces lift."},
+        {"id": "u2", "text": "Braking stops the rotor."},
+    ]
+    ideas = [{"id": "i1", "unit_ids": ["u1"]}, {"id": "i2", "unit_ids": ["u2"]}]
+    target = {
+        "id": "control",
+        "title": "Controls",
+        "prompt": "What reduces lift?",
+        "context": "Rotor operation",
+        "member_idea_ids": ["i1", "i2"],
+        "membership_relation": "variant",
+        "answer_groups": [
+            {
+                "label": "Answer",
+                "items": [
+                    {
+                        "text": units[0]["text"],
+                        "supports_idea_ids": ["i1", "i2"],
+                        "evidence": [
+                            {"unit_id": unit["id"], "quote": unit["text"]}
+                            for unit in units
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(RetrievalTargetError, match="own cited quote containing"):
+        validate_retrieval_targets({"targets": [target], "relations": []}, ideas, units)
+
+
+def test_many_target_relations_are_bounded_by_unique_known_pairs():
+    count = 1100
+    units = [{"id": "u", "text": "Reduce lift."}]
+    ideas = [{"id": f"idea_{n}", "unit_ids": ["u"]} for n in range(count)]
+    targets = [
+        {
+            "id": f"target_{n}",
+            "title": f"Context {n}",
+            "prompt": "What changes lift?",
+            "context": f"Operating context {n}",
+            "member_idea_ids": [f"idea_{n}"],
+            "membership_relation": "unique",
+            "answer_groups": [
+                {
+                    "label": "Action",
+                    "items": [
+                        {
+                            "text": "Reduce lift.",
+                            "supports_idea_ids": [f"idea_{n}"],
+                            "evidence": [{"unit_id": "u", "quote": "Reduce lift."}],
+                        }
+                    ],
+                }
+            ],
+        }
+        for n in range(count)
+    ]
+    relations = [
+        {
+            "from_target_id": f"target_{n}",
+            "to_target_id": f"target_{n + 1}",
+            "kind": "different_context",
+            "reason": "Distinct fixture operating contexts.",
+        }
+        for n in range(count - 1)
+    ]
+    catalog = validate_retrieval_targets(
+        {"targets": targets, "relations": relations}, ideas, units
+    )
+    assert len(catalog["targets"]) == count and len(catalog["relations"]) == count - 1
+    with pytest.raises(RetrievalTargetError, match="one relation per target pair"):
+        validate_retrieval_targets(
+            {"targets": targets, "relations": relations + [relations[0]]}, ideas, units
+        )
+
+
+def test_target_quote_typography_recovery_retains_original_source_span():
+    source = "The ‘pitch’ angle changes lift."
+    units = [{"id": "u", "text": source}]
+    ideas = [{"id": "i", "unit_ids": ["u"]}]
+    target = {
+        "id": "pitch",
+        "title": "Pitch",
+        "prompt": "What changes lift?",
+        "context": "Rotor",
+        "member_idea_ids": ["i"],
+        "membership_relation": "unique",
+        "answer_groups": [
+            {
+                "label": "Action",
+                "items": [
+                    {
+                        "text": "angle changes lift.",
+                        "supports_idea_ids": ["i"],
+                        "evidence": [
+                            {"unit_id": "u", "quote": "The 'pitch' angle changes lift."}
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    catalog = validate_retrieval_targets(
+        {"targets": [target], "relations": []}, ideas, units
+    )
+    quote = catalog["targets"][0]["answer_groups"][0]["items"][0]["evidence"][0][
+        "quote"
+    ]
+    assert quote == source

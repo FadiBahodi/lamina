@@ -7,18 +7,15 @@
     "brief": "Build a reference for practitioners using the supplied sources. Organize it around presenting problems or operational questions. For each question, preserve the complete answer group, conditions, exceptions and discriminating features. Merge equivalent questions; keep variants when they change the answer or the decision. Explain conflicts using source authority. Use tables when comparison helps. Include source citations and record deliberate omissions.",
     "options": {
       "format": "guide",
-      "reader_workers": 16,
-      "writer_workers": 8,
-      "review_workers": 8,
-      "core_words": 800,
-      "halo_units": 2,
-      "retrieval_targets": true
+      "retrieval_targets": true,
+      "workflow": "planned",
+      "reading": "reusable"
     },
     "inputs": "Add the reference texts. Assign authority, supplement and historical roles in Projects; add a layout example as a form exemplar.",
     "stages": [
       [
         "Read source regions",
-        "Readers extract ideas and supporting passages. Neighbors supply the context around a page or paragraph boundary."
+        "Readers extract ideas and supporting passages. Complete lists, tables and slide components stay together. Readers can request missing source context."
       ],
       [
         "Build an answer catalog",
@@ -46,12 +43,9 @@
     "brief": "Write a spoken lesson for a practitioner learning this material during a commute. Choose a coherent route through the supplied sources and divide it at natural changes in the argument. Preserve useful answer lists, exact quantities, mechanisms and exceptions. Explain unfamiliar terms in context, include brief recall questions and revisit important distinctions in a different scenario. Each section should build on the shared plan and assigned evidence. Return a script with speaker labels and clear transitions.",
     "options": {
       "format": "podcast-script",
-      "reader_workers": 16,
-      "writer_workers": 8,
-      "review_workers": 8,
-      "core_words": 800,
-      "halo_units": 2,
-      "retrieval_targets": false
+      "retrieval_targets": false,
+      "workflow": "planned",
+      "reading": "reusable"
     },
     "inputs": "Add teaching material and select its source roles. Set the audience and listening context in the brief. Configure a speech adapter when starting the local app to produce audio.",
     "stages": [
@@ -85,12 +79,9 @@
     "brief": "Create a staged short-answer assessment for practitioners from the supplied teaching sources. Choose a coherent situation with consequential decisions. Each stage should reveal only the information needed at that point. State the requested response and any answer limit clearly. Write creditable answer items, mark allocations and acceptable alternatives in the examiner material. Include questions that require applying the evidence, interpreting new findings and revising an earlier decision. Preserve conditions and numerical criteria from the sources.",
     "options": {
       "format": "assessment",
-      "reader_workers": 16,
-      "writer_workers": 8,
-      "review_workers": 8,
-      "core_words": 800,
-      "halo_units": 2,
-      "retrieval_targets": true
+      "retrieval_targets": true,
+      "workflow": "planned",
+      "reading": "reusable"
     },
     "inputs": "Add teaching sources as authorities or supplements. Use example questions as form exemplars. Keep evaluation questions in the held-out assessment role.",
     "stages": [
@@ -104,7 +95,7 @@
       ],
       [
         "Solve with candidate information",
-        "Each solve receives the current and earlier candidate sections. The marking guide goes to a separate judge."
+        "Each solve receives the current prompt and explicitly required earlier candidate prompts. The marking guide goes to a separate judge."
       ],
       [
         "Export both views",
@@ -112,7 +103,7 @@
       ]
     ],
     "decision": "The solver has to attempt the question using the information supplied to the candidate. The judge can then locate ambiguity, missing data or a mismatch between the prompt and the marking guide.",
-    "context": "Writers: plan and evidence. Solver: candidate information up to this stage. Judge: candidate response, marking guide and cited evidence.",
+    "context": "Writers: plan and evidence. Solver: current prompt and declared earlier candidate context. Judge: candidate response, marking guide and cited evidence.",
     "delivery": "Candidate and examiner HTML, Markdown and PDF files, plus a private review report. Live oral-session software supplies the controls for releasing findings during practice.",
     "revision": "Edit the affected section and run the assessment checks again. Questions that depend on revised earlier information receive a new candidate context."
   }

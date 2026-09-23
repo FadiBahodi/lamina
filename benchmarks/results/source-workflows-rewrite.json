@@ -1,0 +1,37 @@
+{
+  "kind": "deterministic_fixture_not_model_quality",
+  "revision": "lamina-production-4",
+  "fixture": {
+    "units": 100,
+    "words": 25000,
+    "sections": 10,
+    "tokenizer": "cl100k_base"
+  },
+  "stages": {
+    "production_read": {
+      "calls": 17,
+      "request_bytes": 161442,
+      "reference_input_tokens": 33157
+    },
+    "production_review": {
+      "calls": 10,
+      "request_bytes": 241860,
+      "reference_input_tokens": 53912
+    },
+    "production_route": {
+      "calls": 1,
+      "request_bytes": 45888,
+      "reference_input_tokens": 11223
+    },
+    "production_write": {
+      "calls": 10,
+      "request_bytes": 211310,
+      "reference_input_tokens": 46288
+    }
+  },
+  "reader_source_words": 25000,
+  "reader_source_amplification": 1.0,
+  "cold_calls": 38,
+  "warm_write_calls": 0,
+  "section_revision_calls": 2
+}

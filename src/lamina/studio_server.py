@@ -6,6 +6,8 @@ text is reference material, not an executable instruction or filesystem path.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
+
 import base64
 import copy
 import binascii
@@ -35,7 +37,9 @@ MAX_FILES = 12
 MAX_FILE_CHARS = 500_000
 MAX_PDF_BYTES = 5_000_000
 MAX_METHOD_TASK_CHARS = 500_000
-SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.(?:md|txt|pdf)\Z", re.I)
+SAFE_NAME = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.(?:md|txt|pdf|pptx)\Z", re.I
+)
 RUN_ID = re.compile(r"[0-9a-f]{32}\Z")
 
 
@@ -44,6 +48,10 @@ def make_provider(
 ):
     if not adapter:
         return None
+    if adapter.startswith("@"):
+        from .providers import configured_provider
+
+        return configured_provider(adapter[1:])
     command = shlex.split(adapter)
     if not command:
         raise ValueError("adapter command cannot be empty")
@@ -141,24 +149,65 @@ class StudioServer(ThreadingHTTPServer):
         audio_adapter_version: str | None = None,
         timeout: float = 120,
     ):
-        self.workspace = Workspace(workspace)
-        self.provider = make_provider(adapter, version=adapter_version, timeout=timeout)
-        self.audio_provider = make_provider(
-            audio_adapter, version=audio_adapter_version, timeout=timeout
-        )
-        self.output_root = self.workspace.root / "outputs"
-        self.output_root.mkdir(parents=True, exist_ok=True)
-        from .studio_site import prepare_studio
+        self._provider_resources = ExitStack()
+        self._job_condition = threading.Condition()
+        self._jobs = set()
+        self._closing = False
+        with ExitStack() as resources:
+            self.workspace = Workspace(workspace)
+            self.provider = make_provider(
+                adapter, version=adapter_version, timeout=timeout
+            )
+            resources.callback(getattr(self.provider, "close", lambda: None))
+            self.audio_provider = make_provider(
+                audio_adapter, version=audio_adapter_version, timeout=timeout
+            )
+            resources.callback(getattr(self.audio_provider, "close", lambda: None))
+            self.output_root = self.workspace.root / "outputs"
+            self.output_root.mkdir(parents=True, exist_ok=True)
+            from .studio_site import prepare_studio
 
-        self.asset_root = prepare_studio(
-            self.workspace.root / "studio-static"
-        ).resolve()
-        self.runs: dict[str, dict] = {}
-        self.run_lock = threading.Lock()
-        from .project_api import restore_projects
+            self.asset_root = prepare_studio(
+                self.workspace.root / "studio-static"
+            ).resolve()
+            self.runs: dict[str, dict] = {}
+            self.run_lock = threading.Lock()
+            from .project_api import restore_projects
 
-        restore_projects(self)
-        super().__init__(("127.0.0.1", port), StudioHandler)
+            restore_projects(self)
+            super().__init__(("127.0.0.1", port), StudioHandler)
+            self._provider_resources = resources.pop_all()
+
+    def start_job(self, work, name):
+        """Retain job ownership until work finishes, including during shutdown."""
+
+        def run():
+            try:
+                work()
+            finally:
+                with self._job_condition:
+                    self._jobs.discard(threading.current_thread())
+                    self._job_condition.notify_all()
+
+        with self._job_condition:
+            if self._closing:
+                raise RuntimeError("The app is shutting down; new work cannot start")
+            thread = threading.Thread(target=run, name=name, daemon=True)
+            self._jobs.add(thread)
+            try:
+                thread.start()
+            except BaseException:
+                self._jobs.discard(thread)
+                raise
+
+    def server_close(self):
+        with self._job_condition:
+            self._closing = True
+            self._job_condition.notify_all()
+        super().server_close()
+        with self._job_condition:
+            self._job_condition.wait_for(lambda: not self._jobs)
+        self._provider_resources.close()
 
     def start_run(self, procedure: dict) -> dict:
         if self.provider is None:
@@ -203,9 +252,7 @@ class StudioServer(ThreadingHTTPServer):
                         error=f"{type(exc).__name__}: build failed; see the local Studio console",
                     )
 
-        threading.Thread(
-            target=work, name=f"lamina-run-{run_id[:8]}", daemon=True
-        ).start()
+        self.start_job(work, f"lamina-run-{run_id[:8]}")
         return dict(status)
 
     def start_method_run(self, method: dict, task: dict) -> dict:
@@ -279,9 +326,7 @@ class StudioServer(ThreadingHTTPServer):
                         error="Method run failed; see the local Studio console",
                     )
 
-        threading.Thread(
-            target=work, name=f"lamina-method-{run_id[:8]}", daemon=True
-        ).start()
+        self.start_job(work, f"lamina-method-{run_id[:8]}")
         return dict(status)
 
     def record_method_observation(self, body: dict) -> dict:
@@ -410,7 +455,7 @@ class StudioHandler(BaseHTTPRequestHandler):
             with self.server.run_lock:
                 active = next(
                     (
-                        dict(r)
+                        {k: r.get(k) for k in ("id", "kind", "status")}
                         for r in self.server.runs.values()
                         if r["status"] in {"queued", "running"}
                     ),
@@ -469,6 +514,23 @@ class StudioHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/procedures":
             self._json(200, {"procedures": BUILTINS})
+            return
+        if path.startswith("/api/progress/") and RUN_ID.fullmatch(
+            path.removeprefix("/api/progress/")
+        ):
+            run_id = path.removeprefix("/api/progress/")
+            with self.server.run_lock:
+                run = self.server.runs.get(run_id)
+                result = (
+                    {
+                        k: v
+                        for k, v in run.items()
+                        if k not in {"plan", "receipt", "partial_results"}
+                    }
+                    if run
+                    else None
+                )
+            self._json(200 if result else 404, result or {"error": "run not found"})
             return
         if path.startswith("/api/runs/") and RUN_ID.fullmatch(
             path.removeprefix("/api/runs/")
@@ -625,23 +687,26 @@ class StudioHandler(BaseHTTPRequestHandler):
                 or name in {".", ".."}
                 or name.startswith(".")
             ):
-                raise ValueError("file name must be a safe .md, .txt, or .pdf basename")
+                raise ValueError(
+                    "file name must be a safe .md, .txt, .pdf, or .pptx basename"
+                )
             if name.lower() in names:
                 raise ValueError("file names must be unique within one upload")
             names.add(name.lower())
-            if name.lower().endswith(".pdf"):
+            if name.lower().endswith((".pdf", ".pptx")):
                 if set(item) != {"name", "base64", "role"} or not isinstance(
                     item["base64"], str
                 ):
-                    raise ValueError("PDF files need exactly name, base64, and role")
+                    raise ValueError("Binary files need exactly name, base64, and role")
                 if len(item["base64"]) > MAX_PDF_BYTES * 4 // 3 + 8:
-                    raise OverflowError("PDF exceeds the 5 MB decoded limit")
+                    raise OverflowError("File exceeds the 5 MB decoded limit")
                 try:
                     decoded = base64.b64decode(item["base64"], validate=True)
                 except (ValueError, binascii.Error) as exc:
-                    raise ValueError("PDF base64 is invalid") from exc
-                if len(decoded) > MAX_PDF_BYTES or not decoded.startswith(b"%PDF-"):
-                    raise ValueError("PDF must be a valid PDF header and at most 5 MB")
+                    raise ValueError("File base64 is invalid") from exc
+                signature = b"%PDF-" if name.lower().endswith(".pdf") else b"PK"
+                if len(decoded) > MAX_PDF_BYTES or not decoded.startswith(signature):
+                    raise ValueError("File header is invalid or exceeds 5 MB")
                 item["_decoded"] = decoded
             else:
                 if set(item) != {"name", "text", "role"}:

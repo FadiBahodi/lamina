@@ -1,126 +1,104 @@
 # Lamina
 
-[Try the interface](https://fadibahodi.github.io/lamina/) · [Technical paper](https://fadibahodi.github.io/lamina/assets/lamina-technical-paper.pdf) · [Download](https://github.com/FadiBahodi/lamina/releases/latest)
+Lamina turns source collections into reference documents, guides, podcast scripts and assessments. It preserves source locations, divides independent work across model calls, and reuses completed work when inputs repeat.
 
-Lamina is a framework for agents that turn source collections into documents, guides, scripts and assessments. It reads in parallel, builds a shared plan, gives each writer the evidence it needs, and assembles the result. You can revise one section and reuse the rest.
+Give it files, a description of the result, and a model adapter. It can write directly from the sources, read for the current task and create an outline, or follow sections supplied by a person or another agent.
 
-The design grew out of long-running work on reference books, educational audio and examination cases. Those projects repeatedly lost qualifiers during extraction, merged questions that needed different answers, or forced a complete rebuild to fix one section. Lamina carries the resulting source, coordination and repair mechanisms into a reusable engine. [System origins](docs/system-origins.md) describes that history.
+## Install and run
 
-Models decide how to group and explain the material. Lamina manages source identity, evidence, scheduling, saved results and delivery. It runs locally through Python, a command line or a browser app. The public website contains recorded examples.
-
-![Lamina project interface](docs/overview.png)
-
-The [workflow design guide](docs/workflow-design.md) follows reference, audio and assessment jobs from source selection to delivery. It explains the worker inputs, dependencies and resource choices, with measurements from the earlier audio system and Lamina's scheduler. The website includes reusable setups for each job.
-
-## How it works
-
-1. Readers work on assigned passages with neighboring text for context. Each extracted idea cites a quotation from its assigned passage.
-2. A planner groups the ideas into sections, records omissions, and identifies the evidence each writer needs. Section counts and formats follow the task.
-3. Writers run in parallel with the shared plan and their source material. Review identifies defects, then one repair pass revises and rechecks the affected sections. Unresolved findings stay visible.
-4. The engine saves the plan, output and execution report. Cache keys include request inputs and adapter identity, so unchanged work can be reused after a revision or interruption.
-
-Reading, writing and review each support 1 to 128 concurrent calls. Dependency depth, request size, provider limits and resource contention determine elapsed time. For workflows with custom dependencies or resource limits, the [method runtime](docs/methods.md) executes a graph of jobs using the same workspace and adapter.
-
-Sources can serve as authorities, supplements, historical references or examples of form. Form examples guide planning and stay out of factual citations; held-out assessments stay out of authoring. You can also select saved project notes for the next plan.
-
-Guides and assessments can merge equivalent questions while preserving answer groups and useful variants. Every assessment includes a blind solve using the current and earlier candidate information, followed by a judge with the marking guide and source evidence. Candidate and examiner files are exported separately.
-
-## Run it
-
-Requires Python 3.11 or newer.
+Python 3.11+ and SQLite with FTS5 are required.
 
 ```sh
 git clone https://github.com/FadiBahodi/lamina.git
 cd lamina
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[pdf]'
-lamina app --workspace .lamina --port 8048
+pip install -e '.[pdf,slides,http,tokens]'
+lamina ingest ./sources --workspace .lamina
 ```
 
-Open `http://127.0.0.1:8048` to run the included example. For your own sources, configure the [JSON command adapter](examples/adapter/README.md):
+For a compatible chat endpoint, set `LAMINA_API_BASE`, `LAMINA_MODEL` and `LAMINA_API_KEY`. Save `models.json`:
+
+```json
+{
+  "default": {
+    "transport": "jsonl",
+    "command": ["python", "examples/adapter/http_service.py"],
+    "request_format": "lamina-chat-1",
+    "workload": {
+      "*": {
+        "max_input_tokens": "<chosen complete task request limit>",
+        "max_items": "<chosen maximum items per task>"
+      },
+      "production_read": {"max_input_tokens": "<chosen reading request limit>"}
+    },
+    "env": {
+      "LAMINA_CONTEXT_TOKENS": "<documented model context limit>",
+      "LAMINA_TOKENIZER": "<tiktoken encoding for the model>",
+      "LAMINA_MAX_OUTPUT_TOKENS": "<chosen output allowance>"
+    }
+  }
+}
+```
+
+Replace every placeholder before starting. Workload limits must be JSON integers; environment values remain strings. The tokenizer must match the selected model. Context and output limits describe what the endpoint accepts. The separate `workload` limits specify how much work each call may attempt. Choose provisional limits, evaluate the resulting output on representative material, and retain the measurements before increasing them. The `*` entry supplies a fallback; named stages replace it. [Adapters](docs/adapters.md) defines the fields and [Adapters](docs/adapters.md#workload-limits) defines the counted items. No built-in limit establishes a model's accuracy.
 
 ```sh
-lamina app --workspace .lamina --port 8048 \
-  --adapter 'python examples/adapter/http_chat.py'
+lamina app --workspace .lamina --adapter @models.json
 ```
 
-Projects shows the source selection, progress, finished sections, evidence and downloads. Saved projects reopen after a restart; interrupted runs resume from their plan and completed jobs. Credentials stay in the adapter process, outside the browser.
+Open `http://127.0.0.1:8048`. The adapter sends selected source context to the configured provider. The persistent example shares an HTTP connection pool across calls. Existing one-command-per-call adapters remain supported.
 
-## Use it from an agent
-
-The CLI calls the same engine as the app:
+The CLI uses the same engine:
 
 ```sh
-lamina ingest ./notes --workspace .lamina
-lamina produce --workspace .lamina \
-  --brief 'Write an incident guide for on-call engineers. Preserve exceptions and conflicting evidence.' \
-  --format guide --readers 16 --writers 8 --reviewers 8 \
-  --adapter 'python examples/adapter/http_chat.py' --output ./output/guide
+lamina produce --workspace .lamina --adapter @models.json \
+  --brief 'Explain windmill blade designs, preserving where the sources disagree.' \
+  --format guide --output output/windmills
 ```
 
-The result includes HTML, Markdown, a saved plan and an execution report. The `pdf` extra adds formatted PDFs. Assessments use numbered candidate headings and export marking answers in separate examiner files. Plans and reports may contain private source text and answer keys.
+With no adapter, `lamina app` offers a recorded example. `lamina demo --output demo` runs a deterministic guide fixture offline.
 
-Use `--source-policy` with a JSON map from each selected source ID to `authority`, `supplement`, `historical` or `form_exemplar`; the default is `authority`. Repeat `--observation-id` for up to 20 saved notes from `--method-family` (default `document-production`). Source policy and notes are fixed in the saved plan; changing them requires a new plan.
-
-`--retrieval-targets`, also available in Projects, groups questions before writing a guide or assessment. Each extracted idea belongs to one target with cited answer items. Assigned targets appear in the guide or examiner file; omissions and their reasons stay in the plan and report. The [question-merging example](examples/retrieval-targets/README.md) shows duplicate consolidation and the same answer preserved in a different context. The [source-policy example](examples/source-policy/demo.py) shows authority, historical references, form examples and saved notes.
-
-For audio, add `--audio-adapter` and optionally `--audio-adapter-version` to `lamina produce` or `lamina app`. A ready `podcast-script` becomes `narration.wav`, `narration.txt` and `audio.json`. The [local speech adapter](examples/audio/local_speech.py) uses macOS `say` and `afconvert`, or Linux `espeak`. A process-safe local lock serializes uncached speech calls. The app reports whether audio is configured; adapters are set at startup. With no audio adapter, the output is a script.
-
-To revise a section, save a JSON object such as `{"section_3":"Explain the recovery exception using the existing source evidence."}` and run:
+To evaluate a configured provider before expanding task size, run the [quality experiment](docs/quality-evaluation.md):
 
 ```sh
-lamina produce --workspace .lamina --plan ./output/guide/plan.json \
-  --section-notes ./revision.json \
-  --adapter 'python examples/adapter/http_chat.py' --output ./output/revised
+PYTHONPATH=src python benchmarks/quality_titration.py --models models.json \
+  --loads 20,80,200 --input-limits 4000,8000,16000 \
+  --stage production_read --reading task --replicates 3 --complete \
+  --minimum-fraction 1 --maximum-counterfacts 0 --output output/quality-run
 ```
 
-Python callers use the same functions:
+These numbers define an example experiment. `--loads` counts background paragraphs; `--input-limits` varies the selected stage's complete prompt allowance. The report records actual request sizes and traces fragile facts into the finished output. Its lexical checks cover the declared controls; inspect representative source facts and completed documents before accepting an operating limit. This command uses the configured provider and incurs its normal usage.
 
-```python
-from lamina.store import Workspace
-from lamina.production import plan_production, run_production
-from lamina.production_export import export_production
-from pathlib import Path
+## What happens to the files
 
-workspace = Workspace(Path('.lamina'))
-source_ids = [s['id'] for s in workspace.sources() if s['role'] == 'teaching']
-# provider.call(stage, request) returns a JSON object; provider.identity versions its behavior.
-plan = plan_production(workspace, provider, 'Write an incident guide.', source_ids,
-                       {'format': 'guide', 'reader_workers': 16})
-receipt = run_production(workspace, provider, plan)
-export_production(receipt, plan, Path('output/guide'))
-```
+1. **Import their structure.** Markdown blocks, PDF pages and PowerPoint slide components retain their locations. Slide text, tables and speaker notes stay together during reading. Scanned PDFs can use local OCR.
+2. **Choose the work per call.** Automatic mode checks the declared writing and review workload limits along with request capacity. Collections that exceed those limits use readers and a planner. Supplied assignments bypass planning. Combining multiple items requires a declared workload policy.
+3. **Organize the material.** Readers identify material relevant to the brief and cite source references that code resolves to exact text. Without a reading workload profile, each call owns one parser structure. Planning groups related material across files within its declared limits; final assignment revisits the original ideas.
+4. **Write and check each section.** Writers receive assigned material, original source passages and declared context. Review starts when a section finishes. A finding can trigger a repair and recheck. Optional document review compares completed sections with known relationships.
+5. **Export and revise.** Deliver Markdown, HTML, PDF and an execution receipt. Repeated requests reuse cached results. Source references remain bound to the selected file revisions.
 
-See the [production contract](docs/production.md) for the API and the [technical brief example](examples/methods/technical-brief.md) for a custom job graph.
+A reviewer is another model call that compares the draft with its assignment and sources. Code checks identifiers, quotation spans and ownership. The receipt records findings, unperformed checks, source coverage and provider-reported usage.
 
-## Examples and measurements
+## Interfaces
 
-The [engineering fixture](examples/production-example.json) uses fixed responses to exercise the production engine. Two documents describe leases, fencing and incident logging. A writer introduces an error, review catches it, and repair corrects the section. A second run revises one section and reuses six of eight requests.
+| Need | Documentation |
+| --- | --- |
+| Workflows, controls, assignments and revision | [Production](docs/production.md) |
+| Models, persistent transport and context budgets | [Adapters](docs/adapters.md) |
+| File structure, OCR and parser limits | [Parsing](docs/parsing.md) |
+| Custom dependencies and resource lanes | [Methods](docs/methods.md) |
+| Architecture and scheduling | [Architecture](docs/architecture.md) |
+| Mechanics measurements and their scope | [Benchmarks](docs/benchmarks.md) |
+| Model workload and quality experiments | [Quality evaluation](docs/quality-evaluation.md) |
 
-```sh
-python examples/production/run.py --output output/example
-python benchmarks/run_systems.py --units 64 --lessons 16 --widths 1 4 16 32
-```
-
-The fixtures demonstrate source tracking, caching and selective repair. The scheduler benchmark uses controlled waits. The [evaluation protocol](docs/measurement.md) covers model quality, latency, cost and learning outcomes.
+Search imported sources with `lamina search 'blade design' --json`. Python callers use `build_production(workspace, provider, brief, source_ids, options)` or separate planning and writing calls.
 
 ## Limits
 
-Ingestion reads Markdown, text and PDFs with extractable text; figures, scans and complex table layouts need further processing. Source quotations and assignments are checked mechanically. Extraction coverage, interpretation and question quality still need review.
+Source accounting and quotation matches establish traceability. Semantic completeness, writing quality and factual support need evaluation on the actual material. A model can return valid JSON while omitting important facts. Declared task limits constrain work; their quality remains unassessed until evaluated. Reusable inventories are an explicit option and can carry the same omissions into later projects. Whole structures or required context can exceed configured limits; those cases remain errors or unperformed checks. The shared outline must still fit its planning request.
 
-Assessments are exported files, with no live examination server. Blind-solve calls isolate the supplied inputs; providers may retain state. Audio checks cover PCM structure, nonzero duration, hashes and timing. The transcript records synthesis input; spoken fidelity and pronunciation need listening or transcription checks.
-
-Saved notes are selected by the user. Lamina has no autonomous method selection or training. Production and custom graphs share infrastructure but have different contracts. The [architecture status](docs/architecture-status.md) records those details.
-
-## Technical details and development
-
-The [LaTeX paper](docs/paper/lamina.tex) covers source ownership, context amplification, work/span, resource bounds and repair cost. Build it with `python tools/build_paper.py` after installing [Tectonic](https://tectonic-typesetting.github.io/).
+PDF figures and reading order need inspection. Assessments export separate candidate and examiner files; live oral-case delivery is unavailable. Audio requires a separate speech adapter and listening review. Keep the local app on loopback.
 
 ```sh
-python -m pip install -e '.[pdf,test]'
-python -m pytest tests -q
-python -m lamina.studio_site ./site --pdf
+pip install -e '.[test,pdf,slides,http,tokens]'
+python -m pytest -q
 ```
-
-Maintained by Fadi Bahodi. [MIT license](LICENSE).

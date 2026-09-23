@@ -4,7 +4,6 @@ from __future__ import annotations
 import copy
 import json
 import re
-import threading
 import time
 import uuid
 
@@ -16,7 +15,19 @@ def _save(server, status):
     output.mkdir(parents=True, exist_ok=True)
     target = output / "project-state.json"
     temp = output / "project-state.tmp"
-    temp.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+    compact = dict(status)
+    for key in ("plan", "receipt", "partial_results"):
+        if status.get(key) is not None:
+            artifact = output / f"execution-{key}.json"
+            if not artifact.exists():
+                pending = artifact.with_suffix(".tmp")
+                pending.write_text(
+                    json.dumps(status[key], ensure_ascii=False), encoding="utf-8"
+                )
+                pending.replace(artifact)
+            compact.pop(key)
+            compact[f"{key}_stored"] = True
+    temp.write_text(json.dumps(compact, ensure_ascii=False), encoding="utf-8")
     temp.replace(target)
 
 
@@ -28,6 +39,13 @@ def restore_projects(server):
             state = json.loads(path.read_text(encoding="utf-8"))
             if state.get("id") != path.parent.name or state.get("kind") != "production":
                 continue
+            for key in ("plan", "receipt", "partial_results"):
+                if state.pop(f"{key}_stored", False):
+                    state[key] = json.loads(
+                        (path.parent / f"execution-{key}.json").read_text(
+                            encoding="utf-8"
+                        )
+                    )
             if state.get("status") in {"running", "queued"}:
                 state.update(
                     status="interrupted",
@@ -205,11 +223,22 @@ def start_project(server, body, *, parent=None, section_notes=None):
             with server.run_lock:
                 status.update(
                     status="failed",
+                    failure_metrics=getattr(exc, "metrics", {}),
+                    partial_results=getattr(exc, "partial_results", {}),
                     error="The project stopped. See the local console for details; completed work is retained.",
                 )
                 _save(server, status)
 
-    threading.Thread(target=work, name=f"lamina-project-{rid[:8]}", daemon=True).start()
+    try:
+        server.start_job(work, f"lamina-project-{rid[:8]}")
+    except RuntimeError:
+        with server.run_lock:
+            status.update(
+                status="interrupted",
+                error="The app stopped before this project started. Resume to continue.",
+            )
+            _save(server, status)
+        raise
     return dict(status)
 
 

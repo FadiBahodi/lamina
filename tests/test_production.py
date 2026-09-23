@@ -11,6 +11,7 @@ from lamina.production import (
     plan_production,
     run_production,
 )
+from lamina.production_example import fixture_request_budget
 from lamina.store import Workspace
 
 
@@ -54,13 +55,20 @@ class FixtureProvider:
 
     identity = "fixture-production-v1"
 
-    def __init__(self, *, bad_quote=False, review_issue=False, check_issue=False, delay=0):
+    def __init__(
+        self, *, bad_quote=False, review_issue=False, check_issue=False, delay=0
+    ):
         self.bad_quote = bad_quote
         self.review_issue = review_issue
         self.check_issue = check_issue
         self.delay = delay
         self.requests = []
         self.lock = threading.Lock()
+
+    def budget_for(self, stage):
+        # Deliberately nonbinding for these finite fixtures: individual tests
+        # isolate byte budgets, scheduling and retries, not model quality.
+        return fixture_request_budget(stage, max_items=1024)
 
     def call(self, stage, payload):
         assert payload["protocol"] == "lamina-stage-1"
@@ -72,7 +80,7 @@ class FixtureProvider:
         data = payload["input"]
         if stage == "production_read":
             core = data["core"]
-            return {
+            response = {
                 "ideas": [
                     {
                         "title": unit["heading"],
@@ -92,6 +100,14 @@ class FixtureProvider:
                     for unit in core
                 ]
             }
+            if "repair" in data:
+                return {
+                    "replacements": [
+                        {"index": row["index"], "idea": response["ideas"][row["index"]]}
+                        for row in data["repair"]["invalid_ideas"]
+                    ]
+                }
+            return response
         if stage == "production_route":
             ideas = data["ideas"]
             return {
@@ -104,6 +120,7 @@ class FixtureProvider:
                         "purpose": "Explain the source fact",
                         "idea_ids": [idea["id"]],
                         "context_section_ids": [f"sec_{i-1}"] if i > 1 else [],
+                        "candidate_context_ids": [f"sec_{j}" for j in range(1, i)],
                         "representation": {
                             "kind": "mechanism" if i == 2 else "reference",
                             "rationale": "Show the source distinction clearly",
@@ -116,7 +133,9 @@ class FixtureProvider:
                 "shared_context": [
                     {
                         "statement": "Expiry alone does not stop stale workers.",
-                        "evidence": [ideas[1]["evidence"][0]],
+                        "evidence_refs": [
+                            {"idea_id": ideas[1]["id"], "evidence_index": 0}
+                        ],
                     }
                 ],
             }
@@ -163,15 +182,23 @@ class FixtureProvider:
             return {"answer": "Check the fencing token.", "uncertainties": []}
         if stage == "assessment_judge":
             if self.check_issue:
-                return {"findings": [{"kind": "unanswerable", "issue": "The candidate prompt lacks the condition.",
-                                      "repair_instruction": "Add the condition to the candidate prompt.",
-                                      "evidence": [data["evidence"][0]]}]}
+                return {
+                    "findings": [
+                        {
+                            "kind": "unanswerable",
+                            "issue": "The candidate prompt lacks the condition.",
+                            "repair_instruction": "Add the condition to the candidate prompt.",
+                            "evidence": [data["evidence"][0]],
+                        }
+                    ]
+                }
             return {"findings": []}
         raise AssertionError(stage)
 
 
 def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
     ws = workspace(tmp_path)
+
     class ConcurrentFixture(FixtureProvider):
         def __init__(self):
             super().__init__()
@@ -194,18 +221,25 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
         "Explain lease safety",
         ["s1", "s2"],
         {
-            "core_words": 100,
-            "halo_units": 1,
-            "reader_workers": 8,
-            "writer_workers": 8,
-            "review_workers": 8,
+            "workflow": "planned",
+            **(
+                {
+                    "core_words": 100,
+                    "halo_units": 1,
+                    "reader_workers": 8,
+                    "writer_workers": 8,
+                    "review_workers": 8,
+                }
+            ),
         },
     )
     plan = receipt["plan"]
+    units = {unit["id"]: unit for unit in plan["units"]}
     assert len(plan["windows"]) == 4
-    assert plan["windows"][0]["after"][0]["text"].startswith("The old worker")
-    assert len(plan["windows"][0]["after"][0]["text"]) > 450
-    assert plan["windows"][1]["before"][0]["id"] == "u1"
+    adjacent = units[plan["windows"][0]["after"][0]]
+    assert adjacent["text"].startswith("The old worker")
+    assert len(adjacent["text"]) > 450
+    assert plan["windows"][1]["before"] == ["u1"]
     assert not plan["windows"][1]["after"]  # no cross-source halo
     assert plan["metrics"]["peak_provider_calls"]["production_read"] > 1
     assert receipt["metrics"]["peak_provider_calls"]["production_write"] > 1
@@ -215,9 +249,17 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
     writer_inputs = [
         p["input"] for stage, p in provider.requests if stage == "production_write"
     ]
-    assert all(len(x["shared_route"]) == 4 for x in writer_inputs)
     by_section = {x["section"]["id"]: x for x in writer_inputs}
-    assert by_section["sec_2"]["earlier_evidence_units"][0]["id"] == "u1"
+    for n in range(1, 5):
+        assert {row["id"] for row in by_section[f"sec_{n}"]["shared_route"]} == {
+            f"sec_{j}" for j in (n - 1, n, n + 1) if 1 <= j <= 4
+        }
+    assert (
+        by_section["sec_2"]["earlier_evidence_units"][0]["text"] == units["u1"]["text"]
+    )
+    assert by_section["sec_2"]["earlier_evidence_units"][0]["id"] not in {
+        unit["id"] for unit in by_section["sec_2"]["assigned_units"]
+    }
     assert by_section["sec_2"]["section"]["representation"]["kind"] == "mechanism"
     review_inputs = [
         p["input"] for stage, p in provider.requests if stage == "production_review"
@@ -253,17 +295,31 @@ def test_bad_quote_fails_and_assessment_source_never_reaches_provider(tmp_path):
         ]
     )
     provider = FixtureProvider(bad_quote=True)
-    with pytest.raises(ProductionError, match="non-exact quote"):
-        plan_production(ws, provider, "Explain", ["s1"], {"core_words": 100})
+    with pytest.raises(ProductionError, match="quote"):
+        plan_production(
+            ws,
+            provider,
+            "Explain",
+            ["s1"],
+            {"workflow": "planned", **({"core_words": 100})},
+        )
     with pytest.raises(ProductionError, match="not a teaching source"):
-        plan_production(ws, provider, "Explain", ["secret"])
+        plan_production(
+            ws, provider, "Explain", ["secret"], options={"workflow": "planned"}
+        )
     assert "secret_unit" not in str(provider.requests)
 
 
 def test_review_repairs_only_flagged_section_and_cache_reuse(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider(review_issue=True)
-    plan = plan_production(ws, provider, "Explain", ["s1", "s2"], {"core_words": 100})
+    plan = plan_production(
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {"workflow": "planned", **({"core_words": 100})},
+    )
     first = run_production(ws, provider, plan)
     assert first["status"] == "ready"
     assert list(first["initial_findings"]) == ["sec_2"]
@@ -279,7 +335,13 @@ def test_review_repairs_only_flagged_section_and_cache_reuse(tmp_path):
 def test_targeted_revision_changes_one_writer_and_review(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider()
-    plan = plan_production(ws, provider, "Explain", ["s1", "s2"], {"core_words": 100})
+    plan = plan_production(
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {"workflow": "planned", **({"core_words": 100})},
+    )
     first = run_production(ws, provider, plan)
     before = len(provider.requests)
     revised = run_production(
@@ -305,7 +367,7 @@ def test_assessment_candidate_artifact_excludes_marking(tmp_path):
         provider,
         "Create an assessment",
         ["s1"],
-        {"format": "assessment", "core_words": 100},
+        {"workflow": "planned", **({"format": "assessment", "core_words": 100})},
     )
     assert receipt["candidate_markdown"] == receipt["markdown"]
     assert "What makes" in receipt["candidate_markdown"]
@@ -318,21 +380,42 @@ def test_assessment_candidate_artifact_excludes_marking(tmp_path):
 def test_assessment_blind_finding_keeps_output_for_review(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider(check_issue=True)
-    receipt = build_production(ws, provider, "Create an assessment", ["s1"],
-                               {"format": "assessment", "core_words": 100})
+    receipt = build_production(
+        ws,
+        provider,
+        "Create an assessment",
+        ["s1"],
+        {"workflow": "planned", **({"format": "assessment", "core_words": 100})},
+    )
     assert receipt["status"] == "review"
     assert receipt["assessment_checks"]["status"] == "review"
-    assert receipt["assessment_checks"]["checks"][0]["findings"][0]["kind"] == "unanswerable"
+    assert (
+        receipt["assessment_checks"]["checks"][0]["findings"][0]["kind"]
+        == "unanswerable"
+    )
     assert "What makes" in receipt["candidate_markdown"]
-    solves = [request["input"] for stage, request in provider.requests if stage == "assessment_blind_solve"]
-    assert solves and all(set(row) == {"current_candidate_body", "prior_candidate_bodies"} for row in solves)
+    solves = [
+        request["input"]
+        for stage, request in provider.requests
+        if stage == "assessment_blind_solve"
+    ]
+    assert solves and all(
+        set(row) == {"current_candidate_body", "prior_candidate_bodies"}
+        for row in solves
+    )
     assert all("marking_body" not in str(row) for row in solves)
 
 
 def test_new_source_revision_reuses_unaffected_reader_windows(tmp_path):
     ws = workspace(tmp_path)
     provider = FixtureProvider()
-    first = plan_production(ws, provider, "Explain", ["s1", "s2"], {"core_words": 100})
+    first = plan_production(
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {"workflow": "planned", **({"core_words": 100})},
+    )
     assert first["metrics"]["cache_misses"] == 5  # four windows plus global route
     ws.put_source(
         {
@@ -364,7 +447,11 @@ def test_new_source_revision_reuses_unaffected_reader_windows(tmp_path):
         )
     before = len(provider.requests)
     revised = plan_production(
-        ws, provider, "Explain", ["s1", "s2_new"], {"core_words": 100}
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2_new"],
+        {"workflow": "planned", **({"core_words": 100})},
     )
     new_reads = [
         p["input"]["source"]["id"]

@@ -145,14 +145,21 @@ def test_http_policy_observation_planner_only_and_holdout_boundary(
         bad = {
             "brief": "Make a guide",
             "source_ids": selected + [holdout_id],
-            "options": {"source_policy": {**policy, holdout_id: "form_exemplar"}},
+            "options": {
+                "workflow": "planned",
+                "source_policy": {**policy, holdout_id: "form_exemplar"},
+            },
         }
         assert _call(server, "/api/projects", bad)[0] == 400
         assert not provider.envelopes
         body = {
             "brief": "Write an incident guide for lease workers",
             "source_ids": selected,
-            "options": {"format": "guide", "source_policy": policy},
+            "options": {
+                "workflow": "planned",
+                "format": "guide",
+                "source_policy": policy,
+            },
         }
         code, raw = _call(server, "/api/projects", body)
         assert code == 202, raw

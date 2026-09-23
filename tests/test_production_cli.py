@@ -34,10 +34,54 @@ def test_production_command_and_saved_plan_revision(tmp_path):
     workspace = tmp_path / "workspace"
     cli("ingest", source_dir, "--workspace", workspace)
     adapter = tmp_path / "adapter.py"
+    started = tmp_path / "adapter-started"
     adapter.write_text(
-        'import sys,json\nfrom lamina.production_example import FixtureAdapter\nr=json.load(sys.stdin)\njson.dump(FixtureAdapter().call(r["stage"],r),sys.stdout)\n'
+        "import sys,json\nfrom pathlib import Path\n"
+        "from lamina.production_example import FixtureAdapter\n"
+        f"Path({str(started)!r}).touch()\n"
+        'r=json.load(sys.stdin)\njson.dump(FixtureAdapter().call(r["stage"],r),sys.stdout)\n'
     )
     command = shlex.join([sys.executable, str(adapter)])
+    # A subprocess cannot communicate an internal Python budget declaration
+    # through its replies. The caller must configure the workload explicitly.
+    rejected = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "lamina",
+            "produce",
+            "--workspace",
+            str(workspace),
+            "--brief",
+            "Explain lease safety.",
+            "--workflow",
+            "planned",
+            "--adapter",
+            command,
+            "--output",
+            str(tmp_path / "unprofiled"),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert rejected.returncode != 0
+    assert "workload" in rejected.stderr.lower()
+    assert not started.exists(), "unprofiled planning invoked the adapter"
+
+    model_config = tmp_path / "models.json"
+    model_config.write_text(
+        json.dumps(
+            {
+                "default": {
+                    "command": [sys.executable, str(adapter)],
+                    "version": "scripted-cli-fixture-v1",
+                    "workload": {"*": {"max_items": 16, "basis": "configured"}},
+                }
+            }
+        )
+    )
+    configured_adapter = "@" + str(model_config)
     first = tmp_path / "first"
     result = cli(
         "produce",
@@ -45,10 +89,12 @@ def test_production_command_and_saved_plan_revision(tmp_path):
         workspace,
         "--brief",
         "Explain lease safety.",
+        "--workflow",
+        "planned",
         "--readers",
         16,
         "--adapter",
-        command,
+        configured_adapter,
         "--output",
         first,
     )
@@ -66,7 +112,7 @@ def test_production_command_and_saved_plan_revision(tmp_path):
         "--section-notes",
         revision,
         "--adapter",
-        command,
+        configured_adapter,
         "--output",
         second,
     )

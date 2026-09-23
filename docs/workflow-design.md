@@ -1,92 +1,122 @@
 # Designing a workflow with Lamina
 
-Start with the result a person needs to use. A reference helps someone find and compare answers. A spoken lesson explains ideas in an order a listener can follow. An assessment gives a candidate enough information to make a decision, then gives an examiner a way to mark it. Those uses determine the work you divide among models.
+Start with the object a person needs to use. A reference guide gives a question one place to live. A podcast script carries a listener through an explanation in a sensible order. A practice exam gives the candidate enough information to answer and gives the examiner a separate marking view. These products can share source handling and execution machinery, but they do not have the same natural unit of work.
 
-The [website](https://fadibahodi.github.io/lamina/) has a setup for each of these jobs. Select one to see its stages, worker context and output, then choose **Use this setup** to load its brief and settings into Projects. Edit the brief for your audience, add sources, assign their roles and run it in the local app. You can download the same setup for an agent to use from Python.
+Lamina provides that shared machinery: structured source import, exact source references, bounded model requests, parallel execution, saved plans, local revision and receipts. The goal and source roles still determine the production design. A setup is an editable starting point, not a universal workflow.
 
-## A reference organized around the reader's question
+## Read source structures before dividing the product
 
-Suppose several documents discuss the same presenting problem. A writer assigned to each document will tend to repeat the shared material. A reference becomes easier to use when it gives that question a home and combines its supported answers there.
+Current Lamina does not divide every file into fixed passages with a fixed neighboring halo. Import preserves the structures the parser can identify:
 
-The historical PDF builds explored several units of organization:
+- Markdown headings, paragraphs, lists, tables, quotations and code blocks;
+- PowerPoint slide text, tables, shapes and speaker notes, with material from one slide kept together;
+- PDF pages as text units, with an explicit warning that extraction does not interpret figures or guarantee reading order.
+
+Without an evaluated reading workload policy, one model call owns one parser structure. When a configured policy permits several structures in one call, Lamina packs complete structures within the measured request and workload limits. It does not cut a list, table or slide group merely to fill the available context.
+
+No neighboring source structure is sent by default. A reader that cannot interpret its owned material at a boundary can request the structure immediately before or after it and state the missing dependency. Lamina adds the complete neighboring structure and records that request. The added material supplies context; it does not become that reader's source ownership.
+
+This policy handles local boundaries. It does not find every distant relationship. A generic rule qualified many pages later, two equivalent questions in different files, or a callback to an earlier lesson needs a later planning or reconciliation decision over the relevant source-backed ideas.
+
+## Build a reference around the reader's question
+
+Suppose several documents discuss the same presenting problem. A chapter-per-file layout will repeat shared material and separate conditions that belong in one answer. A useful reference first decides what question the reader is trying to answer.
+
+Historical reference builds used several valid objects:
 
 | Product | Unit of work | Design consequence |
 | --- | --- | --- |
 | Broad differential atlas | Source-derived list | Preserved variants close to their source; related fragments occupied many separate drills. |
 | Reconciled question atlas | Question with a complete answer group | Family editors decided which prompts were equivalent and which conditions justified a variant. |
 | Presentation book | Presenting problem with discriminating findings | A diagnosis could recur under several presentations because each comparison taught a different decision. |
-| List collection | Self-contained answer list | Procedures, differentials and prompts needing their original case were routed to other destinations. |
+| List collection | Self-contained answer list | Procedures, differentials and prompts missing their original case were routed elsewhere or quarantined. |
 
-The broad atlas recorded 1,473 entries and 1,579 pages. A later question atlas had 122 owned questions across 270 pages; a separate presentation book had 205 sheets across 263 pages. These counts describe different scopes and organizing decisions. The historical receipts provide no matched full-build timing comparison.
+The broad atlas recorded 1,473 entries across 1,579 pages. A later direct-question atlas recorded 122 owned questions across 270 pages. A separate presentation book contained 205 sheets across 263 pages. These products had different scopes and organizing questions. Their page counts do not establish relative quality or speed, and the saved receipts do not provide a matched cold-build comparison.
 
-In Lamina, select **Study guide** and enable **Merge equivalent questions**. Readers return ideas with quotations from their assigned passages. A model groups the ideas into questions and answer items. Code checks that every idea has one owner and that the cited answer text appears in its source. The planner assigns those groups to sections, and writers receive the common route plus their evidence.
+Lamina's planned guide path reads source structures into source-backed ideas. When retrieval targets are enabled, models group equivalent tasks and compatible variants while retaining answer items and their supporting passages. If the planning request is too large, Lamina builds a provisional hierarchy of groups, designs an outline from the reduced cards, and then reassigns every original idea against that outline. Transport groups never become final source owners. Writers receive their assigned answer groups, original evidence, the common route and only the declared cross-section context.
 
-Review should examine the complete answer group: its conditions, exceptions and useful variants. A list of three therapies under one condition may become wrong when merged with a list for another condition. Source membership makes the merge traceable; an expert still has to assess the clinical or technical meaning.
+This path does not reproduce every historical reference mechanism. It starts from model-extracted ideas rather than an independently audited inventory of all original question objects. It has no built-in router for sending procedures, treatments and context-dependent prompts to separate products, and PDF export has no atlas-scale bookmark, widget, link and page-inspection acceptance pass. Use a custom method when the work requires family-by-family reconciliation or an explicit routing and quarantine stage.
 
-For a large collection, the older atlas used local windows, then reconciliation within families, then a whole-book route. This hierarchy spreads reading across workers while bringing broader context into the decisions that need it. Lamina's production engine currently uses one global grouping call. Its custom method runtime can run a declared hierarchy when the task needs a different graph.
+Review a complete answer group, including its conditions, exceptions and meaningful variants. Two lists can share most of their words while applying to different situations. Exact source membership makes the decision inspectable; it does not make the merge semantically correct.
 
-## A lesson that several writers can produce together
+## Plan a podcast before dividing the script
 
-Educational audio introduced a different dependency. Each section belongs in a teaching sequence, but requiring every writer to wait for all preceding prose lengthens the run and repeatedly sends more text.
+A podcast has a dependency that an ordinary reference does not: each section belongs in a route the listener must be able to follow without scanning the whole artifact. The historical audio factory therefore separated these decisions:
 
-The earlier audio factory used one editorial route. Writers received their assigned source evidence, the route, earlier planned ideas and evidence for selected callbacks. This allowed section writing to overlap. Where a transition depends on the words a previous writer actually used, a method can instead make that completed section a prerequisite. The tradeoff is a longer dependency chain and more repeated context.
+1. local readers recovered idea families from ordered source material;
+2. one topology pass chose the natural episode or series shape;
+3. a sparse pass resolved only distant relationships and conflicts that several sections needed;
+4. one route assigned teaching jobs, objectives, useful callbacks and evidence;
+5. section writers worked concurrently from that route, their assigned evidence, earlier planned ideas and selected callback evidence;
+6. local factual checks and targeted turn repairs preceded speech, transcription checks and phone publication.
 
-Lamina's **Spoken lesson** setup uses the shared-plan arrangement. Its output is a script. A speech adapter configured at startup can then produce WAV audio and a synthesis transcript. Uncached local speech calls share a process-safe lane so simultaneous projects can coordinate access to the renderer.
+The writers did not need the exact preceding prose when a shared route was sufficient. If a transition, summary or later decision depends on what an earlier writer actually produced, the later job must instead depend on that completed result. That dependency lengthens the critical path and should be declared only when the finished text matters.
 
-The earlier factory also used transcription to check delivered speech and published it through a phone player. Those delivery components remain specific to that system. Lamina checks WAV structure, duration and hashes; listening and transcription checks can follow the export.
+Lamina's current podcast format uses the shared-plan arrangement. It creates a source-grounded script whose sections can be written and reviewed concurrently. A configured speech adapter can synthesize the finished script as WAV audio through a capacity-limited resource lane.
 
-## An assessment with distinct writer, candidate and examiner inputs
+The current engine does not implement the historical episode topology, spoken-turn roles, sparse relationship board, turn-level audio repair, transcription comparison, timed transcript or phone player. Its WAV checks establish file structure, duration and hashes. Listening, pronunciation, pacing and educational quality require checks on the delivered audio and listener surface.
 
-In the earlier exam factory, one setter owned the case opening, question order, new findings and marks. Question writers worked in parallel from that plan and their assigned evidence. Candidate solvers attempted each question using only the case prefix available at that point. A judge then compared their answers with the marking guide and source material. Repairs named affected question IDs and triggered another solve and judgment.
+## Give a practice exam distinct candidate and examiner inputs
 
-This information flow helps find a question whose intended answer depends on an unrevealed finding. It also exposes prompts that ask for two answers while the marking guide expects four, or that leave several interpretations equally reasonable.
+A practice exam needs an information boundary. Candidate prompts must not contain the answer key, and later findings must not make an earlier question answerable only in retrospect.
 
-Lamina's **Assessment** setup carries teaching sources through a shared plan and parallel writing. The production path exports candidate and examiner files separately. Its blind solve receives the current and preceding candidate sections; the judge receives the answer, marking text and cited evidence. Review findings remain in the examiner report. The adapter should use isolated calls for these roles.
+The historical written-case factory used one setter to own the case opening, reveal order, questions and marks. Question-specific marking guides and candidate solves then ran concurrently. The solver for each question saw only the case prefix available at that point. One examiner compared the assembled paper, keys, blind answers and exact evidence. A material finding named the affected question, after which the factory repaired it and ran the solves and judgment again.
 
-For an oral encounter, the product needs another layer: requestable history, findings released by the examiner, treatment-linked reassessment and a marking sheet usable during conversation. Resus Room supplied that live interface. Lamina's exports can supply static assessment material; a live-session application owns release timing and participant access.
+Lamina's current assessment path plans source-backed sections and writes candidate and examiner material separately. Each blind solve receives the current candidate section and only the earlier candidate sections declared as required context. A separate judge receives that answer, the marking text and cited source passages. These calls can run concurrently because the engine constructs a separate information-limited request for each section. Use a stateless adapter or isolated provider sessions when the blind boundary matters.
 
-## Choose the context and dependencies deliberately
+The current path does not install one setter over a whole staged case, repair named questions from blind-solve findings, or repeat the solve-and-judge loop after that repair. Findings remain in examiner and operator records. A live oral encounter needs additional behavior—requestable findings, examiner-controlled release, action-linked reassessment, exhibits, private scoring and participant access—which belongs in a stateful application rather than a static export.
 
-Each production reader owns a core passage and can inspect neighboring units, called the *halo*. Ownership tells the engine where a new extracted idea belongs. The halo helps a reader follow a list or qualification across a boundary.
+## Keep the product-specific work visible
 
-Smaller cores create more independent jobs and smaller local decisions, while repeating more neighboring material and instructions. In an archived audio analysis, answer-word exposure ranged from 1.53 times the unique source answer words for one collection to 5.57 times for another. These counts exclude prompts and metadata. They show why context size needs its own measurement alongside runtime.
+Reference guides, podcasts and practice exams differ in more than their final file format. They ask readers to recover different objects, make different decisions with the combined evidence and test different delivered surfaces. Current Lamina supplies useful common infrastructure, while some product-specific work remains outside the production engine:
 
-A useful exposure measure is:
+| Product | Current Lamina production | Product-specific work still needed for the fuller historical method |
+| --- | --- | --- |
+| Reference guide | Structured reading, source-backed ideas, optional retrieval targets, hierarchical planning, reassignment of original ideas, parallel sections and local revision | An audited original-question inventory, explicit routing or quarantine across product types, family-level reconciliation when required, and atlas-scale navigation/render checks |
+| Podcast | Shared teaching route, assigned source evidence, concurrent section writing and review, optional whole-script WAV synthesis | Natural episode/series topology, sparse distant-relationship resolution, spoken-turn and segment repair, transcript comparison, and a tested listener/player journey |
+| Practice exam | Separate candidate and examiner text, declared earlier candidate context, blind answers and separate key/evidence judgments | One setter-owned staged case, question-level marks and repairs, repeat solve/judge after a change, and live oral-state behavior when the product is an encounter |
+| Reusable method | Operator-declared nodes, completed-result dependencies, resource lanes, receipts and selected same-family observations | Evidence-based selection among methods and a measured result showing that a retained observation improved a later run |
+
+These are separate extension paths. A reference router does not belong in every podcast, and a case setter does not belong in every guide. Reuse the source, execution and receipt machinery where it fits; keep each product's meaning and acceptance test explicit.
+
+## Choose plan sharing and completed-result dependencies deliberately
+
+Two jobs can run together when they need the same finished plan and different owned evidence. A later job must wait when it needs an earlier job's actual result. These are different kinds of context:
+
+| Context | Use it when | Cost |
+| --- | --- | --- |
+| Owned source structure | A reader must interpret one intact list, table, slide or page | Local model work |
+| Requested neighboring structure | A local boundary hides a necessary qualifier or continuation | Repeated adjacent source context |
+| Shared route | Writers need the same intended order, ownership and requirements | One global planning dependency |
+| Selected earlier evidence | A writer needs a planned callback or common definition | Small repeated source context |
+| Completed prior result | Exact earlier wording or output changes the later job | Longer dependency chain and more context |
+| Resource lane | Jobs can be ready together but compete for one renderer or constrained service | Queue time without an informational dependency |
+
+A custom [method](methods.md) declares completed-result dependencies, selected task fields and resource lanes directly. The production planner uses a shared route and declared source context. Do not make every writer wait for prior prose to improve continuity by assumption; do not let parallel writers proceed without the route and evidence needed to remain coherent.
+
+For source exposure, a useful diagnostic is:
 
 ```math
 A = \frac{\sum_j \text{source tokens sent in request }j}{\text{distinct accepted source tokens}}
 ```
 
-Record extraction coverage, the largest request and output quality beside this ratio. A lower ratio can save work but may remove context a reader needed.
+Record source extraction results, the largest request, repeated context and output quality beside this ratio. A lower ratio may remove context a reader needed. A higher ratio may spend time and money without improving the result. Capacity establishes what fits; an evaluated workload policy establishes how much work a stage has shown it can handle.
 
-For a custom graph, declare a dependency when a job needs a completed result. Share selected task fields when jobs can work from the same plan. Assign a resource lane when jobs compete for the same capacity. In the [method runtime](methods.md), these choices determine the actual requests, run order and cache reuse.
+## Keep historical and current timing evidence separate
 
-## Where time went
-
-The following figures come from saved production records analyzed in the earlier audio project's 4 September 2026 infrastructure review. The observations describe that system and batch. Lamina's synthetic scheduler measurements appear below in a separate table.
+The following observations come from saved records in the earlier audio system's 4 September 2026 infrastructure review. They do not measure current Lamina performance.
 
 | Historical audio observation | Sample and clock |
 | --- | --- |
-| 109.06 seconds to saved script, median | 82 rendered V8 parts; measured from engine start, excluding queue wait. |
-| 336.65 seconds to ready part, median | The same 82 parts. Parts share setup and contend for local media capacity. |
-| 575.54 seconds job service, median | 19 completed course jobs; a job can produce several parts. |
+| 109.06 seconds to saved script, median | 82 rendered audio parts; measured from engine start and excluding queue wait. |
+| 336.65 seconds to ready part, median | The same 82 parts; parts shared setup and contended for local media capacity. |
+| 575.54 seconds job service, median | 19 completed course jobs; one job could produce several parts. |
 | 5,042.11 seconds queue wait, median | The same 19 jobs in that saved batch. |
-| 73.754 seconds planning; 4.122 seconds slowest of eight writers | One recorded part. Call timers include provider-gate waiting. |
+| 73.754 seconds planning; 4.122 seconds for the slowest of eight writers | One recorded part; call timers included provider-gate waiting. |
 
-The 82-part sample included four parts with recorded model-cache hits. Its median delivered part lasted 18.47 minutes. Subtracting the median script and ready times would not recover a stage duration: jobs and parts share setup and wait on resources differently. The archived review supplies aggregate statistics; the private course texts and production logs remain outside this repository.
+The 82-part sample included four recorded model-cache hits and had a median delivered duration of 18.47 minutes. Subtracting the median script and ready times does not recover one stage duration because jobs and parts shared setup and waited on different resources. The private source text and production logs are outside this repository.
 
-These observations led to practical choices: measure queue time from admission, separate script readiness from audio readiness, keep expensive local media within its machine's capacity, and inspect the slowest dependent step before increasing writer count.
-
-Lamina's checked-in [scheduler experiment](../benchmarks/results/production-widths.json) runs 64 reader jobs, two serial global steps and 16 author/review chains through real local persistence. Each handler sleeps for a declared duration and returns a small object.
-
-| Worker capacity | Cold wall time | Peak simultaneous handlers |
-| ---: | ---: | ---: |
-| 1 | 6.001 s | 1 |
-| 4 | 1.690 s | 4 |
-| 16 | 0.777 s | 16 |
-| 32 | 0.626 s | 30 |
-
-Each width has one recorded run on Darwin arm64, Python 3.14.7 and SQLite 3.53.4. Warm runs made zero handler calls. Model inference, parsing and media rendering belong in a full workflow measurement with their own stage times.
+Current Lamina benchmarks use scripted adapters and declared fixture workloads to exercise request limits, scheduling, recovery and cache reuse. They do not measure live-model comprehension, cost or latency. The 0.10 validation deliberately includes a scripted case that returns valid cited records while silently omitting one required fact; the separate quality evaluator catches that omission. Operational completion and complete source-unit citation are therefore not evidence of semantic recall.
 
 For total service work on resource `r`, `W_r`, capacity `c_r`, and longest dependency chain `D`, completion time has the lower bound:
 
@@ -94,11 +124,11 @@ For total service work on resource `r`, `W_r`, capacity `c_r`, and longest depen
 T \geq \max\left(D,\max_r \frac{W_r}{c_r}\right)
 ```
 
-The first term explains why a shared planning step can dominate after writers become fast. The second explains why many ready audio jobs still wait for one renderer. Admission delays, retries, serialization and operator review add to elapsed time. A useful comparison measures time and cost to an accepted result under the same source scope and quality criteria; the [measurement protocol](measurement.md) describes that experiment.
+The first term explains why a route, setter or other global decision can dominate after local workers become fast. The second explains why many ready audio jobs still wait for one renderer. Admission delay, retries, provider limits and operator review add to elapsed time. Compare workflows by time and cost to an accepted result under the same source scope and quality criteria; the [measurement protocol](measurement.md) describes that experiment.
 
-## Reuse a setup
+## Run and retain a workflow
 
-Download a setup from the website. Its JSON contains `brief` and `options`, the same fields used by the production engine. Save it as `setup.json`, edit the brief, and ingest your sources:
+Ingest the source files and assign their roles before production:
 
 ```sh
 lamina ingest ./sources --workspace .lamina
@@ -125,8 +155,6 @@ receipt = run_production(workspace, provider, plan)
 export_production(receipt, plan, Path("output/my-project"))
 ```
 
-All selected sources default to authority. Add `source_policy` to the options when some are supplements, historical accounts or form examples; Projects exposes the same choice per file. The optional audio adapter is configured separately through the app or CLI. The Python example above exports the text artifacts.
+All selected factual sources default to authority. Use `source_policy` when some sources are supplements, historical accounts or form examples. Use task-specific reading when the brief should guide source selection; choose reusable reading only when you need a source inventory that can support later briefs. The inventory remains a model interpretation and does not prove complete semantic capture.
 
-A setup specifies the goal and production settings. A [custom method](methods.md) specifies the graph itself: jobs, selected task inputs, completed-result dependencies and resource lanes. Use Projects for source-to-document production. Use **Projects → Advanced tools → Custom workflow** to import a method JSON when you need that additional control.
-
-After a run, keep a useful observation about the source, representation or review decision. Select that observation for a later plan or method node when it applies. The next request then includes the note, making its effect available for inspection. Selection remains a decision by the person or agent running the workflow.
+A setup specifies the goal and production options. A custom method specifies the graph itself. After a run, retain a useful observation about applicability, representation or review only when it can guide a later decision. Selecting that observation for a later run makes its effect inspectable. Storage alone does not show that Lamina learned a better method.

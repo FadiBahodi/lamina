@@ -6,7 +6,7 @@
   const OUTPUTS = ["study-guide", "samp", "oral-case", "audio-script"];
   const OUTPUT_LABELS = {
     "study-guide": "Study guide",
-    samp: "Decision practice",
+    samp: "Practice exam",
     "oral-case": "Oral scenario",
     "audio-script": "Audio script",
   };
@@ -32,7 +32,7 @@
     {
       schema_version: "1",
       id: "samp-assessment",
-      name: "Decision practice",
+      name: "Practice exam",
       description:
         "Write progressive short-answer problems with staged information, marking points, and source evidence.",
       audience: "Candidates and examiners",
@@ -49,7 +49,7 @@
         "Create a candidate brief, private examiner findings, second event, and debrief.",
       audience: "Candidates and examiners",
       instructions:
-        "Author an interactive case with a short candidate brief. Hold examiner findings until requested. Add a staged second event, reassessment prompt, source-grounded checklist, and debrief.",
+        "Write a case packet with a short candidate brief. Put requestable findings in the examiner sheet. Add a staged second event, reassessment prompt, source-grounded checklist, and debrief.",
       outputs: ["oral-case"],
       workers: 4,
     },
@@ -58,7 +58,7 @@
       id: "audio-script",
       name: "Audio script",
       description:
-        "Make a speakable lesson script with deliberate pauses for retrieval.",
+        "Write a podcast script with explanations and pauses for recall.",
       audience: "Audio learners and narrators",
       instructions:
         "Transform the lesson sequence into a speakable script. Use concise explanations, examples, and retrieval pauses. Keep the script grounded in source evidence; do not claim audio synthesis or delivery evaluation.",
@@ -114,7 +114,7 @@
     );
   }
   function displayProcedureName(p) {
-    return /samp/i.test(p.name) ? "Decision practice" : p.name;
+    return /samp/i.test(p.name) ? "Practice exam" : p.name;
   }
   function linkFor(path) {
     if (
@@ -148,7 +148,7 @@
     state.view = view;
     document.body.classList.toggle("subview", view !== "overview");
     $$(".nav-link").forEach((b) => {
-      const yes = b.dataset.view === view || (b.dataset.view === "workflows" && ["studio", "examples", "procedures"].includes(view));
+      const yes = b.dataset.view === view || (b.dataset.view === "workflows" && ["studio", "procedures"].includes(view));
       b.classList.toggle("is-active", yes);
       if (yes) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
@@ -352,7 +352,7 @@
     }
     const lesson = b?.lessons?.[0];
     if (!lesson) {
-      box.appendChild(node("p", "", "Loading the source-grounded example…"));
+      box.appendChild(node("p", "", "Loading the example…"));
       return;
     }
     if (kind === "oral-case" && lesson.scenario) {
@@ -373,7 +373,7 @@
       const line = lesson.audio_script?.find((x) => x.kind === "speech");
       add(
         box,
-        node("h4", "", "A script built for listening"),
+        node("h4", "", "Podcast script"),
         node("p", "", trim(line?.text, 230)),
         node(
           "div",
@@ -863,13 +863,12 @@
       head = node("div", "example-head");
     const intro = add(
       node("div"),
-      node("span", "section-index", "ORIGINAL FIELD GUIDE / SOURCE → STUDY"),
+      node("span", "section-index", "ENGINEERING GUIDE"),
       node("h3", "", b.title || "Resilient workflow engineering"),
       node(
         "p",
         "",
-        b.description ||
-          "An engineering guide with source references and practice questions.",
+        "An engineering guide with source references, practice questions and a podcast script.",
       ),
     );
     const figure = node("figure", "example-image"),
@@ -889,7 +888,7 @@
       studyCard = node("article", "example-card");
     add(
       sourceCard,
-      node("span", "small-label", "INPUT / ADDRESSED SOURCE"),
+      node("span", "small-label", "SOURCE EXCERPT"),
       node("h4", "", source?.filename || "Source unit"),
       node(
         "p",
@@ -904,12 +903,12 @@
       node("p", "", trim(unit?.text, 550)),
     );
     sourceCard.appendChild(paper);
-    const link = node("a", "example-link", "Read the complete source trail →");
+    const link = node("a", "example-link", "Read the source passages →");
     link.href = new URL("workbench/#sources", ROOT);
     sourceCard.appendChild(link);
     add(
       studyCard,
-      node("span", "small-label", "OUTPUT / LEARNING UNIT"),
+      node("span", "small-label", "GUIDE SECTION"),
       node("h4", "", lesson?.title || "Lesson"),
       node("p", "", lesson?.summary || ""),
     );
@@ -926,7 +925,7 @@
       const d = node("details");
       add(
         d,
-        node("summary", "", "Reveal grounded answer"),
+        node("summary", "", "Show answer and source"),
         node("p", "", question.answer || ""),
       );
       const qc = citation(question.evidence?.[0], b);
@@ -947,12 +946,12 @@
       card.style.marginTop = "18px";
       add(
         card,
-        node("span", "small-label", "INTERMEDIATE / SEMANTIC MERGE"),
+        node("span", "small-label", "COMBINING RELATED MATERIAL"),
         node("h4", "", "Two source statements, one teachable idea."),
         node(
           "p",
           "",
-          "The merge keeps both source quotes. It reduces duplicate teaching without erasing provenance.",
+          "The combined explanation keeps both source quotations.",
         ),
       );
       const flow = node("div", "merge-flow");
@@ -986,12 +985,12 @@
       card.style.marginTop = "18px";
       add(
         card,
-        node("span", "small-label", "DEPENDENCY MAP / ACTUAL PLAN"),
-        node("h4", "", "The curriculum follows the work."),
+        node("span", "small-label", "SECTION ORDER"),
+        node("h4", "", "How the sections build on each other"),
         node(
           "p",
           "",
-          "Each box is a lesson from the published plan. Arrows follow its listed prerequisites.",
+          "Each section uses ideas introduced by its prerequisites.",
         ),
       );
       const map = node("div", "dependency-map");
@@ -1016,7 +1015,7 @@
           node(
             "p",
             "",
-            `${counters.extracted_concepts} extracted ideas → ${counters.canonical_concepts} consolidated ideas → ${counters.assigned_concepts} assigned. These counts track extracted ideas and their lesson assignments.`,
+            `${counters.extracted_concepts} extracted ideas → ${counters.canonical_concepts} consolidated ideas → ${counters.assigned_concepts} assigned. These counts track extracted ideas and their section assignments.`,
           ),
         );
       root.appendChild(card);
@@ -1030,7 +1029,7 @@
         node(
           "p",
           "error-note",
-          "The decision-practice example is not available from this build.",
+          "The practice exam example is not available from this build.",
         ),
       );
       return;
@@ -1048,7 +1047,7 @@
           "section-index",
           "SEPARATE OUTPUT / PROGRESSIVE ASSESSMENT",
         ),
-        node("h3", "", "Decision practice"),
+        node("h3", "", "Practice exam"),
         node(
           "p",
           "",
@@ -1247,7 +1246,7 @@
     root.appendChild(link);
   }
   async function initialize() {
-    $$(".nav-link,[data-view]").forEach((b) =>
+    $$("[data-view]").forEach((b) =>
       b.addEventListener("click", () => showView(b.dataset.view)),
     );
     $$("[data-paper-section]").forEach((b) => b.addEventListener("click", () => { showView("overview"); document.getElementById(b.dataset.paperSection)?.scrollIntoView({behavior:"smooth"}); }));

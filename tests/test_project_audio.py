@@ -56,6 +56,7 @@ def test_podcast_project_delivers_wave_link_and_report(tmp_path, monkeypatch):
                 "brief": "Write a short engineering podcast script about lease safety.",
                 "source_ids": ids,
                 "options": {
+                    "workflow": "planned",
                     "format": "podcast-script",
                     "reader_workers": 4,
                     "writer_workers": 4,

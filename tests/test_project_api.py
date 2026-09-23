@@ -57,7 +57,9 @@ def _finished(server, rid):
         if status["status"] in {"ready", "review", "failed", "interrupted"}:
             return status
         time.sleep(0.05)
-    raise AssertionError(f"Production run did not finish: {status.get('status')}, {status.get('events', [])[-3:]}")
+    raise AssertionError(
+        f"Production run did not finish: {status.get('status')}, {status.get('events', [])[-3:]}"
+    )
 
 
 def _upload_four(server):
@@ -93,6 +95,7 @@ def _start(server, source_ids, fmt="guide"):
         "brief": "Write an incident guide for lease-based workers.",
         "source_ids": source_ids,
         "options": {
+            "workflow": "planned",
             "format": fmt,
             "reader_workers": 8,
             "writer_workers": 8,
@@ -210,8 +213,14 @@ def test_assessment_candidate_download_separate_from_examiner(tmp_path, monkeypa
     class AssessmentFixture(FixtureAdapter):
         def call(self, stage, request):
             if stage == "assessment_blind_solve":
-                assert set(request["input"]) == {"current_candidate_body", "prior_candidate_bodies"}
-                return {"answer": "Check the current fencing token.", "uncertainties": []}
+                assert set(request["input"]) == {
+                    "current_candidate_body",
+                    "prior_candidate_bodies",
+                }
+                return {
+                    "answer": "Check the current fencing token.",
+                    "uncertainties": [],
+                }
             if stage == "assessment_judge":
                 return {"findings": []}
             if (

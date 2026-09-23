@@ -120,7 +120,11 @@ def main():
         }
         adapter = BoundaryFixture()
         first_plan = plan_production(
-            workspace, adapter, "Explain safe worker retries", source_ids, options
+            workspace,
+            adapter,
+            "Explain safe worker retries",
+            source_ids,
+            {"workflow": "planned", **(options)},
         )
         first = run_production(workspace, adapter, first_plan)
         note = record_observation(
@@ -139,7 +143,7 @@ def main():
             adapter,
             "Explain safe worker retries",
             source_ids,
-            selected_options,
+            {"workflow": "planned", **(selected_options)},
         )
         second = run_production(workspace, adapter, second_plan)
         result = {

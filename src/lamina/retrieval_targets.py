@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import re
 
-TARGET_REVISION = "lamina-retrieval-targets-1"
+from .evidence import QuoteMatchError, resolve_quote
+
+TARGET_REVISION = "lamina-retrieval-targets-2"
 _ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,99}\Z")
 
 TARGET_SHAPE = {
@@ -61,14 +63,19 @@ def _text(value: object, label: str, limit: int) -> str:
 
 
 def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) -> dict:
-    """Validate exact idea partition and answer support without choosing meaning."""
+    """Validate response or aggregate ownership and exact answer support.
+
+    Array cardinality follows the selected source/target identities. Transport
+    and model-output budgets bound individual calls; a merged catalog may contain
+    the valid results of many calls.
+    """
     if not isinstance(raw, dict) or set(raw) != {"targets", "relations"}:
         raise RetrievalTargetError("retrieval stage needs targets and relations")
     rows, links = raw["targets"], raw["relations"]
-    if not isinstance(rows, list) or not 1 <= len(rows) <= 512:
-        raise RetrievalTargetError("targets must be a nonempty bounded list")
-    if not isinstance(links, list) or len(links) > 1024:
-        raise RetrievalTargetError("relations must be a bounded list")
+    if not isinstance(rows, list) or not rows:
+        raise RetrievalTargetError("targets must be a nonempty list")
+    if not isinstance(links, list):
+        raise RetrievalTargetError("relations must be a list")
     idea_by_id = {idea["id"]: idea for idea in ideas}
     unit_by_id = {unit["id"]: unit for unit in units}
     claimed: set[str] = set()
@@ -93,7 +100,6 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
         if (
             not isinstance(members, list)
             or not members
-            or len(members) > 100
             or any(not isinstance(i, str) for i in members)
             or len(members) != len(set(members))
             or any(i not in idea_by_id or i in claimed for i in members)
@@ -102,7 +108,11 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
                 "each idea must have exactly one known target owner"
             )
         relation = raw_target["membership_relation"]
-        if relation not in {"unique", "equivalent", "variant"}:
+        if not isinstance(relation, str) or relation not in {
+            "unique",
+            "equivalent",
+            "variant",
+        }:
             raise RetrievalTargetError(
                 "membership_relation must be unique, equivalent, or variant"
             )
@@ -111,19 +121,20 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
                 "unique targets need one idea; equivalent/variant targets need multiple"
             )
         claimed.update(members)
+        member_set = set(members)
+        member_units = {mid: set(idea_by_id[mid]["unit_ids"]) for mid in members}
+        allowed_units = set().union(*member_units.values())
         groups = raw_target["answer_groups"]
-        if not isinstance(groups, list) or not 1 <= len(groups) <= 50:
-            raise RetrievalTargetError("target needs bounded answer groups")
+        if not isinstance(groups, list) or not groups:
+            raise RetrievalTargetError("target needs a nonempty answer_groups list")
         checked_groups = []
         supported: set[str] = set()
         for group in groups:
             if not isinstance(group, dict) or set(group) != {"label", "items"}:
                 raise RetrievalTargetError("answer group needs label and items")
             items = group["items"]
-            if not isinstance(items, list) or not 1 <= len(items) <= 100:
-                raise RetrievalTargetError(
-                    "answer group items must be nonempty and bounded"
-                )
+            if not isinstance(items, list) or not items:
+                raise RetrievalTargetError("answer group items must be a nonempty list")
             checked_items = []
             for item in items:
                 if not isinstance(item, dict) or set(item) != {
@@ -141,16 +152,14 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
                     or not supports
                     or any(not isinstance(i, str) for i in supports)
                     or len(supports) != len(set(supports))
-                    or any(i not in members for i in supports)
+                    or any(i not in member_set for i in supports)
                 ):
                     raise RetrievalTargetError(
                         "answer item must name member ideas it supports"
                     )
                 evidence = item["evidence"]
-                if not isinstance(evidence, list) or not 1 <= len(evidence) <= 30:
-                    raise RetrievalTargetError(
-                        "answer item needs bounded exact evidence"
-                    )
+                if not isinstance(evidence, list) or not evidence:
+                    raise RetrievalTargetError("answer item needs exact evidence")
                 checked_evidence = []
                 seen_evidence = set()
                 for citation in evidence:
@@ -163,34 +172,34 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
                         )
                     uid = citation["unit_id"]
                     quote = _text(citation["quote"], "answer quote", 4000)
-                    if (
-                        not isinstance(uid, str)
-                        or uid not in unit_by_id
-                        or quote not in unit_by_id[uid]["text"]
-                    ):
+                    if not isinstance(uid, str) or uid not in unit_by_id:
                         raise RetrievalTargetError(
                             "answer quote is not exact source text"
                         )
-                    if uid not in {
-                        u for mid in members for u in idea_by_id[mid]["unit_ids"]
-                    }:
+                    try:
+                        quote = resolve_quote(quote, unit_by_id[uid]["text"]).quote
+                    except QuoteMatchError as exc:
+                        raise RetrievalTargetError(
+                            f"answer quote has no exact, unambiguous source span: {exc}"
+                        ) from exc
+                    if uid not in allowed_units:
                         raise RetrievalTargetError(
                             "answer quote is outside target member ideas"
                         )
                     if (uid, quote) not in seen_evidence:
                         checked_evidence.append({"unit_id": uid, "quote": quote})
                         seen_evidence.add((uid, quote))
-                if not any(text in e["quote"] for e in checked_evidence):
+                supporting_units = {
+                    e["unit_id"] for e in checked_evidence if text in e["quote"]
+                }
+                if not supporting_units:
                     raise RetrievalTargetError(
                         "answer item text must be an exact substring of its cited quote"
                     )
                 for mid in supports:
-                    if not any(
-                        e["unit_id"] in idea_by_id[mid]["unit_ids"]
-                        for e in checked_evidence
-                    ):
+                    if not member_units[mid] & supporting_units:
                         raise RetrievalTargetError(
-                            "each claimed idea needs its own cited unit"
+                            "each claimed idea needs its own cited quote containing the answer text"
                         )
                 supported.update(supports)
                 checked_items.append(
@@ -250,7 +259,10 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
         if pair in seen_pairs:
             raise RetrievalTargetError("one relation per target pair")
         seen_pairs.add(pair)
-        if link["kind"] not in {"variant", "different_context"}:
+        if not isinstance(link["kind"], str) or link["kind"] not in {
+            "variant",
+            "different_context",
+        }:
             raise RetrievalTargetError(
                 "equivalent targets must be merged; cross-target links are variant or different_context"
             )

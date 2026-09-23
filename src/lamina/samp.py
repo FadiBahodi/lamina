@@ -191,7 +191,7 @@ def _demo_response(bundle: dict, provider: DemoProvider) -> dict:
         raise ProviderError("offline SAMP example requires the exact bundled field guide")
     by_file = {s["id"]: s["filename"] for s in bundle["sources"]}
     for u in bundle["units"]:
-        if (u["heading"], u["text"]) != provider.expected_units[by_file[u["source_id"]]]:
+        if (u["heading"], u["text"]) not in provider.expected_units[by_file[u["source_id"]]]:
             raise ProviderError("offline SAMP example requires unchanged source units")
     aliases = provider._aliases(bundle["concepts"],
                                 [t for t in provider.fixture["concepts"] if t["alias"] != "lease_limit"])

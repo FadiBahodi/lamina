@@ -1,56 +1,194 @@
 #!/usr/bin/env python3
-"""Example Lamina command adapter for a user-configured JSON chat endpoint.
+"""One-shot chat adapter. http_service.py reuses these request/response rules."""
 
-Set LAMINA_API_BASE, LAMINA_MODEL, and LAMINA_API_KEY. The endpoint must accept
-POST /chat/completions with model/messages and return choices[0].message.content
-as a JSON object string. No provider or model is selected by this repository.
-"""
 from __future__ import annotations
 
+import datetime
+import email.utils
 import json
 import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
+from lamina.chat_protocol import chat_messages, chat_token_count
 
-def main() -> int:
+
+class AdapterFailure(Exception):
+    def __init__(self, code, retry_after=None, usage=None):
+        self.code, self.retry_after = code, retry_after
+        self.usage = usage or {}
+        super().__init__(code)
+
+    def error(self):
+        result = {"code": self.code}
+        if self.retry_after is not None:
+            result["retry_after"] = self.retry_after
+        if self.usage:
+            result["usage"] = self.usage
+        return result
+
+
+def endpoint():
+    base = os.environ["LAMINA_API_BASE"].rstrip("/")
+    parsed = urllib.parse.urlparse(base)
+    if parsed.scheme != "https" and not (
+        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    ):
+        raise AdapterFailure("invalid_request")
+    return base + "/chat/completions"
+
+
+def request_body(request):
+    messages = chat_messages(request)
+    output_limit = int(os.environ.get("LAMINA_MAX_OUTPUT_TOKENS", "8192"))
+    if output_limit < 1:
+        raise AdapterFailure("invalid_request")
+    context = os.environ.get("LAMINA_CONTEXT_TOKENS")
+    if context:
+        import tiktoken
+
+        encoding = tiktoken.get_encoding(os.environ["LAMINA_TOKENIZER"])
+        if chat_token_count(request, encoding) + output_limit > int(context):
+            raise AdapterFailure("context_limit")
+    body = {
+        "model": os.environ["LAMINA_MODEL"],
+        "messages": messages,
+        "temperature": float(os.environ.get("LAMINA_TEMPERATURE", "0.2")),
+        "max_tokens": output_limit,
+    }
+    schema = request.get("response_schema")
+    if schema is not None:
+        # The endpoint must explicitly support this dialect. expected_shape remains
+        # prompt documentation and is never guessed into a JSON Schema.
+        if os.environ.get("LAMINA_STRUCTURED_OUTPUT") != "json_schema":
+            raise AdapterFailure("invalid_request")
+        from jsonschema import Draft202012Validator
+
+        Draft202012Validator.check_schema(schema)
+        body["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {"name": "lamina_result", "strict": True, "schema": schema},
+        }
+    return body
+
+
+def response_usage(envelope):
+    """Preserve measured cost even when generated content cannot be accepted."""
+    if not isinstance(envelope, dict):
+        return {}
+    usage = envelope.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
+    measured = {}
+    for source_key, target_key in (
+        ("prompt_tokens", "input_tokens"),
+        ("completion_tokens", "output_tokens"),
+    ):
+        if type(usage.get(source_key)) is int and usage[source_key] >= 0:
+            measured[target_key] = usage[source_key]
+    details = usage.get("prompt_tokens_details")
+    cached = details.get("cached_tokens") if isinstance(details, dict) else None
+    if type(cached) is int and cached >= 0:
+        measured["cached_input_tokens"] = cached
+    if isinstance(envelope.get("model"), str):
+        measured["model"] = envelope["model"]
+    return measured
+
+
+def response_result(envelope, request):
+    measured = response_usage(envelope)
+    try:
+        choice = envelope["choices"][0]
+        if not isinstance(choice, dict):
+            raise AdapterFailure("invalid_response")
+        if choice.get("finish_reason") == "length":
+            raise AdapterFailure("output_truncated")
+        result = json.loads(choice["message"]["content"])
+        if not isinstance(result, dict):
+            raise AdapterFailure("invalid_response")
+        if request.get("response_schema") is not None:
+            from jsonschema import Draft202012Validator
+
+            if not Draft202012Validator(request["response_schema"]).is_valid(result):
+                raise AdapterFailure("invalid_response")
+        return {
+            "protocol": "lamina-response-1",
+            "result": result,
+            "model": envelope.get("model", os.environ["LAMINA_MODEL"]),
+            "usage": measured,
+        }
+    except AdapterFailure as exc:
+        exc.usage = measured
+        raise
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise AdapterFailure("invalid_response", usage=measured) from exc
+
+
+def http_failure(status, retry_after=None):
+    delay = None
+    if retry_after is not None:
+        try:
+            delay = float(retry_after)
+        except (TypeError, ValueError):
+            try:
+                delay = (
+                    email.utils.parsedate_to_datetime(retry_after)
+                    - datetime.datetime.now(datetime.timezone.utc)
+                ).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                pass
+    if delay is not None:
+        delay = max(0, min(delay, 3600))
+    code = (
+        "rate_limit"
+        if status == 429
+        else (
+            "timeout"
+            if status == 408
+            else (
+                "unavailable"
+                if status >= 500
+                else "authentication" if status in {401, 403} else "invalid_request"
+            )
+        )
+    )
+    return AdapterFailure(code, delay)
+
+
+def main():
     try:
         request = json.load(sys.stdin)
-        if not isinstance(request, dict) or request.get("protocol") != "lamina-stage-1":
-            raise ValueError("expected one Lamina stage request object")
-        base = os.environ["LAMINA_API_BASE"].rstrip("/")
-        model = os.environ["LAMINA_MODEL"]
-        token = os.environ["LAMINA_API_KEY"]
-        parsed = urllib.parse.urlparse(base)
-        if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}):
-            raise ValueError("API base must use HTTPS or local loopback HTTP")
-        messages = [
-            {"role": "system", "content": request["instruction"] +
-             " Return exactly one JSON object matching the expected shape. No markdown."},
-            {"role": "user", "content": json.dumps({
-                "stage": request["stage"], "expected_shape": request["expected_shape"],
-                "input": request["input"]}, ensure_ascii=False)},
-        ]
-        body = json.dumps({"model": model, "messages": messages,
-                           "temperature": 0.2}, ensure_ascii=False).encode()
+        body = request_body(request)
         call = urllib.request.Request(
-            base + "/chat/completions", data=body,
-            headers={"Authorization": "Bearer " + token,
-                     "Content-Type": "application/json"}, method="POST",
+            endpoint(),
+            data=json.dumps(body, ensure_ascii=False).encode(),
+            headers={
+                "Authorization": "Bearer " + os.environ["LAMINA_API_KEY"],
+                "Content-Type": "application/json",
+            },
+            method="POST",
         )
-        with urllib.request.urlopen(call, timeout=100) as response:
-            envelope = json.load(response)
-        content = envelope["choices"][0]["message"]["content"]
-        result = json.loads(content)
-        if not isinstance(result, dict):
-            raise ValueError("model response was not a JSON object")
-        json.dump(result, sys.stdout, ensure_ascii=False)
-        sys.stdout.write("\n")
-        return 0
-    except Exception as exc:
-        print(f"Lamina adapter error: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 1
+        try:
+            with urllib.request.urlopen(call, timeout=100) as response:
+                envelope = json.load(response)
+        except urllib.error.HTTPError as exc:
+            raise http_failure(exc.code, exc.headers.get("Retry-After")) from exc
+        except TimeoutError as exc:
+            raise AdapterFailure("timeout") from exc
+        except urllib.error.URLError as exc:
+            raise AdapterFailure("connection") from exc
+        reply = response_result(envelope, request)
+    except AdapterFailure as exc:
+        reply = {"protocol": "lamina-error-1", "error": exc.error()}
+    except Exception:
+        # Source text, credentials and provider response bodies never enter public
+        # exception strings. Add protected diagnostics locally when needed.
+        reply = {"protocol": "lamina-error-1", "error": {"code": "invalid_request"}}
+    json.dump(reply, sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
+    return 0
 
 
 if __name__ == "__main__":

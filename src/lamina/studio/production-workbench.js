@@ -5,20 +5,6 @@
   if (!host) return;
   const make = (tag, cls = "", value) => { const x = document.createElement(tag); if (cls) x.className = cls; if (value !== undefined) x.textContent = String(value); return x; };
   const route = path => new URL(path, document.baseURI);
-  function initScaleLab() {
-    const units=document.getElementById("scale-units"), readers=document.getElementById("scale-readers"), waves=document.getElementById("scale-waves");
-    if(!units || !readers || !waves) return;
-    function paint() {
-      const count=Number(units.value), width=Number(readers.value), total=Math.ceil(count/width);
-      document.getElementById("scale-units-value").textContent=String(count);
-      document.getElementById("scale-readers-value").textContent=String(width);
-      document.getElementById("scale-wave-count").textContent=`${total} wave${total===1?"":"s"} of reading`;
-      waves.replaceChildren(); let left=count;
-      for(let i=0;i<total;i++){const row=make("div","scale-wave");const n=Math.min(width,left);for(let j=0;j<n;j++)row.append(make("i"));row.setAttribute("aria-label",`Reading wave ${i+1}: ${n} source pieces`);waves.append(row);left-=n;}
-    }
-    units.addEventListener("input",paint); readers.addEventListener("input",paint); paint();
-  }
-  initScaleLab();
   const state = { local: false, adapter: false, audioAdapter: false, sources: [], selected: new Set(), roles: new Map(), observations: [], selectedObservations: new Set(), runId: "", run: null, poll: null, example: null };
   const shell = make("div", "pb-shell");
   const form = make("div", "pb-form");
@@ -36,34 +22,47 @@
   const sourceHead = make("div", "pb-block-head"); sourceHead.append(make("span", "pb-step", "02"), make("h3", "", "Which sources should it use?"));
   const sourceNote = make("p", "pb-explain", "Choose source files and how each should be used. Assessment files stay held out from generation.");
   const sourceList = make("div", "pb-sources");
-  const uploadLabel = make("label", "pb-upload"); uploadLabel.append(make("span", "", "Add .txt, .md, or .pdf files"));
-  const fileInput = make("input"); fileInput.type = "file"; fileInput.multiple = true; fileInput.accept = ".txt,.md,.pdf,text/plain,text/markdown,application/pdf"; uploadLabel.append(fileInput);
+  const uploadLabel = make("label", "pb-upload"); uploadLabel.append(make("span", "", "Add .txt, .md, .pdf, or .pptx files"));
+  const fileInput = make("input"); fileInput.type = "file"; fileInput.multiple = true; fileInput.accept = ".txt,.md,.pdf,.pptx,text/plain,text/markdown,application/pdf"; uploadLabel.append(fileInput);
   const uploadStatus = make("p", "pb-upload-status"); uploadStatus.setAttribute("role", "status");
   sourceBlock.append(sourceHead, sourceNote, sourceList, uploadLabel, uploadStatus);
   const capacityBlock = make("section", "pb-block");
   const capacityHead = make("div", "pb-block-head"); capacityHead.append(make("span", "pb-step", "03"), make("h3", "", "How much work can run together?"));
-  const capacityIntro = make("p", "pb-explain", "Set the maximum tasks for each stage. Your model provider may allow fewer.");
+  const capacityIntro = make("p", "pb-explain", "Stage limits share one total call limit. A finished section can be reviewed while others are being written.");
   const capacityFields = make("div", "pb-capacity-fields");
   const workerInputs = {};
-  [["reader_workers", "Reading", 16], ["writer_workers", "Writing", 8], ["review_workers", "Review", 8]].forEach(([key, label, value]) => {
+  [["reader_workers", "Reading", 8], ["writer_workers", "Writing", 8], ["review_workers", "Review", 8]].forEach(([key, label, value]) => {
     const field = make("label", "pb-worker"); field.append(make("span", "", `${label} at once`));
-    const input = make("input"); input.type = "number"; input.min = "1"; input.max = "128"; input.step = "1"; input.value = String(value); input.setAttribute("aria-label", `${label} workers at once`);
+    const input = make("input"); input.type = "number"; input.min = "1"; input.max = "128"; input.step = "1"; input.value = ""; input.placeholder = "Use total limit"; input.setAttribute("aria-label", `${label} workers at once`);
     field.append(input); capacityFields.append(field); workerInputs[key] = input;
   });
-  const context = make("details", "pb-context-options"); context.append(make("summary", "", "Source context settings"));
+  const context = make("details", "pb-context-options"); context.append(make("summary", "", "Advanced workflow settings"));
   const contextFields = make("div", "pb-context-fields");
-  function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
-  const coreWords = numericField("Words in each owned passage", 800, 100, 2000);
-  const haloUnits = numericField("Neighboring passages on each side", 2, 0, 8);
-  const maxRequest = numericField("Maximum request bytes", 1500000, 4096, 2000000);
+  function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=value===null?"":String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
+  const workflowLabel = make("label", "pb-worker"); workflowLabel.append(make("span", "", "Workflow"));
+  const workflow = make("select"); workflow.setAttribute("aria-label", "Workflow");
+  [["auto","Automatic: use declared workload limits"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
+  workflowLabel.append(workflow); contextFields.append(workflowLabel);
+  const totalWorkers = numericField("Maximum simultaneous model calls", 8, 1, 128);
+  const totalWorkerField = totalWorkers.parentElement; totalWorkerField.remove();
+  const readingLabel = make("label", "pb-worker"); readingLabel.append(make("span", "", "Source reading"));
+  const reading = make("select"); reading.setAttribute("aria-label", "Source reading");
+  [["task","Read for this project"],["reusable","Reuse inventory across goals (check coverage)"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
+  readingLabel.append(reading);contextFields.append(readingLabel);
+  const maxAttempts = numericField("Attempts per model request", 2, 1, 5);
+  const coreWords = numericField("Optional fixed reading target (words)", null, 100, 2000);
+  coreWords.placeholder="Use declared workload or one source structure";
+  const haloUnits = numericField("Extra neighboring passages", 0, 0, 8);
+  const maxRequest = numericField("Optional request byte ceiling", null, 4096, 2000000);
+  maxRequest.placeholder="Use adapter budget";
   const retrievalChoice=make("label","pb-retrieval-choice");retrievalChoice.hidden=true;
   const retrievalTargets=make("input");retrievalTargets.type="checkbox";
   const retrievalCopy=make("span");retrievalCopy.append(make("strong","","Merge equivalent questions"),make("small","","Preserve answer groups and distinct contexts."));
   retrievalChoice.append(retrievalTargets,retrievalCopy);
   function updateRetrievalChoice(){retrievalChoice.hidden=!(["guide","assessment"].includes(format.value));if(retrievalChoice.hidden)retrievalTargets.checked=false;}
   format.addEventListener("change",updateRetrievalChoice);updateRetrievalChoice();
-  context.append(contextFields, make("p", "pb-explain", "Neighboring passages add context; each reading result remains tied to its assigned passage."),retrievalChoice);
-  capacityBlock.append(capacityHead, capacityIntro, capacityFields, context);
+  context.append(contextFields, capacityFields, make("p", "pb-explain", "Set task limits in the model adapter before combining source structures or ideas. The context limit only checks that a request fits. Reading is specific to this project by default. Check coverage before reusing an inventory across goals; missed facts can carry forward."),retrievalChoice);
+  capacityBlock.append(capacityHead, capacityIntro, totalWorkerField, context);
   const savedNotes=make("details","pb-saved-notes");savedNotes.hidden=true;
   savedNotes.append(make("summary","","Use saved project notes"),make("p","pb-explain","Choose notes that apply to this project."));
   const savedNotesList=make("div","pb-saved-notes-list");savedNotes.append(savedNotesList);
@@ -93,16 +92,34 @@
     if(!setup || typeof setup.brief!=="string" || !["guide","assessment","podcast-script"].includes(setup.options?.format))return;
     goal.value=setup.brief; format.value=setup.options.format;
     for(const [key,input] of Object.entries(workerInputs)){
-      const value=setup.options[key];if(Number.isInteger(value)&&value>=1&&value<=128)input.value=String(value);
+      const value=setup.options[key];input.value=Number.isInteger(value)&&value>=1&&value<=128?String(value):"";
     }
-    coreWords.value=String(setup.options.core_words);haloUnits.value=String(setup.options.halo_units);
+    coreWords.value=setup.options.core_words??"";haloUnits.value=setup.options.halo_units??0;
+    maxRequest.value=setup.options.max_input_bytes??"";reading.value=setup.options.reading??"task";
+    workflow.value=setup.options.workflow??"auto";maxAttempts.value=setup.options.max_attempts??2;
+    totalWorkers.value=setup.options.workers??8;
     updateFormatNote();updateRetrievalChoice();retrievalTargets.checked=Boolean(setup.options.retrieval_targets)&&!retrievalChoice.hidden;
     let notice=form.querySelector('.setup-loaded');if(!notice){notice=make('p','setup-loaded');notice.setAttribute('role','status');form.prepend(notice);}
     notice.textContent=`${setup.name} setup loaded. Adjust the brief, then choose your sources.`;
     goal.focus();
   });
   function safeNumber(input, name) { const n = Number(input.value); if (!Number.isInteger(n) || n < Number(input.min) || n > Number(input.max)) throw Error(`${name} must be ${input.min}–${input.max}.`); return n; }
-  function options(selected) { if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose an authority, supplement or historical source for factual evidence.");if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");return {format:format.value, reader_workers:safeNumber(workerInputs.reader_workers,"Reading capacity"), writer_workers:safeNumber(workerInputs.writer_workers,"Writing capacity"), review_workers:safeNumber(workerInputs.review_workers,"Review capacity"), core_words:safeNumber(coreWords,"Passage size"), halo_units:safeNumber(haloUnits,"Neighboring passages"), max_request_bytes:safeNumber(maxRequest,"Request byte limit"), retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden, source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])), observation_ids:Array.from(state.selectedObservations)}; }
+  function options(selected) {
+    if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose an authority, supplement or historical source for factual evidence.");
+    if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");
+    const halo=safeNumber(haloUnits,"Neighboring passages");
+    if(halo && !coreWords.value.trim())throw Error("Extra neighboring passages require an explicit fixed reading target.");
+    return {
+      format:format.value, workflow:workflow.value, reading:reading.value,
+      workers:safeNumber(totalWorkers,"Total calls"), max_attempts:safeNumber(maxAttempts,"Attempts"),
+      ...Object.fromEntries(Object.entries(workerInputs).filter(([,input])=>input.value.trim()!=="").map(([key,input])=>[key,safeNumber(input,key)])),
+      ...(coreWords.value.trim()?{core_words:safeNumber(coreWords,"Fixed reading target")}:{}),
+      ...(maxRequest.value.trim()?{max_input_bytes:safeNumber(maxRequest,"Request byte ceiling")}:{}),
+      halo_units:halo, retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden,
+      source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])),
+      observation_ids:Array.from(state.selectedObservations)
+    };
+  }
   function renderSources() {
     sourceList.replaceChildren();
     if (!state.sources.length) { sourceList.append(make("p", "pb-empty", state.local ? "No sources stored locally yet. Add files below." : "Add your own sources in the local app. You can explore the recorded project here.")); return; }
@@ -143,17 +160,17 @@
       recentList.append(row);
     });
   }
-  function readPDF(file) { return new Promise((resolve,reject) => { const reader=new FileReader(); reader.onerror=()=>reject(Error("Could not read PDF")); reader.onload=()=> { const text=String(reader.result||""); const pos=text.indexOf(","); if (pos<0) reject(Error("Could not encode PDF")); else resolve(text.slice(pos+1)); }; reader.readAsDataURL(file); }); }
+  function readBinary(file) { return new Promise((resolve,reject) => { const reader=new FileReader(); reader.onerror=()=>reject(Error("Could not read file")); reader.onload=()=> { const text=String(reader.result||""); const pos=text.indexOf(","); if (pos<0) reject(Error("Could not encode file")); else resolve(text.slice(pos+1)); }; reader.readAsDataURL(file); }); }
   fileInput.addEventListener("change", async () => {
     const files=Array.from(fileInput.files || []); if (!files.length) return;
     uploadStatus.textContent="Reading files…"; fileInput.disabled=true;
     try {
       const payload=[];
       for (const file of files) {
-        if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.(txt|md|pdf)$/i.test(file.name)) throw Error(`${file.name}: unsupported file name or type.`);
-        const pdf=/\.pdf$/i.test(file.name);
-        if (file.size > (pdf?5000000:2000000)) throw Error(`${file.name}: file is too large for this local upload.`);
-        payload.push(pdf ? {name:file.name,base64:await readPDF(file),role:"teaching"} : {name:file.name,text:await file.text(),role:"teaching"});
+        if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.(txt|md|pdf|pptx)$/i.test(file.name)) throw Error(`${file.name}: unsupported file name or type.`);
+        const binary=/\.(pdf|pptx)$/i.test(file.name);
+        if (file.size > (binary?5000000:2000000)) throw Error(`${file.name}: file is too large for this local upload.`);
+        payload.push(binary ? {name:file.name,base64:await readBinary(file),role:"teaching"} : {name:file.name,text:await file.text(),role:"teaching"});
       }
       const answer=await post("api/sources", {files:payload});
       for (const source of answer.sources || []) state.selected.add(source.id);
@@ -296,7 +313,7 @@
     if(run.error) output.replaceChildren(make("p","pb-error",run.error)); else renderReceipt(run,example || Boolean(run.example));
     if(wasHidden || example) activity.scrollIntoView({behavior:"smooth",block:"start"});
   }
-  async function poll(id) {clearTimeout(state.poll);try{const run=await getJSON(`api/runs/${encodeURIComponent(id)}`);renderRun(run);if(["queued","running"].includes(run.status))state.poll=setTimeout(()=>poll(id),1800);else{start.disabled=!state.adapter;setMessage(run.status==="ready"?"Project complete. Open the result and its source evidence below.":run.status==="review"?"Review requested. Inspect the findings below.":`Project ${run.status}.`,run.status==="failed");}}catch(err){start.disabled=false;setMessage(`Could not read project progress: ${err.message}`,true);}}
+  async function poll(id) {clearTimeout(state.poll);try{let run=await getJSON(`api/progress/${encodeURIComponent(id)}`);if(!["queued","running"].includes(run.status))run=await getJSON(`api/runs/${encodeURIComponent(id)}`);renderRun(run);if(["queued","running"].includes(run.status))state.poll=setTimeout(()=>poll(id),1800);else{start.disabled=!state.adapter;setMessage(run.status==="ready"?"Project complete. Open the result and its source evidence below.":run.status==="review"?"Review requested. Inspect the findings below.":`Project ${run.status}.`,run.status==="failed");}}catch(err){start.disabled=false;setMessage(`Could not read project progress: ${err.message}`,true);}}
   start.addEventListener("click",async()=>{
     if(!state.local || !state.adapter){setMessage("Open the local app with a configured adapter to run a project.",true);return;}
     const brief=goal.value.trim();if(!brief){setMessage("Describe the result you want first.",true);goal.focus();return;}

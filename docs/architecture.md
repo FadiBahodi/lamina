@@ -1,45 +1,59 @@
 # Architecture
 
-This page covers the structured lesson builder. The default Projects interface uses [source-aware production](production.md); [architecture status](architecture-status.md) compares both paths with the method runtime.
+Lamina connects three decisions: which material belongs together, what each worker must see, and when the worker can start. Models or a calling agent decide meaning and editorial structure. Code controls provenance, ownership, resource limits and execution. [Production](production.md) specifies the direct, planned and caller-assigned routes.
 
-Lamina builds learning material from local documents and exports a static reader. Python 3.11+ and SQLite handle the pipeline; plain browser assets serve the workbench. Source identity and evidence remain inspectable across semantic stages.
+## Source structure and capacity
 
-## Data flow
+Ingestion preserves complete parser structures. Reading uses one structure per call when no workload profile exists. A declared profile can combine structures across headings within one source; the complete request must satisfy separate workload and capacity limits. PowerPoint slide components remain together. A reader can request adjacent context with a reason; output truncation divides a batch between complete structures. An indivisible structure can require a larger allowance or explicit decomposition.
 
-1. **Ingest.** Each document gets a SHA-256 digest, source ID, title, filename, and role. Text becomes ordered units with stable IDs and locators. Repeated writes are idempotent. PDF support extracts text; it does not read images, scanned pages, tables, or layout reliably.
-2. **Retrieve.** Search ranks units by lexical and heading signals. A caller-supplied vector lane can add cosine similarity. Scores and contributing lanes are returned; the default has no semantic embeddings.
-3. **Extract.** An adapter sees bounded teaching-unit windows and adjacent context, then proposes concepts with exact quotes. Validation rejects unknown units, invented quotes, and held-out assessment evidence.
-4. **Reconcile.** A global pass can merge raw concepts. Each raw concept belongs to one canonical concept, and all member evidence survives. Mechanical accounting protects extracted material; the model judges semantic overlap.
-5. **Plan.** A global pass assigns canonical concepts to lessons in prerequisite order or defers them with reasons. It accounts for extracted concepts, not undiscovered source ideas.
-6. **Author and review.** Lessons contain summaries, source-backed sections, optional task-appropriate practice questions, and speech/pause scripts. A separate adapter review can pass or request revision; unresolved revisions block export. The default reviewer uses the same adapter.
-7. **Export.** Validated bundles become JSON and a static workbench, with optional source-linked Markdown or paginated PDF handouts containing practice and answers. Teaching sources and units stay in the bundle. Assessment text stays out of requests and exports. This path does not synthesize or audit audio.
+Providers with a declared tokenizer and context limit expose measured input capacity with an output reserve. Generic adapters expose a byte transport guard. Per-stage workload profiles separately constrain input tokens or item counts. Automatic workflow selection applies those policies to writing and source-review requests; future drafts and findings are checked when available. Multi-item semantic stages require an explicit policy. The writer also checks every visible source unit and any form exemplars or retained observations before allowing an unprofiled single-unit call; these inputs contribute work even when they have no ownership assignment. Configured limits remain operator decisions until supported by task-specific evaluation.
 
-Since v0.2, a validated data-only **procedure** supplies audience, bounded teaching instructions, outputs, and local worker width. Its content-derived revision enters semantic requests and cache keys; planning and authoring also receive its brief. Local Studio serves the curated public example and can accept new sources. It starts background builds only with an adapter configured at startup. Every run exports the base lesson bundle. SAMP adds short-answer generation and review with source-backed points and checked mark totals; an oral case needs an authored scenario. Procedures and outputs are saved together. A SAMP review is another adapter reading.
+Default readings use the current goal. Reusable inventories require explicit selection and remain unassessed unless evaluated. Original source passages accompany writing because extraction can omit qualifications or relationships. A cache preserves the selected interpretation, including any undetected omissions.
 
-## Identity, cache, and recovery
+## Organization and context
 
-Cache keys include stage, canonical request, adapter identity, and prompt/schema revision. Source, adapter, or contract changes require new results; completed stages survive retries. SQLite claims jobs atomically with a lease. Expired claims can be retried after a process disappears, with bounded attempts and visible errors. This is local recovery, not a distributed queue.
+Planning cards retain complete idea titles, explanations and evidence references. Repeated quotation text is removed from planning requests and restored mechanically. Inventories exceeding workload or request limits use bounded grouping calls to create an outline; final assignment revisits every original card. Each card has one owner or an explicit omission. The saved grouping tree makes those decisions inspectable. The shared outline must still fit a request.
 
-Adapter identity must include its model, prompt, or workflow revision. Lamina cannot detect a semantic change hidden behind identical requests and identity. A cache hit records a prior response, not its quality.
+The engine measures resulting writing and source-review assignments. Models subdivide oversized planned sections without discarding owned material. Required context or one indivisible idea can still exceed capacity.
 
-## Validation boundaries
+Each writer receives its assignment, original passages, declared earlier evidence, relevant shared relationships, and its neighbors' titles and purposes. Repeated source IDs appear once. Unrelated sections' assignments stay outside the request.
 
-| Check | Establishes | Limit |
-| --- | --- | --- |
-| Source digest and unit locator | Extracted text identity | Cannot establish visual PDF fidelity. |
-| Exact quote within a known unit | Quote occurs in an allowed source | Cannot establish clinical or scientific correctness. |
-| Reconciled member and evidence accounting | Extracted concepts and evidence survive merges | Cannot establish that distinctions remain useful. |
-| Assignment or deferral | Every extracted concept is accounted for | Cannot detect missing concepts. |
-| Question-mode requirements | Recall, contrast, and apply prompts are present where required | Cannot establish learning benefit. |
-| Review pass | Adapter reviewer accepted its rubric | Not independent expert review. |
-| Local self-rating | Learner's reported practice result | Not predicted mastery or exam performance. |
+`context_section_ids` shares earlier source evidence. `candidate_context_ids` supplies completed earlier candidate prompts during assessment checking. Work requiring completed prerequisite prose uses a method dependency graph. Ownership, context and completed outputs remain explicit boundaries.
 
-There is no calibrated spaced-repetition scheduler. Local ratings can guide a learner's next choice. Exported material can still be thin, repetitive, or mistaken.
+## Checks and recovery
 
-## Extension points
+Code resolves reader source references to exact spans, then validates membership, supplied output claim spans and ownership. Legacy quotation replies retain conservative formatting normalization. Accepted extraction rows remain fixed while invalid rows receive local corrections. Reviewers inspect the actual draft for lost meaning and unsupported claims. Different stages can use different models.
 
-The [adapter protocol](adapters.md) handles interpretation and writing. Ingestion can add document types while retaining source/unit identity. Retrieval can use external vectors alongside lexical search. The static bundle permits alternate readers without moving authoring into the browser.
+Production permits two attempts by default: the original call and one eligible correction/retry. This configurable resource policy covers validator feedback and provider-declared transient failures. Only fully validated results become successful cache entries. Independent jobs can finish after another fails.
 
-## Reusable methods in v0.3
+Each section proceeds through writing, review and one possible repair/recheck. Optional document review examines completed neighbors and declared relationships, recording unchecked pairs. Coverage reports distinguish material considered, cited by readers, assigned and cited in output. Plans and receipts retain `semantic_recall: "unmeasured"` independently of the operational status. Semantic completeness remains a separate evaluation.
 
-The CLI runs [method graphs](methods.md) with selected task fields, dependencies, resource lanes, and cached results. Guide authors in the lesson builder receive the shared lesson route and exact prerequisite evidence, not finished earlier prose. Practice forms follow the material without a universal three-mode quota.
+## Scheduling and latency
+
+One worker limit bounds simultaneous production calls; stage limits can reduce it. Review begins as individual sections finish. The method runtime builds dependency counts once, starts ready work within lane limits, and prioritizes longer remaining paths using graph depth. This priority uses structure without estimating model duration.
+
+With total service work W, worker capacity P and longest dependency chain D, ideal completion takes at least max(W/P, D). Real runs also incur provider waiting, network/process overhead, retries and unequal call lengths. Measure complete-run latency and delivered quality alongside call counts and usage.
+
+Persistent adapters share a process and HTTP connection pool. Stable prompt ordering preserves repeated prefixes where endpoints support caching. Provider receipts establish actual cache usage; no universal discount or speedup is assumed.
+
+## Identity and reuse
+
+SQLite stores exact source revisions, parsed units, an FTS5 index, jobs and receipts. Completed cache reads avoid write transactions. Renewable leases and owner fencing protect running jobs. Atomic import prevents mixed parser output.
+
+Local request identities allow unchanged readings and section context to reuse results while rebinding citations to the current exact revision. Changing packing boundaries, headings, dependencies or relevant model configuration can invalidate additional work. Source edits have no constant-cost guarantee. New goals reread sources by default. Explicit reusable mode can reuse matching inventories, then plans across the inventory.
+
+Plans hold source units once and use IDs in reading batches. Browser progress records remain separate from full plans and receipts.
+
+## Code map
+
+| Modules | Responsibility |
+| --- | --- |
+| `ingest`, `store` | Parse, locate, index and retain sources. |
+| `context_budget`, `source_reading`, `source_spans` | Enforce capacity/workload limits, read structures and resolve exact source spans. |
+| `planning`, `source_assignments` | Organize bounded plans or validate supplied assignments. |
+| `production`, `production_contract`, `context_binding` | Assemble requests, enforce contracts and bind references. |
+| `call_runtime`, `execution`, `providers` | Cache, retry, schedule and transport calls. |
+| `verification`, `assessment_checks` | Check output links, section relationships and assessment behavior. |
+| `method_runtime` | Run declared graphs and retain observations. |
+
+Older lesson/procedure APIs retain separate contracts. See [system origins](system-origins.md) for their source families and [measurement](measurement.md) for evaluation boundaries.

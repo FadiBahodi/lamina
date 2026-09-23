@@ -1,4 +1,39 @@
-# Systems benchmark
+# Systems benchmarks
+
+## Current workflow and scheduling checks
+
+The current [mixed-document evaluation](optimization-evidence.md) imports five PDFs and three PowerPoint decks, then exercises direct, planned and supplied-assignment workflows through writing, review, repair and source revision. Its [raw result](../benchmarks/results/workflow-matrix.json) records each stage. Responses and delays are scripted; no live model quality, billing or latency is measured.
+
+The [quality evaluation](quality-evaluation.md) separately checks known facts through extraction, assignment and finished prose. Its [scripted silent-omission result](../benchmarks/results/quality-silent-omission.json) demonstrates a failure that successful execution does not catch: every source unit is cited and the engine returns `ready`, but a negation disappears and only five of six canaries survive. The oracle catches this at both tested background loads. This validates detection of the injected defect; no real model's preservation rate is measured.
+
+The [finite-capacity scheduling result](../benchmarks/results/execution-scaling.json) compares identical work and worker limits with variable service times and injected failures. Across three seeds, the median barrier/chain ratios were 1.35 for the variable-call fixture, 1.46 with one reviewer slot, and 1.36 with failures. A constructed case reverses the result: barriers complete in nine service-time units and chains in ten. Earlier completed sections and earlier complete documents are different outcomes.
+
+On a reversed 1,024-node chain, adjacency construction, topological validation and depth ranking took 1.14 ms versus 16.65 ms for repeated readiness scans on this machine. This measures graph bookkeeping; inference time is excluded. Reproduce with `PYTHONPATH=src python benchmarks/execution_scaling.py --output RESULT.json`.
+
+The [25,000-word fixture result](../benchmarks/results/source-workflows-current.json) was regenerated with production protocol revision 6. It makes 22 cold calls (one read, one route, ten writes and ten reviews), zero repeat calls and two calls for one section revision. Reader source exposure is 1.00×. Its scripted provider explicitly declares a configured ceiling of 100 items per stage and returns fixed short ideas; it has no real model output limit. The single reader call measures this finite oracle's mechanics and provides no evidence for a suitable textbook batch size. Production operators must supply their own stage policies, with measured preservation checks when claiming an observed operating range.
+
+## Earlier measurements
+
+The following results describe their named revisions and fixtures.
+
+## Source workflow rewrite
+
+An original deterministic fixture compares baseline commit `539b7f8` with the source workflow rewrite. Both use the same 100 stored units, 25,000 words, ten section assignments and fixed responses. This isolates request construction and reader defaults; it does not score parsing or model output quality.
+
+| Measure | Baseline | Rewrite |
+| --- | ---: | ---: |
+| Reader calls | 100 | 17 |
+| Reader source words sent | 123,500 | 25,000 |
+| Reader source repetition | 4.94× | 1.00× |
+| Total cold calls | 121 | 38 |
+| Reference input tokens, all stages | 325,626 | 144,580 |
+| Provider calls on repeat writing | 0 | 0 |
+| Provider calls for one section revision | 2 | 2 |
+
+Reference tokens use `cl100k_base` over serialized requests; they are not billed tokens. Total calls fell 68.6% and reference input tokens fell 55.6% on this fixture. This result comes from removing default neighboring overlap, packing reader batches, and shortening writer context. It is not a measured wall-time, monetary-cost or quality improvement. Explicit context can still be necessary on real material.
+
+Reproduce with `python benchmarks/source_workflows.py --repo CHECKOUT --output RESULT.json` for each checkout. Raw results are in [baseline](../benchmarks/results/source-workflows-baseline.json) and [rewrite](../benchmarks/results/source-workflows-rewrite.json). Small direct workflows are separately covered by contract and browser tests: writing plus review uses two calls, with no reader or planner.
+
 
 `benchmarks/run_systems.py` uses the real `Workspace.run_cached` SQLite claim, lease, result and cache path. Handlers sleep for declared durations and return small JSON objects. They make no model calls or media files. The default graph has 24 independent extraction jobs, one reconciliation and one planning job in series, then six independent author-to-review chains.
 

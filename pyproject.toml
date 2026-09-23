@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lamina-engine"
-version = "0.7.0"
+version = "0.10.0"
 description = "Reusable model workflows with explicit context, parallel execution, and selective revision."
 requires-python = ">=3.11"
 license = "MIT"
@@ -15,6 +15,9 @@ dependencies = ["markdown-it-py>=3,<5", "filelock>=3,<4"]
 
 [project.optional-dependencies]
 pdf = ["pypdf>=5,<7", "reportlab>=4,<5"]
+slides = ["python-pptx>=1,<2"]
+http = ["httpx[http2,socks]>=0.27,<1", "jsonschema>=4,<5"]
+tokens = ["tiktoken>=0.9,<1"]
 test = ["pytest>=8,<10"]
 
 [project.scripts]

@@ -1,0 +1,2574 @@
+{
+  "protocol_revision": "lamina-production-6",
+  "evaluation": "scripted-adversarial-contract",
+  "oracle_scope": "Lexical canary preservation with correct-source evidence; broader meaning, usefulness and unknown factual errors require human review.",
+  "summary": {
+    "criteria": {
+      "minimum_fraction_per_stage_and_position": 1.0,
+      "maximum_counterfacts_per_stage": 0,
+      "required_stages": [
+        "extraction",
+        "assignment",
+        "finished_output"
+      ]
+    },
+    "observations": [
+      {
+        "provider_identity": "scripted-silent-omission-1",
+        "reading": "task",
+        "load": 6,
+        "replicates": 1,
+        "passed_all_observed_checks": false
+      },
+      {
+        "provider_identity": "scripted-silent-omission-1",
+        "reading": "task",
+        "load": 20,
+        "replicates": 1,
+        "passed_all_observed_checks": false
+      }
+    ],
+    "largest_sampled_passing_load": {},
+    "interpretation": "Observed lexical canary checks only. No fitted knee, confidence bound, unseen-corpus recall certificate or automatic profile promotion."
+  },
+  "trials": [
+    {
+      "load": 6,
+      "load_unit": "background paragraphs",
+      "reading": "task",
+      "provider_identity": "scripted-silent-omission-1",
+      "protocol_revision": "lamina-production-6",
+      "corpus_sha256": "11630489576185668299e9cb1506108ad6b1020305b43dd7900ed243854cb797",
+      "canaries": [
+        {
+          "id": "threshold",
+          "source": "current.md",
+          "subject": "Rotor Nacre",
+          "required": [
+            "2026",
+            "Rotor Nacre",
+            "17 m/s",
+            "unless supervised service mode"
+          ],
+          "forbidden": [
+            "Rotor Nacre always stops above 17 m/s"
+          ],
+          "position": "start",
+          "kind": "qualification"
+        },
+        {
+          "id": "negation",
+          "source": "current.md",
+          "subject": "Rotor Umber",
+          "required": [
+            "Rotor Umber",
+            "does not reset",
+            "red lamp"
+          ],
+          "forbidden": [
+            "Rotor Umber resets while its red lamp",
+            "Rotor Umber generates electricity from its red lamp"
+          ],
+          "position": "middle",
+          "kind": "negation"
+        },
+        {
+          "id": "table-l",
+          "source": "current.md",
+          "subject": "Panel Jade lane L",
+          "required": [
+            "Panel Jade lane L",
+            "6 mA",
+            "only below 4 C"
+          ],
+          "forbidden": [
+            "Panel Jade lane L uses 9 mA"
+          ],
+          "position": "middle-table",
+          "kind": "association"
+        },
+        {
+          "id": "table-m",
+          "source": "current.md",
+          "subject": "Panel Jade lane M",
+          "required": [
+            "Panel Jade lane M",
+            "9 mA",
+            "only at or above 4 C"
+          ],
+          "forbidden": [
+            "Panel Jade lane M uses 6 mA"
+          ],
+          "position": "middle-table",
+          "kind": "association"
+        },
+        {
+          "id": "sequence",
+          "source": "current.md",
+          "subject": "Vessel Sable",
+          "required": [
+            "Vessel Sable",
+            "14 kPa",
+            "only after",
+            "2 minutes"
+          ],
+          "forbidden": [
+            "Vessel Sable permits 14 kPa before"
+          ],
+          "position": "end",
+          "kind": "sequence"
+        },
+        {
+          "id": "history",
+          "source": "historical.md",
+          "subject": "Rotor Nacre",
+          "required": [
+            "2018",
+            "Rotor Nacre",
+            "13 m/s",
+            "does not apply",
+            "2026"
+          ],
+          "forbidden": [
+            "13 m/s applies to the 2026 controller"
+          ],
+          "position": "separate-source",
+          "kind": "authority-context"
+        }
+      ],
+      "options": {
+        "workflow": "planned",
+        "reading": "task",
+        "format": "document"
+      },
+      "source_bytes": 1159,
+      "extraction": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_1"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_6"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_6"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_10"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_2153be8ff894:idea_1"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "assignment": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_1"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_6"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_6"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_bf7aa9125775:idea_10"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_2153be8ff894:idea_1"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "planning_metrics": {
+        "requests": [
+          {
+            "stage": "production_read",
+            "item": "window_2153be8ff894",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 2557,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 1,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 2557,
+            "wall_ms": 2.779,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 2557,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+                "workload_items": 1,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.174
+              }
+            ]
+          },
+          {
+            "stage": "production_read",
+            "item": "window_bf7aa9125775",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 4782,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 10,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 4782,
+            "wall_ms": 3.805,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 4782,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+                "workload_items": 10,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.252
+              }
+            ]
+          },
+          {
+            "stage": "production_route",
+            "item": "global",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 6872,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:b68c1bbebcc1de7b30199ada6140855a456ca693e2c006039d1f592317de6b1d",
+            "workload_items": 11,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 6872,
+            "wall_ms": 1.816,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 6872,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:b68c1bbebcc1de7b30199ada6140855a456ca693e2c006039d1f592317de6b1d",
+                "workload_items": 11,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.16
+              }
+            ]
+          }
+        ],
+        "peak_provider_calls": {
+          "production_read": 1,
+          "production_route": 1
+        },
+        "context_bytes_total": 14211,
+        "provider_request_bytes": 14211,
+        "failed_requests": 0,
+        "recovered_requests": 0,
+        "provider_attempts": 3,
+        "retry_attempts": 0,
+        "failed_attempts": 0,
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cached_input_tokens": 0
+        },
+        "usage_reported_calls": 0,
+        "cache_hits": 0,
+        "cache_misses": 3,
+        "wall_ms": 10.562,
+        "selected_sources": 2,
+        "factual_sources": 2,
+        "form_exemplar_sources": 0,
+        "selected_observations": 0,
+        "source_units": 11,
+        "reader_windows": 2,
+        "workflow": "planned",
+        "extracted_ideas": 11,
+        "source_references": 0,
+        "assigned_ideas": 11,
+        "omitted_ideas": 0,
+        "retrieval_target_count": 0
+      },
+      "planning_strategy": {
+        "routing": {
+          "mode": "compact",
+          "original_cards": 11,
+          "hierarchy_levels": 0,
+          "groups": [],
+          "requests": [
+            {
+              "stage": "production_route",
+              "item": "global",
+              "request_bytes": 6852
+            }
+          ]
+        },
+        "targets": null,
+        "writing_capacity": {
+          "rounds": [],
+          "subdivided_sections": 0
+        }
+      },
+      "initial_draft": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "review_observations": [
+        {
+          "stage": "production_review",
+          "finding_count": 0
+        }
+      ],
+      "finished_output": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "engine_status": "ready",
+      "production_metrics": {
+        "requests": [
+          {
+            "stage": "production_review",
+            "item": "equipment",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 11623,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:52f8d406647d1dc4386487e7f7e2476aed850e2dd63f6db1f9d53b2385801ccd",
+            "workload_items": 11,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 11623,
+            "wall_ms": 1.737,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 11623,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:52f8d406647d1dc4386487e7f7e2476aed850e2dd63f6db1f9d53b2385801ccd",
+                "workload_items": 11,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.091
+              }
+            ]
+          },
+          {
+            "stage": "production_write",
+            "item": "equipment",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 9051,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:f0eb76f12c56e989141f9b258381636ca5269ef307e2e4f2c1d043369b00c15b",
+            "workload_items": 11,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 9051,
+            "wall_ms": 2.03,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 9051,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:f0eb76f12c56e989141f9b258381636ca5269ef307e2e4f2c1d043369b00c15b",
+                "workload_items": 11,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.158
+              }
+            ]
+          }
+        ],
+        "peak_provider_calls": {
+          "production_write": 1,
+          "production_review": 1
+        },
+        "context_bytes_total": 20674,
+        "provider_request_bytes": 20674,
+        "failed_requests": 0,
+        "recovered_requests": 0,
+        "provider_attempts": 2,
+        "retry_attempts": 0,
+        "failed_attempts": 0,
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cached_input_tokens": 0
+        },
+        "usage_reported_calls": 0,
+        "cache_hits": 0,
+        "cache_misses": 2,
+        "wall_ms": 6.363,
+        "sections": 1,
+        "initial_flagged_sections": 0,
+        "remaining_flagged_sections": 0,
+        "output_bytes": 1178,
+        "retrieval_targets": 0
+      },
+      "citation_coverage": {
+        "selected_unit_count": 11,
+        "reading": {
+          "applicable": true,
+          "considered_unit_ids": [
+            "unit_0de8398dd9aaf3f9c1ee",
+            "unit_1e0981e640ee90288fd3",
+            "unit_539670bd4a32c21f0ac8",
+            "unit_8e6f569135f28e195c13",
+            "unit_935fdf76e367be8aa8ef",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a2e6892097d1d97c0b01",
+            "unit_b11d5de626d584f7b1cf",
+            "unit_b226e9f03c07111a83d4",
+            "unit_d00f72058e583dbf1d41",
+            "unit_fc895766011e25d7706d"
+          ],
+          "unconsidered_unit_ids": [],
+          "cited_unit_ids": [
+            "unit_0de8398dd9aaf3f9c1ee",
+            "unit_1e0981e640ee90288fd3",
+            "unit_539670bd4a32c21f0ac8",
+            "unit_8e6f569135f28e195c13",
+            "unit_935fdf76e367be8aa8ef",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a2e6892097d1d97c0b01",
+            "unit_b11d5de626d584f7b1cf",
+            "unit_b226e9f03c07111a83d4",
+            "unit_d00f72058e583dbf1d41",
+            "unit_fc895766011e25d7706d"
+          ],
+          "uncited_unit_ids": []
+        },
+        "assignment": {
+          "assigned_unit_ids": [
+            "unit_0de8398dd9aaf3f9c1ee",
+            "unit_1e0981e640ee90288fd3",
+            "unit_539670bd4a32c21f0ac8",
+            "unit_8e6f569135f28e195c13",
+            "unit_935fdf76e367be8aa8ef",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a2e6892097d1d97c0b01",
+            "unit_b11d5de626d584f7b1cf",
+            "unit_b226e9f03c07111a83d4",
+            "unit_d00f72058e583dbf1d41",
+            "unit_fc895766011e25d7706d"
+          ],
+          "explicitly_omitted_unit_ids": [],
+          "unaccounted_unit_ids": []
+        },
+        "output": {
+          "cited_unit_ids": [
+            "unit_0de8398dd9aaf3f9c1ee",
+            "unit_1e0981e640ee90288fd3",
+            "unit_539670bd4a32c21f0ac8",
+            "unit_8e6f569135f28e195c13",
+            "unit_935fdf76e367be8aa8ef",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a2e6892097d1d97c0b01",
+            "unit_b11d5de626d584f7b1cf",
+            "unit_b226e9f03c07111a83d4",
+            "unit_d00f72058e583dbf1d41",
+            "unit_fc895766011e25d7706d"
+          ],
+          "assigned_without_citation_unit_ids": [],
+          "writer_omitted_unit_ids": [],
+          "mapped_claim_count": 0,
+          "claim_cited_unit_ids": [],
+          "sections_without_claim_maps": [
+            "equipment"
+          ]
+        },
+        "scope": "Exact source and output links; citation counts do not measure entailment or semantic completeness."
+      },
+      "status": "completed",
+      "calls": [
+        {
+          "stage": "production_read",
+          "status": "completed",
+          "wall_ms": 0.004907000402454287,
+          "response_bytes": 274,
+          "measurement": {
+            "request_bytes": 2557,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 1,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": 129,
+          "canary_source_positions": {
+            "history": 0.2713178294573643
+          }
+        },
+        {
+          "stage": "production_read",
+          "status": "completed",
+          "wall_ms": 0.013050000234215986,
+          "response_bytes": 2335,
+          "measurement": {
+            "request_bytes": 4782,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 10,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": 1028,
+          "canary_source_positions": {
+            "threshold": 0.026264591439688716,
+            "negation": 0.40175097276264593,
+            "table-l": 0.5136186770428015,
+            "table-m": 0.5680933852140078,
+            "sequence": 0.9309338521400778
+          }
+        },
+        {
+          "stage": "production_route",
+          "status": "completed",
+          "wall_ms": 0.0030650007829535753,
+          "response_bytes": 697,
+          "measurement": {
+            "request_bytes": 6872,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:b68c1bbebcc1de7b30199ada6140855a456ca693e2c006039d1f592317de6b1d",
+            "workload_items": 11,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": null,
+          "canary_source_positions": {}
+        },
+        {
+          "stage": "production_write",
+          "status": "completed",
+          "wall_ms": 0.005808999958389904,
+          "response_bytes": 2790,
+          "measurement": {
+            "request_bytes": 9051,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:f0eb76f12c56e989141f9b258381636ca5269ef307e2e4f2c1d043369b00c15b",
+            "workload_items": 11,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": null,
+          "canary_source_positions": {}
+        },
+        {
+          "stage": "production_review",
+          "status": "completed",
+          "wall_ms": 0.0009310006134910509,
+          "response_bytes": 15,
+          "measurement": {
+            "request_bytes": 11623,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:52f8d406647d1dc4386487e7f7e2476aed850e2dd63f6db1f9d53b2385801ccd",
+            "workload_items": 11,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": null,
+          "canary_source_positions": {}
+        }
+      ],
+      "wall_ms": 23.27194600002258,
+      "stage_budgets": {
+        "production_read": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_read",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        },
+        "production_review": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_review",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        },
+        "production_route": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_route",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        },
+        "production_write": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_write",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        }
+      },
+      "experimental_input_limit": null,
+      "experimental_stage": null,
+      "replicate": 1
+    },
+    {
+      "load": 20,
+      "load_unit": "background paragraphs",
+      "reading": "task",
+      "provider_identity": "scripted-silent-omission-1",
+      "protocol_revision": "lamina-production-6",
+      "corpus_sha256": "9a31a5151d19e0081c613ca3c3623b35db8a801cd90299c2629a242aba6e29bd",
+      "canaries": [
+        {
+          "id": "threshold",
+          "source": "current.md",
+          "subject": "Rotor Nacre",
+          "required": [
+            "2026",
+            "Rotor Nacre",
+            "17 m/s",
+            "unless supervised service mode"
+          ],
+          "forbidden": [
+            "Rotor Nacre always stops above 17 m/s"
+          ],
+          "position": "start",
+          "kind": "qualification"
+        },
+        {
+          "id": "negation",
+          "source": "current.md",
+          "subject": "Rotor Umber",
+          "required": [
+            "Rotor Umber",
+            "does not reset",
+            "red lamp"
+          ],
+          "forbidden": [
+            "Rotor Umber resets while its red lamp",
+            "Rotor Umber generates electricity from its red lamp"
+          ],
+          "position": "middle",
+          "kind": "negation"
+        },
+        {
+          "id": "table-l",
+          "source": "current.md",
+          "subject": "Panel Jade lane L",
+          "required": [
+            "Panel Jade lane L",
+            "6 mA",
+            "only below 4 C"
+          ],
+          "forbidden": [
+            "Panel Jade lane L uses 9 mA"
+          ],
+          "position": "middle-table",
+          "kind": "association"
+        },
+        {
+          "id": "table-m",
+          "source": "current.md",
+          "subject": "Panel Jade lane M",
+          "required": [
+            "Panel Jade lane M",
+            "9 mA",
+            "only at or above 4 C"
+          ],
+          "forbidden": [
+            "Panel Jade lane M uses 6 mA"
+          ],
+          "position": "middle-table",
+          "kind": "association"
+        },
+        {
+          "id": "sequence",
+          "source": "current.md",
+          "subject": "Vessel Sable",
+          "required": [
+            "Vessel Sable",
+            "14 kPa",
+            "only after",
+            "2 minutes"
+          ],
+          "forbidden": [
+            "Vessel Sable permits 14 kPa before"
+          ],
+          "position": "end",
+          "kind": "sequence"
+        },
+        {
+          "id": "history",
+          "source": "historical.md",
+          "subject": "Rotor Nacre",
+          "required": [
+            "2018",
+            "Rotor Nacre",
+            "13 m/s",
+            "does not apply",
+            "2026"
+          ],
+          "forbidden": [
+            "13 m/s applies to the 2026 controller"
+          ],
+          "position": "separate-source",
+          "kind": "authority-context"
+        }
+      ],
+      "options": {
+        "workflow": "planned",
+        "reading": "task",
+        "format": "document"
+      },
+      "source_bytes": 2625,
+      "extraction": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_1"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_13"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_13"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_24"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_2153be8ff894:idea_1"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "assignment": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_1"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_13"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_13"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_524441d037a1:idea_24"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "window_2153be8ff894:idea_1"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "planning_metrics": {
+        "requests": [
+          {
+            "stage": "production_read",
+            "item": "window_2153be8ff894",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 2557,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 1,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 2557,
+            "wall_ms": 1.878,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 2557,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+                "workload_items": 1,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.088
+              }
+            ]
+          },
+          {
+            "stage": "production_read",
+            "item": "window_524441d037a1",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 8362,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 24,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 8362,
+            "wall_ms": 3.115,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 8362,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+                "workload_items": 24,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.335
+              }
+            ]
+          },
+          {
+            "stage": "production_route",
+            "item": "global",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 11810,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:b68c1bbebcc1de7b30199ada6140855a456ca693e2c006039d1f592317de6b1d",
+            "workload_items": 25,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 11810,
+            "wall_ms": 1.72,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 11810,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:b68c1bbebcc1de7b30199ada6140855a456ca693e2c006039d1f592317de6b1d",
+                "workload_items": 25,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.172
+              }
+            ]
+          }
+        ],
+        "peak_provider_calls": {
+          "production_read": 1,
+          "production_route": 1
+        },
+        "context_bytes_total": 22729,
+        "provider_request_bytes": 22729,
+        "failed_requests": 0,
+        "recovered_requests": 0,
+        "provider_attempts": 3,
+        "retry_attempts": 0,
+        "failed_attempts": 0,
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cached_input_tokens": 0
+        },
+        "usage_reported_calls": 0,
+        "cache_hits": 0,
+        "cache_misses": 3,
+        "wall_ms": 9.362,
+        "selected_sources": 2,
+        "factual_sources": 2,
+        "form_exemplar_sources": 0,
+        "selected_observations": 0,
+        "source_units": 25,
+        "reader_windows": 2,
+        "workflow": "planned",
+        "extracted_ideas": 25,
+        "source_references": 0,
+        "assigned_ideas": 25,
+        "omitted_ideas": 0,
+        "retrieval_target_count": 0
+      },
+      "planning_strategy": {
+        "routing": {
+          "mode": "compact",
+          "original_cards": 25,
+          "hierarchy_levels": 0,
+          "groups": [],
+          "requests": [
+            {
+              "stage": "production_route",
+              "item": "global",
+              "request_bytes": 11790
+            }
+          ]
+        },
+        "targets": null,
+        "writing_capacity": {
+          "rounds": [],
+          "subdivided_sections": 0
+        }
+      },
+      "initial_draft": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "3"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "review_observations": [
+        {
+          "stage": "production_review",
+          "finding_count": 0
+        }
+      ],
+      "finished_output": {
+        "oracle": "local-qualified-phrase-and-source-2",
+        "preserved": 5,
+        "total": 6,
+        "fraction": 0.8333333333333334,
+        "counterfacts": 0,
+        "by_position": {
+          "end": {
+            "preserved": 1,
+            "total": 1
+          },
+          "middle": {
+            "preserved": 0,
+            "total": 1
+          },
+          "middle-table": {
+            "preserved": 2,
+            "total": 2
+          },
+          "separate-source": {
+            "preserved": 1,
+            "total": 1
+          },
+          "start": {
+            "preserved": 1,
+            "total": 1
+          }
+        },
+        "checks": [
+          {
+            "id": "threshold",
+            "source": "current.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2026",
+              "Rotor Nacre",
+              "17 m/s",
+              "unless supervised service mode"
+            ],
+            "forbidden": [
+              "Rotor Nacre always stops above 17 m/s"
+            ],
+            "position": "start",
+            "kind": "qualification",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "negation",
+            "source": "current.md",
+            "subject": "Rotor Umber",
+            "required": [
+              "Rotor Umber",
+              "does not reset",
+              "red lamp"
+            ],
+            "forbidden": [
+              "Rotor Umber resets while its red lamp",
+              "Rotor Umber generates electricity from its red lamp"
+            ],
+            "position": "middle",
+            "kind": "negation",
+            "status": "required_phrase_missing",
+            "matching_row_ids": [],
+            "counterfacts": []
+          },
+          {
+            "id": "table-l",
+            "source": "current.md",
+            "subject": "Panel Jade lane L",
+            "required": [
+              "Panel Jade lane L",
+              "6 mA",
+              "only below 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane L uses 9 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "table-m",
+            "source": "current.md",
+            "subject": "Panel Jade lane M",
+            "required": [
+              "Panel Jade lane M",
+              "9 mA",
+              "only at or above 4 C"
+            ],
+            "forbidden": [
+              "Panel Jade lane M uses 6 mA"
+            ],
+            "position": "middle-table",
+            "kind": "association",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "sequence",
+            "source": "current.md",
+            "subject": "Vessel Sable",
+            "required": [
+              "Vessel Sable",
+              "14 kPa",
+              "only after",
+              "2 minutes"
+            ],
+            "forbidden": [
+              "Vessel Sable permits 14 kPa before"
+            ],
+            "position": "end",
+            "kind": "sequence",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          },
+          {
+            "id": "history",
+            "source": "historical.md",
+            "subject": "Rotor Nacre",
+            "required": [
+              "2018",
+              "Rotor Nacre",
+              "13 m/s",
+              "does not apply",
+              "2026"
+            ],
+            "forbidden": [
+              "13 m/s applies to the 2026 controller"
+            ],
+            "position": "separate-source",
+            "kind": "authority-context",
+            "status": "preserved",
+            "matching_row_ids": [
+              "equipment"
+            ],
+            "counterfacts": []
+          }
+        ]
+      },
+      "engine_status": "ready",
+      "production_metrics": {
+        "requests": [
+          {
+            "stage": "production_review",
+            "item": "equipment",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 23447,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:52f8d406647d1dc4386487e7f7e2476aed850e2dd63f6db1f9d53b2385801ccd",
+            "workload_items": 25,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 23447,
+            "wall_ms": 1.949,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 23447,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:52f8d406647d1dc4386487e7f7e2476aed850e2dd63f6db1f9d53b2385801ccd",
+                "workload_items": 25,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.144
+              }
+            ]
+          },
+          {
+            "stage": "production_write",
+            "item": "equipment",
+            "cache": "miss",
+            "status": "completed",
+            "request_bytes": 17341,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:f0eb76f12c56e989141f9b258381636ca5269ef307e2e4f2c1d043369b00c15b",
+            "workload_items": 25,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40,
+            "provider_request_bytes": 17341,
+            "wall_ms": 1.972,
+            "usage": {},
+            "attempts": [
+              {
+                "number": 1,
+                "request_bytes": 17341,
+                "input_tokens": null,
+                "available_input_tokens": null,
+                "counting": "bytes",
+                "workload_status": "configured",
+                "workload_profile": "workload:f0eb76f12c56e989141f9b258381636ca5269ef307e2e4f2c1d043369b00c15b",
+                "workload_items": 25,
+                "max_workload_input_tokens": null,
+                "max_workload_items": 40,
+                "usage": {},
+                "status": "completed",
+                "wall_ms": 0.208
+              }
+            ]
+          }
+        ],
+        "peak_provider_calls": {
+          "production_write": 1,
+          "production_review": 1
+        },
+        "context_bytes_total": 40788,
+        "provider_request_bytes": 40788,
+        "failed_requests": 0,
+        "recovered_requests": 0,
+        "provider_attempts": 2,
+        "retry_attempts": 0,
+        "failed_attempts": 0,
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cached_input_tokens": 0
+        },
+        "usage_reported_calls": 0,
+        "cache_hits": 0,
+        "cache_misses": 2,
+        "wall_ms": 7.765,
+        "sections": 1,
+        "initial_flagged_sections": 0,
+        "remaining_flagged_sections": 0,
+        "output_bytes": 2644,
+        "retrieval_targets": 0
+      },
+      "citation_coverage": {
+        "selected_unit_count": 25,
+        "reading": {
+          "applicable": true,
+          "considered_unit_ids": [
+            "unit_003dc824e59dc29b520c",
+            "unit_05871396235ac73e7b6a",
+            "unit_14680d4705c702203084",
+            "unit_1fb660971923931e32a8",
+            "unit_2baa07dc64a6e2d28ddf",
+            "unit_4473546dadb74863f867",
+            "unit_53279401c1049b8f2816",
+            "unit_5fddd1ae70ccbc57de21",
+            "unit_617621b33bbfb784529b",
+            "unit_63b9effb7f7aba65df2b",
+            "unit_6eff92cd4b69bbc77c90",
+            "unit_7aa2fa32480fa9247291",
+            "unit_900ddadb583582281df1",
+            "unit_915dcffb6c91780cc0c5",
+            "unit_965cc9eae97af3510e5f",
+            "unit_9b7e490a245e27cc0176",
+            "unit_9cde567df41bf9f48cbd",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a889fba4d2bc9abfd461",
+            "unit_b73c154913ed7bf10150",
+            "unit_b815e0f3e79b3f4cb2a5",
+            "unit_db846c1cc6f310ed15ef",
+            "unit_df7e16ae938b850eb874",
+            "unit_e6e6792a45216d630837",
+            "unit_f196396dab22a501ac33"
+          ],
+          "unconsidered_unit_ids": [],
+          "cited_unit_ids": [
+            "unit_003dc824e59dc29b520c",
+            "unit_05871396235ac73e7b6a",
+            "unit_14680d4705c702203084",
+            "unit_1fb660971923931e32a8",
+            "unit_2baa07dc64a6e2d28ddf",
+            "unit_4473546dadb74863f867",
+            "unit_53279401c1049b8f2816",
+            "unit_5fddd1ae70ccbc57de21",
+            "unit_617621b33bbfb784529b",
+            "unit_63b9effb7f7aba65df2b",
+            "unit_6eff92cd4b69bbc77c90",
+            "unit_7aa2fa32480fa9247291",
+            "unit_900ddadb583582281df1",
+            "unit_915dcffb6c91780cc0c5",
+            "unit_965cc9eae97af3510e5f",
+            "unit_9b7e490a245e27cc0176",
+            "unit_9cde567df41bf9f48cbd",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a889fba4d2bc9abfd461",
+            "unit_b73c154913ed7bf10150",
+            "unit_b815e0f3e79b3f4cb2a5",
+            "unit_db846c1cc6f310ed15ef",
+            "unit_df7e16ae938b850eb874",
+            "unit_e6e6792a45216d630837",
+            "unit_f196396dab22a501ac33"
+          ],
+          "uncited_unit_ids": []
+        },
+        "assignment": {
+          "assigned_unit_ids": [
+            "unit_003dc824e59dc29b520c",
+            "unit_05871396235ac73e7b6a",
+            "unit_14680d4705c702203084",
+            "unit_1fb660971923931e32a8",
+            "unit_2baa07dc64a6e2d28ddf",
+            "unit_4473546dadb74863f867",
+            "unit_53279401c1049b8f2816",
+            "unit_5fddd1ae70ccbc57de21",
+            "unit_617621b33bbfb784529b",
+            "unit_63b9effb7f7aba65df2b",
+            "unit_6eff92cd4b69bbc77c90",
+            "unit_7aa2fa32480fa9247291",
+            "unit_900ddadb583582281df1",
+            "unit_915dcffb6c91780cc0c5",
+            "unit_965cc9eae97af3510e5f",
+            "unit_9b7e490a245e27cc0176",
+            "unit_9cde567df41bf9f48cbd",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a889fba4d2bc9abfd461",
+            "unit_b73c154913ed7bf10150",
+            "unit_b815e0f3e79b3f4cb2a5",
+            "unit_db846c1cc6f310ed15ef",
+            "unit_df7e16ae938b850eb874",
+            "unit_e6e6792a45216d630837",
+            "unit_f196396dab22a501ac33"
+          ],
+          "explicitly_omitted_unit_ids": [],
+          "unaccounted_unit_ids": []
+        },
+        "output": {
+          "cited_unit_ids": [
+            "unit_003dc824e59dc29b520c",
+            "unit_05871396235ac73e7b6a",
+            "unit_14680d4705c702203084",
+            "unit_1fb660971923931e32a8",
+            "unit_2baa07dc64a6e2d28ddf",
+            "unit_4473546dadb74863f867",
+            "unit_53279401c1049b8f2816",
+            "unit_5fddd1ae70ccbc57de21",
+            "unit_617621b33bbfb784529b",
+            "unit_63b9effb7f7aba65df2b",
+            "unit_6eff92cd4b69bbc77c90",
+            "unit_7aa2fa32480fa9247291",
+            "unit_900ddadb583582281df1",
+            "unit_915dcffb6c91780cc0c5",
+            "unit_965cc9eae97af3510e5f",
+            "unit_9b7e490a245e27cc0176",
+            "unit_9cde567df41bf9f48cbd",
+            "unit_9d2460a44c728a60d0a8",
+            "unit_a889fba4d2bc9abfd461",
+            "unit_b73c154913ed7bf10150",
+            "unit_b815e0f3e79b3f4cb2a5",
+            "unit_db846c1cc6f310ed15ef",
+            "unit_df7e16ae938b850eb874",
+            "unit_e6e6792a45216d630837",
+            "unit_f196396dab22a501ac33"
+          ],
+          "assigned_without_citation_unit_ids": [],
+          "writer_omitted_unit_ids": [],
+          "mapped_claim_count": 0,
+          "claim_cited_unit_ids": [],
+          "sections_without_claim_maps": [
+            "equipment"
+          ]
+        },
+        "scope": "Exact source and output links; citation counts do not measure entailment or semantic completeness."
+      },
+      "status": "completed",
+      "calls": [
+        {
+          "stage": "production_read",
+          "status": "completed",
+          "wall_ms": 0.0032250000003841706,
+          "response_bytes": 274,
+          "measurement": {
+            "request_bytes": 2557,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 1,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": 129,
+          "canary_source_positions": {
+            "history": 0.2713178294573643
+          }
+        },
+        {
+          "stage": "production_read",
+          "status": "completed",
+          "wall_ms": 0.018877999536925927,
+          "response_bytes": 5691,
+          "measurement": {
+            "request_bytes": 8362,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:9f5483b32d41db156198463e665b956073f7a9a734d8defde0156739c3691b93",
+            "workload_items": 24,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": 2494,
+          "canary_source_positions": {
+            "threshold": 0.01082598235765838,
+            "negation": 0.4578989574979952,
+            "table-l": 0.5040096230954291,
+            "table-m": 0.5264635124298316,
+            "sequence": 0.9715316760224539
+          }
+        },
+        {
+          "stage": "production_route",
+          "status": "completed",
+          "wall_ms": 0.0034750000850181095,
+          "response_bytes": 1117,
+          "measurement": {
+            "request_bytes": 11810,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:b68c1bbebcc1de7b30199ada6140855a456ca693e2c006039d1f592317de6b1d",
+            "workload_items": 25,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": null,
+          "canary_source_positions": {}
+        },
+        {
+          "stage": "production_write",
+          "status": "completed",
+          "wall_ms": 0.00675999945087824,
+          "response_bytes": 6324,
+          "measurement": {
+            "request_bytes": 17341,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:f0eb76f12c56e989141f9b258381636ca5269ef307e2e4f2c1d043369b00c15b",
+            "workload_items": 25,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": null,
+          "canary_source_positions": {}
+        },
+        {
+          "stage": "production_review",
+          "status": "completed",
+          "wall_ms": 0.001142000655818265,
+          "response_bytes": 15,
+          "measurement": {
+            "request_bytes": 23447,
+            "input_tokens": null,
+            "available_input_tokens": null,
+            "counting": "bytes",
+            "workload_status": "configured",
+            "workload_profile": "workload:52f8d406647d1dc4386487e7f7e2476aed850e2dd63f6db1f9d53b2385801ccd",
+            "workload_items": 25,
+            "max_workload_input_tokens": null,
+            "max_workload_items": 40
+          },
+          "usage": {},
+          "source_characters": null,
+          "canary_source_positions": {}
+        }
+      ],
+      "wall_ms": 26.54766900013783,
+      "stage_budgets": {
+        "production_read": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_read",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        },
+        "production_review": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_review",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        },
+        "production_route": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_route",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        },
+        "production_write": {
+          "configuration_identity": "scripted-silent-omission-1",
+          "context_tokens": null,
+          "output_tokens": 0,
+          "max_request_bytes": 2000000,
+          "counting": "bytes",
+          "workload": {
+            "stage": "production_write",
+            "max_input_tokens": null,
+            "max_items": 40,
+            "basis": "configured",
+            "evidence": null
+          }
+        }
+      },
+      "experimental_input_limit": null,
+      "experimental_stage": null,
+      "replicate": 1
+    }
+  ]
+}

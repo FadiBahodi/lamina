@@ -185,7 +185,7 @@ def main() -> None:
             provider,
             "Make a worker-safety retrieval guide",
             [f"source_{n}" for n in range(1, 5)],
-            {"format": "guide", "retrieval_targets": True},
+            {"workflow": "planned", **({"format": "guide", "retrieval_targets": True})},
         )
         receipt = run_production(workspace, provider, plan)
         print(

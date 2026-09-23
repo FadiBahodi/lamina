@@ -7,9 +7,8 @@ not simulate an interactive candidate or establish clinical/content validity.
 
 from __future__ import annotations
 
-import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from .execution import bounded_map
 from typing import Callable
 
 from .production import (
@@ -18,9 +17,11 @@ from .production import (
     _form_exemplar_context,
     _plan_identity,
     _sources,
+    _Tracker,
+    request_limit,
 )
 from .source_policy import normalize_production_inputs
-from .store import Workspace, canonical, digest
+from .store import Workspace, digest
 
 REVISION = "lamina-assessment-check-1"
 SOLVE_STAGE = "assessment_blind_solve"
@@ -156,7 +157,7 @@ def _inputs(workspace: Workspace, plan: dict, receipt: dict) -> list[dict]:
         raise AssessmentCheckError("receipt sections do not match plan")
     by_unit = {u["id"]: u for u in units}
     rows = []
-    prior_candidate = []
+    prior_candidate = {}
     for index, (section, output) in enumerate(zip(planned, authored), 1):
         if not isinstance(output, dict) or output.get("id") != section["id"]:
             raise AssessmentCheckError(
@@ -187,12 +188,15 @@ def _inputs(workspace: Workspace, plan: dict, receipt: dict) -> list[dict]:
                 "section_id": section["id"],
                 "ordinal": index,
                 "candidate_body": candidate,
-                "prior_candidate_bodies": list(prior_candidate),
+                "prior_candidate_bodies": [
+                    prior_candidate[sid]
+                    for sid in section.get("candidate_context_ids", [])
+                ],
                 "marking_body": marking,
                 "evidence": evidence,
             }
         )
-        prior_candidate.append(candidate)
+        prior_candidate[section["id"]] = candidate
     return rows
 
 
@@ -206,81 +210,43 @@ def check_assessment(
 ) -> dict:
     """Check each finished section through blind solve and informed judge calls.
 
-    Each solve request contains only current and earlier candidate-facing bodies.
+    Each solve contains the current prompt and explicitly declared prior prompts.
     The provider is responsible for keeping calls independent; using separate
     provider sessions is recommended for a stronger blind boundary. Changed
-    prior candidate text invalidates later solves by design.
+    prior candidate text invalidates only solves that declare it as context.
     """
     if type(workers) is not int or not 1 <= workers <= 128:
         raise AssessmentCheckError("workers must be an integer from 1 to 128")
-    identity = _text(getattr(provider, "identity", None), "provider.identity", 500)
+    _text(getattr(provider, "identity", None), "provider.identity", 500)
     rows = _inputs(workspace, plan, receipt)
-    max_bytes = plan["options"]["max_request_bytes"]
+    max_bytes = request_limit(plan["options"])
     started = time.monotonic()
-    lock = threading.Lock()
-    records: list[dict] = []
-    active: dict[str, int] = {}
-    peak: dict[str, int] = {}
+    tracker = _Tracker(progress, max_attempts=plan["options"]["max_attempts"])
 
-    def call(
-        stage: str,
-        section_id: str,
-        instruction: str,
-        shape: dict,
-        data: dict,
-        checker: Callable[[object], dict],
-    ) -> dict:
-        envelope = {
-            "protocol": "lamina-stage-1",
-            "revision": REVISION,
-            "stage": stage,
-            "instruction": instruction,
-            "expected_shape": shape,
-            "input": data,
-        }
-        size = len(canonical(envelope).encode("utf-8"))
-        if size > max_bytes:
-            raise AssessmentCheckError(
-                f"{stage} request for {section_id} exceeds {max_bytes} bytes"
-            )
-        invoked = False
-        if progress:
-            progress({"stage": stage, "item": section_id, "status": "started"})
-        t0 = time.monotonic()
+    def call(stage, section_id, instruction, shape, data, checker):
+        from .production_contract import ProductionValidationError
 
-        def handler(payload: dict) -> dict:
-            nonlocal invoked
-            invoked = True
-            with lock:
-                active[stage] = active.get(stage, 0) + 1
-                peak[stage] = max(peak.get(stage, 0), active[stage])
+        def checked(raw):
             try:
-                return checker(provider.call(stage, payload))
-            finally:
-                with lock:
-                    active[stage] -= 1
+                return checker(raw)
+            except AssessmentCheckError as exc:
+                raise ProductionValidationError(str(exc)) from exc
 
         try:
-            result = workspace.run_cached(
-                stage, envelope, handler, identity=f"{REVISION}:{identity}", retries=0
+            return tracker.call(
+                workspace,
+                provider,
+                stage,
+                section_id,
+                instruction,
+                shape,
+                data,
+                checked,
+                max_bytes,
+                workload_items=1,
             )
-        except Exception:
-            if progress:
-                progress({"stage": stage, "item": section_id, "status": "failed"})
-            raise
-        with lock:
-            records.append(
-                {
-                    "stage": stage,
-                    "item": section_id,
-                    "cache": "miss" if invoked else "hit",
-                    "request_bytes": size,
-                    "wall_ms": round((time.monotonic() - t0) * 1000, 3),
-                }
-            )
-        if progress:
-            progress({"stage": stage, "item": section_id, "status": "completed"})
-        return result
+        except ProductionError as exc:
+            raise AssessmentCheckError(str(exc)) from exc
 
     def solve(row: dict) -> dict:
         return call(
@@ -296,9 +262,6 @@ def check_assessment(
             },
             _solve_result,
         )
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        answers = list(pool.map(solve, rows))
 
     def judge(pair: tuple[dict, dict]) -> dict:
         row, answer = pair
@@ -331,8 +294,17 @@ def check_assessment(
             lambda raw: _judge_result(raw, row["evidence"], row["section_id"]),
         )
 
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        judgments = list(pool.map(judge, zip(rows, answers)))
+    def check(row):
+        answer = solve(row)
+        return answer, judge((row, answer))
+
+    try:
+        paired = bounded_map(check, rows, workers)
+    except Exception as exc:
+        exc.metrics = tracker.metrics()
+        raise
+    answers = [pair[0] for pair in paired]
+    judgments = [pair[1] for pair in paired]
     checks = [
         {
             "section_id": row["section_id"],
@@ -350,11 +322,7 @@ def check_assessment(
         "metrics": {
             "sections": len(checks),
             "flagged_sections": sum(bool(c["findings"]) for c in checks),
-            "requests": sorted(records, key=lambda r: (r["stage"], r["item"])),
-            "peak_provider_calls": peak,
-            "cache_hits": sum(r["cache"] == "hit" for r in records),
-            "cache_misses": sum(r["cache"] == "miss" for r in records),
-            "context_bytes_total": sum(r["request_bytes"] for r in records),
+            **tracker.metrics(),
             "wall_ms": round((time.monotonic() - started) * 1000, 3),
         },
         "scope": "Model-generated blind answers and separate model judgments; no guaranteed provider isolation, interactive administration, or independent content validity.",

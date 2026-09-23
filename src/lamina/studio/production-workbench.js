@@ -9,17 +9,17 @@
   const shell = make("div", "pb-shell");
   const form = make("div", "pb-form");
   const goalBlock = make("section", "pb-block");
-  const goalHead = make("div", "pb-block-head"); goalHead.append(make("span", "pb-step", "01"), make("h3", "", "What should this project produce?"));
+  const goalHead = make("div", "pb-block-head"); goalHead.append(make("span", "pb-step", "01"), make("h3", "", "Describe the result"));
   const goal = make("textarea", "pb-goal"); goal.rows = 5; goal.placeholder = "Example: Make a concise field guide that helps an on-call engineer decide when a retried job may publish its result."; goal.setAttribute("aria-label", "Project goal");
   const formatLabel = make("label", "pb-field"); formatLabel.append(make("span", "", "Output"));
   const format = make("select"); format.setAttribute("aria-label", "Output format");
-  [["document", "Document"], ["guide", "Study guide"], ["assessment", "Decision practice"], ["podcast-script", "Listening script"]].forEach(([value, label]) => { const option = make("option", "", label); option.value = value; format.append(option); });
+  [["document", "Document"], ["guide", "Reference guide"], ["assessment", "Practice exam"], ["podcast-script", "Podcast script"]].forEach(([value, label]) => { const option = make("option", "", label); option.value = value; format.append(option); });
   const formatNote=make("p","pb-format-note");
-  function updateFormatNote(){formatNote.hidden=format.value!=="podcast-script";formatNote.textContent=state.audioAdapter?"A configured audio adapter will render a WAV from the script. Listen to verify the result.":"The result is a text script unless this app starts with an audio adapter.";}
+  function updateFormatNote(){formatNote.hidden=format.value!=="podcast-script";formatNote.textContent=state.audioAdapter?"Your speech adapter will turn the script into WAV audio.":"Produces a script. Start the local app with a speech adapter to add WAV audio.";}
   format.addEventListener("change",updateFormatNote);
   formatLabel.append(format); goalBlock.append(goalHead, goal, formatLabel,formatNote);updateFormatNote();
   const sourceBlock = make("section", "pb-block");
-  const sourceHead = make("div", "pb-block-head"); sourceHead.append(make("span", "pb-step", "02"), make("h3", "", "Which sources should it use?"));
+  const sourceHead = make("div", "pb-block-head"); sourceHead.append(make("span", "pb-step", "02"), make("h3", "", "Add your sources"));
   const sourceNote = make("p", "pb-explain", "Choose source files and how each should be used. Assessment files stay held out from generation.");
   const sourceList = make("div", "pb-sources");
   const uploadLabel = make("label", "pb-upload"); uploadLabel.append(make("span", "", "Add .txt, .md, .pdf, or .pptx files"));
@@ -27,8 +27,8 @@
   const uploadStatus = make("p", "pb-upload-status"); uploadStatus.setAttribute("role", "status");
   sourceBlock.append(sourceHead, sourceNote, sourceList, uploadLabel, uploadStatus);
   const capacityBlock = make("section", "pb-block");
-  const capacityHead = make("div", "pb-block-head"); capacityHead.append(make("span", "pb-step", "03"), make("h3", "", "How much work can run together?"));
-  const capacityIntro = make("p", "pb-explain", "Stage limits share one total call limit. A finished section can be reviewed while others are being written.");
+  const capacityHead = make("div", "pb-block-head"); capacityHead.append(make("span", "pb-step", "03"), make("h3", "", "Parallel model calls"));
+  const capacityIntro = make("p", "pb-explain", "Choose how many model calls can run at once. Review can begin as soon as a section is written.");
   const capacityFields = make("div", "pb-capacity-fields");
   const workerInputs = {};
   [["reader_workers", "Reading", 8], ["writer_workers", "Writing", 8], ["review_workers", "Review", 8]].forEach(([key, label, value]) => {
@@ -41,17 +41,17 @@
   function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=value===null?"":String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
   const workflowLabel = make("label", "pb-worker"); workflowLabel.append(make("span", "", "Workflow"));
   const workflow = make("select"); workflow.setAttribute("aria-label", "Workflow");
-  [["auto","Automatic: use declared workload limits"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
+  [["auto","Automatic"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
   workflowLabel.append(workflow); contextFields.append(workflowLabel);
   const totalWorkers = numericField("Maximum simultaneous model calls", 8, 1, 128);
   const totalWorkerField = totalWorkers.parentElement; totalWorkerField.remove();
   const readingLabel = make("label", "pb-worker"); readingLabel.append(make("span", "", "Source reading"));
   const reading = make("select"); reading.setAttribute("aria-label", "Source reading");
-  [["task","Read for this project"],["reusable","Reuse inventory across goals (check coverage)"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
+  [["task","Read for this project"],["reusable","Save a reusable source inventory"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
   readingLabel.append(reading);contextFields.append(readingLabel);
   const maxAttempts = numericField("Attempts per model request", 2, 1, 5);
   const coreWords = numericField("Optional fixed reading target (words)", null, 100, 2000);
-  coreWords.placeholder="Use declared workload or one source structure";
+  coreWords.placeholder="Follow the adapter’s reading settings";
   const haloUnits = numericField("Extra neighboring passages", 0, 0, 8);
   const maxRequest = numericField("Optional request byte ceiling", null, 4096, 2000000);
   maxRequest.placeholder="Use adapter budget";
@@ -61,7 +61,7 @@
   retrievalChoice.append(retrievalTargets,retrievalCopy);
   function updateRetrievalChoice(){retrievalChoice.hidden=!(["guide","assessment"].includes(format.value));if(retrievalChoice.hidden)retrievalTargets.checked=false;}
   format.addEventListener("change",updateRetrievalChoice);updateRetrievalChoice();
-  context.append(contextFields, capacityFields, make("p", "pb-explain", "Set task limits in the model adapter before combining source structures or ideas. The context limit only checks that a request fits. Reading is specific to this project by default. Check coverage before reusing an inventory across goals; missed facts can carry forward."),retrievalChoice);
+  context.append(contextFields, capacityFields, make("p", "pb-explain", "The model adapter sets how much material each call handles. Read for this project by default; choose a reusable inventory when you need the same extraction for several outputs. Review that inventory before reuse."),retrievalChoice);
   capacityBlock.append(capacityHead, capacityIntro, totalWorkerField, context);
   const savedNotes=make("details","pb-saved-notes");savedNotes.hidden=true;
   savedNotes.append(make("summary","","Use saved project notes"),make("p","pb-explain","Choose notes that apply to this project."));
@@ -82,6 +82,7 @@
   const replayActions = make("div", "pb-replay-actions");
   const replayButton = make("button", "pb-secondary", "Initial result"); replayButton.type = "button";
   const replayRevision = make("button", "pb-secondary", "After section revision"); replayRevision.type = "button";
+  window.addEventListener("lamina:replay", () => replayButton.click());
   replayActions.append(replayButton,replayRevision); replay.append(replayHeading, replayActions);
   const recent = make("details", "pb-recent"); recent.append(make("summary", "", "Recent local projects"));
   const recentList = make("div", "pb-recent-list"); recent.append(recentList);
@@ -133,7 +134,7 @@
       if(source.role !== "assessment") {
         const use=make("label","pb-source-use");use.append(make("span","","Use as"));
         const selector=make("select");selector.setAttribute("aria-label",`How to use ${source.title || source.filename || source.id}`);selector.disabled=!state.local;
-        [["authority","Factual source"],["supplement","Supporting context"],["historical","Older or conflicting version"],["form_exemplar","Example of output form"]].forEach(([value,label])=>{const option=make("option","",label);option.value=value;selector.append(option);});
+        [["authority","Factual source"],["supplement","Supporting context"],["historical","Older or conflicting version"],["form_exemplar","Style or layout example"]].forEach(([value,label])=>{const option=make("option","",label);option.value=value;selector.append(option);});
         selector.value=state.roles.get(source.id) || "authority";
         selector.addEventListener("change",()=>state.roles.set(source.id,selector.value));use.append(selector);row.append(use);
       }
@@ -197,7 +198,7 @@
     output.replaceChildren(); const receipt=run.receipt;
     if (!receipt) return;
     const isAssessment=receipt.format==="assessment";
-    output.append(make("h3", "", isAssessment?"Decision practice":receipt.title || "Result"));
+    output.append(make("h3", "", isAssessment?"Practice exam":receipt.title || "Result"));
     const planned=Array.isArray(run.plan?.route?.sections)?run.plan.route.sections:[];
     if(planned.length && !isAssessment){
       const plan=make("details","pb-plan");plan.append(make("summary","",`How this was planned · ${planned.length} section${planned.length===1?"":"s"}`));
@@ -238,7 +239,7 @@
         practice.append(item);
       });output.append(practice);
     }
-    if(receipt.format==="podcast-script" && !run.outputs?.audio)output.append(make("p","pb-script-note","Listening script only. This run has no audio file."));
+    if(receipt.format==="podcast-script" && !run.outputs?.audio)output.append(make("p","pb-script-note","Podcast script. Add a speech adapter to generate audio."));
     let examinerDetails=null;
     if (receipt.assessment_checks){output.append(make("p","pb-assessment-status",`Blind assessment check: ${receipt.assessment_checks.status || "unknown"} · ${receipt.assessment_checks.metrics?.flagged_sections ?? "?"} flagged section${receipt.assessment_checks.metrics?.flagged_sections===1?"":"s"}.`));}
     if (receipt.examiner_markdown || receipt.assessment_checks || isAssessment) {

@@ -1,38 +1,65 @@
-# Document-workflow design
+# Building useful artifacts from source collections
 
-Lamina helps educators, training teams and developers turn source collections into learning material. A reusable procedure controls the audience, authoring instructions, outputs and concurrency.
+Lamina turns source files into reference documents, guides, podcast scripts and assessments. A project starts with files, a description of the intended result and a configured model adapter. It finishes with an artifact, its source-aware plan and a receipt that records model calls, reuse, findings and known gaps.
 
-The product walkthrough follows the work from input to use:
+The main production path serves people who need to make a substantial artifact from more material than one model call should handle. Lamina preserves source structure, assigns material to bounded tasks, gives each task the context it needs and saves validated results for later revision. Models decide meaning and editorial form. Code controls source identity, ownership, capacity, execution and exact accounting.
 
-1. Open the sources, their roles and accepted text.
-2. Edit the procedure and export it as portable JSON.
-3. Read the guide, answer a short-answer management problem, use the examiner sheet or follow the audio script.
-4. Follow an answer back to its sources and grouping decisions.
+## A project from input to result
 
-## An engineering example
+Suppose an engineering team has several manuals and incident reviews about safe job retries. They want a field guide that explains when a retried worker may publish a result.
 
-The public collection explains leases, idempotency and evidence. Two passages distinguish lease expiry from worker termination. Consolidation keeps both passages, and the guide explains the distinction. An incident assessment asks what to do when an old worker finishes after its replacement, then introduces information that changes the decision. The examiner sheet gives marking points, answer limits and evidence.
+1. Lamina imports the files as identifiable structures. A Markdown table remains a table; a PDF page retains its page location; text, tables and notes from one PowerPoint slide remain connected.
+2. The operator marks each source as authoritative, supplemental, historical or an example of form. Held-out assessment material remains unavailable to generation.
+3. Lamina chooses a route. A small assignment can go directly to a writer. A larger collection is read in bounded tasks and organized into sections. A person or another agent can also provide the section assignments.
+4. Each writer receives its owned material, the original source passages and declared context. A reviewer checks the completed section against the same assignment and sources. A concrete finding can trigger one repair and recheck.
+5. Lamina exports Markdown, HTML and optional PDF, together with the plan and receipt. Repeating an unchanged request reuses its validated result. A local section revision can leave unrelated requests unchanged.
 
-The collection supports explanation, recall and decisions through different formats. It uses prepared examples and an original illustration:
+The same engine supports assessments and listening scripts. Assessments separate candidate material from examiner material and run a blind solve plus a separate judging call. A configured speech adapter can turn a completed podcast script into a checked PCM WAV. These are production boundaries: the exported assessment is not a live oral-exam application, and a structurally valid WAV still needs listening review.
 
-![A lease expiry and stale completion illustrated](../src/lamina/studio/assets/lease-timeline.svg)
+## Three production routes
 
-## Procedures and execution
+`workflow="auto"` selects the simplest route that fits the declared request and workload limits.
 
-A procedure sets the audience, instructions, outputs and worker width for the supported pipeline. Those settings enter the cache key and travel with the run. The engine supplies the stages and validation rules; the adapter is configured when the local app starts.
+| Route | When to use it | Model work before writing |
+| --- | --- | --- |
+| Direct | The complete source assignment and review request fit one call. | None. The writer works from the original source units. |
+| Planned | The collection needs source reading, cross-file organization or retrieval-target reconciliation. | Readers produce source-addressed ideas; a planner creates sections and assigns every idea or records an omission. |
+| Assigned | A person or upstream agent already knows the sections and source ownership. | None inside Lamina. The supplied assignments must account for every selected factual unit. |
 
-The public interface provides examples and a procedure editor. Files selected there are inspected in the browser. Generation runs in the local app, which stores imported material in its workspace and exposes finished artifacts. The service binds to loopback; credentials remain outside browser files. An adapter may send source text to its configured model service.
+Automatic selection does not judge whether the result is good. The adapter's context limit establishes what fits; a separate workload policy states how much semantic work a call may attempt. Those limits remain operator choices until they are evaluated on representative material.
 
-## Product direction
+## Ownership, shared evidence and dependencies
 
-NotebookLM provides source-based study features. Google documents [flashcards, quizzes and reports](https://workspaceupdates.googleblog.com/2025/09/flashcards-quizzes-reports-notebook-lm-google-education.html), [slide decks, infographics and video overviews](https://blog.google/innovation-and-ai/products/notebooklm/notebooklm-google-io-2026/), and [structured data tables](https://blog.google/innovation-and-ai/models-and-research/google-labs/notebooklm-data-tables/). These pages were checked on 21 September 2026; availability may change.
+Lamina keeps three relationships separate because they change what a worker may claim and when it may start.
 
-Lamina's direction is a portable production process that people can modify: editable procedures, a chosen model adapter, intermediate data structures, source checks, local execution and reusable exports. Repeatable source-to-training work is the initial use case. Research synthesis and organizational knowledge work are further applications to evaluate.
+**Ownership** says what a section must account for. In the retry guide, a section called “Fencing stale completions” might own the manual passage defining fencing tokens and the incident passage describing an old worker's late write. Those passages cannot also be silently assigned as another section's work.
+
+**Shared evidence** supplies relevant source material without changing ownership. A neighboring section about lease expiry may need the fencing definition to explain why expiry does not prove that the first worker stopped. It can receive that exact passage as context while the fencing section remains its owner. Planned earlier ideas are also context, not completed prose.
+
+**Completed-result dependencies** apply when a task needs another worker's actual output. If an editor must quote or transform the finished fencing section, it cannot run in parallel with that writer. That job belongs in a custom method graph with a dependency on the completed result. Assessment checks use a narrower boundary: a later candidate question can receive explicitly declared earlier candidate prompts, while examiner answers stay private.
+
+This distinction allows independent writing to remain parallel without pretending that a shared plan is the same as finished prerequisite text.
+
+## What the operator can inspect
+
+A production plan retains selected source revisions, reading batches, extracted ideas, grouping records, section ownership, declared context, omissions and the capacity decision. The receipt retains completed sections, citations, claim links, review findings, unperformed checks, request measurements, attempts, reported usage and cache outcomes.
+
+These records establish specific mechanical facts. They can show that a source unit reached a reader, that an extracted idea cited an exact span, that a planner assigned it once and that an output claim links to an original passage. They cannot prove that extraction found every relevant fact, that the passage supports the interpretation or that the finished artifact is useful. Lamina records semantic recall as unmeasured unless a separate evaluation establishes it.
+
+## Interfaces
+
+The local Projects interface, `lamina produce` and the Python production API use the same source-to-artifact engine. The browser app binds to loopback, stores project state locally and uses the adapter configured at startup. Selected source text may be sent to that adapter's model service.
+
+The separate [Method runtime](methods.md) runs declared dependency graphs with task-field selection, completed-result inputs, resource lanes and caching. It is a general JSON-object workflow runtime. It does not automatically add Production's source ownership, evidence resolution, section review or artifact contracts; a method author must define the behavior its nodes require.
+
+Older lesson and procedure APIs remain in the package under their own contracts. They are not the current general production architecture. [System origins](system-origins.md) explains how reference, audio, question and oral-case work informed the current design without claiming that every historical system is implemented here.
 
 ## Limits and evaluation
 
-Procedures configure the supported pipeline. They cannot add stage types, wire arbitrary graphs, supply commands or credentials, or choose filesystem destinations. A stage/plugin interface would require versioned inputs, outputs and execution rules. The illustrated example uses prepared content; PDF ingestion does not interpret arbitrary diagrams.
+PDF extraction can lose reading order, figures and layout meaning. OCR creates a text layer but does not establish correct associations between labels, values and diagrams. PowerPoint text, tables and notes remain structured, but Lamina does not interpret arbitrary visual content.
 
-Feature parity, output quality, cost, demand and learning effectiveness require evaluation. Ask an unfamiliar educator to import a collection, adapt a procedure, generate material, find an unsupported or missing answer, correct it and rerun. Measure time to a usable artifact, successful corrections, cost per accepted output and use of intermediate views. Compare with their existing process on the same collection.
+Model replies can be valid and incomplete. Citations can be real while the explanation loses a condition. Model reviewers can miss the same defect as the writer. The final outline and every indivisible source structure or required context set must fit their configured request limits. Planned production also waits for the route to be complete before section writing begins.
 
-See [design alternatives](design.md), [quality evaluation](evaluation.md), and the [systems benchmark](benchmarks.md).
+Evaluate the complete artifact on the actual source family and use. Record parsing errors, important omissions, qualifier preservation, unsupported claims, elapsed time, provider usage, operator corrections and whether the result helps its intended reader. The [quality evaluation](quality-evaluation.md) and [measurement protocol](measurement.md) separate these judgments from software and scheduler tests.
+
+See [Production](production.md) for controls and failure behavior, [Architecture](architecture.md) for the code map and scheduling model, and [Parsing](parsing.md) for source boundaries.

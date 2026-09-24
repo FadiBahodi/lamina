@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 import hashlib
+import os
 from pathlib import Path
 import re
 import threading
@@ -20,7 +21,7 @@ from .production import plan_production, run_production
 from .production_contract import REVISION
 from .store import Workspace, canonical
 
-ORACLE_VERSION = "local-qualified-phrase-and-source-2"
+ORACLE_VERSION = "local-qualified-phrase-and-source-3"
 
 
 def normalized(text):
@@ -47,6 +48,30 @@ class Canary:
     kind: str
 
 
+_MARKDOWN_BLOCK = re.compile(
+    r"^\s*(?:#{1,6}(?:\s|$)|(?:[-*+]|\d+[.)])\s+|>\s?|```|~~~|\|)"
+)
+
+
+def _prose_blocks(text):
+    """Join hard-wrapped prose while retaining authored block boundaries."""
+    prose = []
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if not line.strip():
+            if prose:
+                yield " ".join(prose)
+                prose = []
+        elif _MARKDOWN_BLOCK.match(line):
+            if prose:
+                yield " ".join(prose)
+                prose = []
+            yield line
+        else:
+            prose.append(line.strip())
+    if prose:
+        yield " ".join(prose)
+
+
 def relation_spans(text, subjects):
     """Conservative lexical statements, split again at another named subject.
 
@@ -58,20 +83,22 @@ def relation_spans(text, subjects):
         for name in sorted(set(subjects), key=len, reverse=True)
     )
     pattern = re.compile(r"(?<!\w)(?:" + names + r")(?!\w)")
-    for statement in re.split(r"(?<=[.!?])\s+|\n+", text):
-        statement = normalized(statement)
-        mentions = list(pattern.finditer(statement))
-        cuts = [0, *(match.start() for match in mentions[1:]), len(statement)]
-        for start, end in zip(cuts, cuts[1:]):
-            if fragment := statement[start:end].strip():
-                yield fragment
+    for block in _prose_blocks(text):
+        for statement in re.split(r"(?<=[.!?])\s+", block):
+            statement = normalized(statement)
+            mentions = list(pattern.finditer(statement))
+            cuts = [0, *(match.start() for match in mentions[1:]), len(statement)]
+            for start, end in zip(cuts, cuts[1:]):
+                if fragment := statement[start:end].strip():
+                    yield fragment
 
 
 def score_canaries(canaries, rows, source_by_unit):
     """Match a local statement with locally supporting, correct-source evidence.
 
-    Required phrases must occur together within one sentence or Markdown line,
-    without borrowing values from a neighboring named subject. Citation text
+    Required phrases must occur together within one prose sentence or Markdown
+    block, without borrowing values from a neighboring named subject. Ordinary
+    single newlines are treated as source-extraction hard wraps. Citation text
     cannot supply a phrase missing from the model's explanation or body.
     """
     checked = []
@@ -118,7 +145,9 @@ def score_canaries(canaries, rows, source_by_unit):
                 else (
                     "wrong_or_missing_source"
                     if authored
-                    else "required_phrase_missing" if relevant else "absent"
+                    else "required_phrase_missing"
+                    if relevant
+                    else "absent"
                 )
             )
         )
@@ -245,11 +274,16 @@ def make_corpus(folder, load):
 class ObservedProvider:
     """Transparent wrapper retaining requests for position and draft diagnostics."""
 
-    def __init__(self, provider):
+    def __init__(self, provider, journal_path=None):
         self.provider = provider
         self.identity = provider.identity
         self.records = []
         self.lock = threading.Lock()
+        self.journal_path = Path(journal_path) if journal_path is not None else None
+        if self.journal_path is not None:
+            self.journal_path.parent.mkdir(parents=True, exist_ok=True)
+        self._source_token_cache = {}
+        self._source_token_lock = threading.Lock()
 
     def __getattr__(self, name):
         return getattr(self.provider, name)
@@ -259,38 +293,180 @@ class ObservedProvider:
             stage
         )
 
+    @staticmethod
+    def _source_text(stage, payload):
+        if stage != "production_read":
+            return ""
+        data = payload.get("input", {})
+        core = data.get("core")
+        if not isinstance(core, list):
+            return ""
+        return "\n\n".join(
+            unit.get("text", "".join(span["text"] for span in unit.get("spans", [])))
+            for unit in core
+        )
+
+    def _record(self, record):
+        with self.lock:
+            if self.journal_path is not None:
+                try:
+                    with self.journal_path.open("a", encoding="utf-8") as stream:
+                        stream.write(canonical(record) + "\n")
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                except Exception as exc:
+                    # Observation must never discard a valid provider response.
+                    record["journal_error"] = type(exc).__name__
+            self.records.append(record)
+
+    def _source_tokens(self, text):
+        counter = getattr(self.provider, "source_token_count", None)
+        if text is None or not callable(counter):
+            return None, None
+        with self._source_token_lock:
+            if text in self._source_token_cache:
+                return self._source_token_cache[text], None
+            try:
+                count = counter(text)
+                if type(count) is not int or count < 0:
+                    raise ValueError(
+                        "provider source_token_count must return a nonnegative integer"
+                    )
+            except Exception as exc:
+                return None, type(exc).__name__
+            self._source_token_cache[text] = count
+            return count, None
+
+    def _output_allowance(self, stage, budget):
+        method = getattr(self.provider, "output_limit_for", None)
+        if callable(method):
+            try:
+                limit = method(stage)
+                if limit is not None and (type(limit) is not int or limit < 1):
+                    raise ValueError(
+                        "provider output_limit_for must return a positive integer or None"
+                    )
+                if limit is not None:
+                    return limit, None
+            except Exception as exc:
+                error = type(exc).__name__
+            else:
+                error = None
+        else:
+            error = None
+        return (budget.output_tokens or None), error
+
+    def _usage(self):
+        try:
+            usage = getattr(self.provider, "last_usage", lambda: {})()
+            if not isinstance(usage, dict):
+                raise TypeError("provider last_usage must return a dictionary")
+            return usage, None
+        except Exception as exc:
+            return {}, type(exc).__name__
+
     def call(self, stage, payload):
+        budget = self.budget_for(stage)
+        measurement = asdict(budget.measure(payload))
+        output_allowance, output_allowance_error = self._output_allowance(stage, budget)
         started = time.monotonic()
         try:
             output = self.provider.call(stage, payload)
         except Exception as exc:
-            with self.lock:
-                self.records.append(
-                    {
-                        "stage": stage,
-                        "status": "failed",
-                        "error_type": type(exc).__name__,
-                    }
-                )
+            wall_ms = (time.monotonic() - started) * 1000
+            usage, usage_error = self._usage()
+            source_tokens, source_token_error = (
+                self._source_tokens(self._source_text(stage, payload))
+                if stage == "production_read"
+                else (None, None)
+            )
+            record = {
+                "stage": stage,
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "payload": payload,
+                "wall_ms": wall_ms,
+                "measurement": measurement,
+                "usage": usage,
+                "source_tokens": source_tokens,
+                "output_token_allowance": output_allowance,
+            }
+            if usage_error:
+                record["usage_error"] = usage_error
+            if source_token_error:
+                record["source_token_error"] = source_token_error
+            if output_allowance_error:
+                record["output_allowance_error"] = output_allowance_error
+            self._record(record)
             raise
+        wall_ms = (time.monotonic() - started) * 1000
+        usage, usage_error = self._usage()
+        source_tokens, source_token_error = (
+            self._source_tokens(self._source_text(stage, payload))
+            if stage == "production_read"
+            else (None, None)
+        )
         record = {
             "stage": stage,
             "status": "completed",
             "payload": payload,
             "output": output,
-            "wall_ms": (time.monotonic() - started) * 1000,
+            "wall_ms": wall_ms,
             "response_bytes": len(canonical(output).encode("utf-8")),
-            "measurement": asdict(self.budget_for(stage).measure(payload)),
-            "usage": getattr(self.provider, "last_usage", lambda: {})(),
+            "measurement": measurement,
+            "usage": usage,
+            "source_tokens": source_tokens,
+            "output_token_allowance": output_allowance,
         }
-        with self.lock:
-            self.records.append(record)
+        if usage_error:
+            record["usage_error"] = usage_error
+        if source_token_error:
+            record["source_token_error"] = source_token_error
+        if output_allowance_error:
+            record["output_allowance_error"] = output_allowance_error
+        self._record(record)
         return output
 
 
 def _source_map(plan):
     sources = {row["id"]: row["filename"] for row in plan["sources"]}
     return {row["id"]: sources[row["source_id"]] for row in plan["units"]}
+
+
+def _source_control(workspace, canaries):
+    """Prove the declared lexical checks can match the ingested source itself."""
+    sources = {row["id"]: row["filename"] for row in workspace.sources()}
+    units = workspace.units("teaching")
+    source_by_unit = {row["id"]: sources[row["source_id"]] for row in units}
+    rows = []
+    for row in units:
+        text = row.get(
+            "text", "".join(span.get("text", "") for span in row.get("spans", []))
+        )
+        rows.append(
+            {
+                "id": row["id"],
+                "text": text,
+                "evidence": [{"unit_id": row["id"], "quote": text}],
+            }
+        )
+    return score_canaries(canaries, rows, source_by_unit)
+
+
+def _evaluation_identity(paths, canaries, brief, options):
+    """Private task identity; source text is represented only by content hashes."""
+    return {
+        "sources": [
+            {
+                "filename": path.name,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for path in paths
+        ],
+        "brief": brief,
+        "canaries": [asdict(row) for row in canaries],
+        "options": options,
+    }
 
 
 def _idea_rows(ideas):
@@ -311,6 +487,73 @@ def _body_rows(rows):
     ]
 
 
+def _writer_units(data):
+    """Reconstruct private validator units from writer-addressed request text."""
+    units = {}
+    marker = re.compile(r"\[(s\d+)\]")
+    for key in (
+        "assigned_units",
+        "earlier_evidence_units",
+        "shared_evidence_units",
+    ):
+        for row in data.get(key, []):
+            if row["id"] in units:
+                continue
+            addressed = row.get("addressed_text")
+            matches = list(marker.finditer(addressed or ""))
+            if not matches or len({match.group(1) for match in matches}) != len(
+                matches
+            ):
+                continue
+            text_parts, spans, offset = [], [], 0
+            for position, match in enumerate(matches):
+                end = (
+                    matches[position + 1].start()
+                    if position + 1 < len(matches)
+                    else len(addressed)
+                )
+                part = addressed[match.end() : end]
+                text_parts.append(part)
+                spans.append(
+                    {"id": match.group(1), "start": offset, "end": offset + len(part)}
+                )
+                offset += len(part)
+            units[row["id"]] = {
+                **row,
+                "text": "".join(text_parts),
+                "spans": spans,
+            }
+    return units
+
+
+def _draft_body(output, data):
+    """Materialize raw marked writer output for pre-review quality scoring."""
+    if "body_marked" not in output and "candidate_body_marked" not in output:
+        return output.get("body", ""), output.get("evidence", [])
+    try:
+        from .writer_markers import materialize_marked_body
+
+        units = _writer_units(data)
+        if "body_marked" in output:
+            marked = materialize_marked_body(output["body_marked"], units)
+            return marked["body"], marked["evidence"]
+        candidate = materialize_marked_body(
+            output["candidate_body_marked"], units, body_field="candidate_body"
+        )
+        marking = materialize_marked_body(
+            output["marking_body_marked"], units, body_field="marking_body"
+        )
+        evidence, seen = [], set()
+        for row in candidate["evidence"] + marking["evidence"]:
+            key = (row["unit_id"], row["quote"])
+            if key not in seen:
+                evidence.append(row)
+                seen.add(key)
+        return candidate["body"] + "\n" + marking["body"], evidence
+    except (KeyError, TypeError, ValueError):
+        return "", []
+
+
 def _draft_score(records, canaries):
     # Latest writing attempt per section. Canonical local aliases are namespaced
     # by request before scoring, because unit:0 can name different source units.
@@ -321,6 +564,7 @@ def _draft_score(records, canaries):
     rows, sources = [], {}
     for index, record in latest.values():
         data, output = record["payload"]["input"], record["output"]
+        body, evidence = _draft_body(output, data)
         names = {source["id"]: source["filename"] for source in data["factual_sources"]}
         for key in (
             "assigned_units",
@@ -332,10 +576,10 @@ def _draft_score(records, canaries):
         rows.append(
             {
                 "id": str(index),
-                "text": output.get("body", ""),
+                "text": body,
                 "evidence": [
                     {**item, "unit_id": f"{index}:{item['unit_id']}"}
-                    for item in output.get("evidence", [])
+                    for item in evidence
                 ],
             }
         )
@@ -350,10 +594,55 @@ def _call_details(records, canaries):
             for key, value in record.items()
             if key not in {"payload", "output"}
         }
-        if record["status"] == "completed":
+        usage = record.get("usage", {})
+        prompt_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
+        output_allowance = record.get("output_token_allowance")
+        row["prompt_tokens"] = (
+            prompt_tokens if type(prompt_tokens) is int and prompt_tokens >= 0 else None
+        )
+        row["output_token_fraction"] = (
+            output_tokens / output_allowance
+            if type(output_tokens) is int
+            and output_tokens >= 0
+            and type(output_allowance) is int
+            and output_allowance > 0
+            else None
+        )
+        if "payload" in record:
             data = record["payload"]["input"]
-            core_text = "\n\n".join(unit["text"] for unit in data.get("core", []))
-            row["source_characters"] = len(core_text) if "core" in data else None
+            core_text = (
+                ObservedProvider._source_text(record["stage"], record["payload"])
+                if "core" in data
+                else ""
+            )
+            row["source_characters"] = (
+                len(core_text)
+                if record["stage"] == "production_read" and "core" in data
+                else None
+            )
+            source_tokens = record.get("source_tokens")
+            row["source_to_prompt_fraction"] = (
+                source_tokens / prompt_tokens
+                if type(source_tokens) is int
+                and type(prompt_tokens) is int
+                and prompt_tokens > 0
+                else None
+            )
+            ideas = (
+                record.get("output", {}).get("ideas")
+                if record["stage"] == "production_read"
+                and record["status"] == "completed"
+                else None
+            )
+            row["read_idea_count"] = len(ideas) if isinstance(ideas, list) else None
+            row["read_ideas_per_1000_source_tokens"] = (
+                1000 * len(ideas) / source_tokens
+                if isinstance(ideas, list)
+                and type(source_tokens) is int
+                and source_tokens > 0
+                else None
+            )
             row["canary_source_positions"] = {
                 fact.id: core_text.find(fact.subject) / max(1, len(core_text))
                 for fact in canaries
@@ -364,7 +653,7 @@ def _call_details(records, canaries):
     return out
 
 
-def run_trial(provider, folder, *, load, reading, complete, options=None):
+def run_trial(provider, folder, *, load, reading, complete, options=None, corpus=None):
     """Run original sources through production prompts, validation and scheduling.
 
     A new workspace per trial avoids cache hits masquerading as independent
@@ -373,11 +662,14 @@ def run_trial(provider, folder, *, load, reading, complete, options=None):
     folder = Path(folder)
     if (folder / "workspace" / "workspace.sqlite3").exists():
         raise ValueError("each quality trial needs a fresh workspace")
-    paths, canaries = make_corpus(folder / "sources", load)
+    folder.mkdir(parents=True, exist_ok=True)
+    paths, canaries = (
+        make_corpus(folder / "sources", load) if corpus is None else corpus[:2]
+    )
     workspace = Workspace(folder / "workspace")
     ingest_paths(paths, workspace, "teaching")
     source_ids = [row["id"] for row in workspace.sources()]
-    observed = ObservedProvider(provider)
+    observed = ObservedProvider(provider, folder / "calls.jsonl")
     opts = {
         **(options or {}),
         "workflow": "planned",
@@ -385,14 +677,19 @@ def run_trial(provider, folder, *, load, reading, complete, options=None):
         "format": "document",
     }
     brief = (
-        "Prepare an exhaustive reference for the fictional equipment specifications. "
-        "Preserve every supported statement, qualification, negation, quantity, table association and historical restriction. "
-        "Keep distinct equipment contexts separate."
+        corpus[2]
+        if corpus is not None
+        else (
+            "Prepare an exhaustive reference for the fictional equipment specifications. "
+            "Preserve every supported statement, qualification, negation, quantity, table association and historical restriction. "
+            "Keep distinct equipment contexts separate."
+        )
     )
+    evaluation_identity = _evaluation_identity(paths, canaries, brief, opts)
     started = time.monotonic()
     result = {
-        "load": load,
-        "load_unit": "background paragraphs",
+        "load": load if corpus is None else len(workspace.units("teaching")),
+        "load_unit": "background paragraphs" if corpus is None else "source units",
         "reading": reading,
         "provider_identity": provider.identity,
         "protocol_revision": REVISION,
@@ -402,9 +699,27 @@ def run_trial(provider, folder, *, load, reading, complete, options=None):
         "canaries": [asdict(row) for row in canaries],
         "options": opts,
         "source_bytes": sum(path.stat().st_size for path in paths),
+        "evaluation_identity": evaluation_identity,
+        "evaluation_sha256": hashlib.sha256(
+            canonical(evaluation_identity).encode("utf-8")
+        ).hexdigest(),
     }
     plan = None
     try:
+        result["source_control"] = _source_control(workspace, canaries)
+        failed_controls = [
+            row
+            for row in result["source_control"]["checks"]
+            if row["status"] != "preserved"
+        ]
+        if failed_controls:
+            failures = ", ".join(
+                f"{row['id']}={row['status']}" for row in failed_controls
+            )
+            raise ValueError(
+                f"source control failed under {ORACLE_VERSION}: {failures}; "
+                "revise the canary phrases or source selection before model calls"
+            )
         plan = plan_production(workspace, observed, brief, source_ids, opts)
         source_by_unit = _source_map(plan)
         result["extraction"] = score_canaries(
@@ -419,6 +734,7 @@ def run_trial(provider, folder, *, load, reading, complete, options=None):
             source_by_unit,
         )
         result["planning_metrics"] = plan["metrics"]
+        result["idea_count"] = len(plan["ideas"])
         result["planning_strategy"] = plan["planning"]
         if complete:
             receipt = run_production(workspace, observed, plan)
@@ -448,7 +764,51 @@ def run_trial(provider, folder, *, load, reading, complete, options=None):
             failure_metrics=getattr(exc, "metrics", {}),
         )
     result["calls"] = _call_details(observed.records, canaries)
+    result["usage"] = {
+        name: sum(row.get("usage", {}).get(name, 0) for row in observed.records)
+        for name in (
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "cached_input_tokens",
+            "reasoning_tokens",
+            "thinking_tokens",
+        )
+        if any(name in row.get("usage", {}) for row in observed.records)
+    }
+    result["read_ideas_per_1000_input_tokens"] = (
+        1000
+        * result.get("idea_count", 0)
+        / sum(
+            row.get("usage", {}).get("input_tokens", 0)
+            for row in observed.records
+            if row["stage"] == "production_read"
+        )
+        if sum(
+            row.get("usage", {}).get("input_tokens", 0)
+            for row in observed.records
+            if row["stage"] == "production_read"
+        )
+        else None
+    )
     result["wall_ms"] = (time.monotonic() - started) * 1000
+    result["read_source_token_exposure"] = (
+        sum(
+            row.get("source_tokens") or 0
+            for row in result["calls"]
+            if row["stage"] == "production_read"
+        )
+        or None
+    )
+    corpus_text = "\n\n".join(unit["text"] for unit in workspace.units("teaching"))
+    corpus_tokens, corpus_count_error = observed._source_tokens(corpus_text)
+    result["corpus_tokens"] = corpus_tokens
+    result["corpus_token_count_error"] = corpus_count_error
+    result["ideas_per_1000_source_tokens"] = (
+        1000 * result["idea_count"] / corpus_tokens
+        if corpus_tokens and "idea_count" in result
+        else None
+    )
     result["stage_budgets"] = {}
     for stage in sorted({row["stage"] for row in observed.records}):
         budget = observed.budget_for(stage)

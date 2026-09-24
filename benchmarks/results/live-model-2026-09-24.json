@@ -1,0 +1,1636 @@
+{
+  "kind": "live-model-calibration-aggregates",
+  "model": "models/gemini-2.5-flash",
+  "reports": [
+    {
+      "report_sha256": "67e3888ee4d8d6588e1a462b85b0a2ca8da9499e8f696ed2d9731e526c098dea",
+      "created_at": "2026-09-24T17:32:49.127014+00:00",
+      "protocol_revision": "lamina-production-7",
+      "stage": "production_read",
+      "dimension": "max_input_tokens",
+      "limits": [
+        4000,
+        8000
+      ],
+      "replicates_required": 2,
+      "trials": [
+        {
+          "replicate": 1,
+          "experimental_stage": "production_read",
+          "experimental_limit": 4000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 29809.175959031563,
+          "usage": {
+            "input_tokens": 16699,
+            "output_tokens": 9010,
+            "total_tokens": 30592
+          },
+          "corpus_sha256": "d00dec83521f051dce4ee8c6cc2fe4c7703a977300e1e91536bd6e60d0c727d3",
+          "load": 30,
+          "load_unit": "background paragraphs",
+          "source_bytes": 835632,
+          "provider_identity": "gemini:edd0ba38996e4ff0f648:experiment:ba454cc2f3686ea1a94ed239192316001deaf535aeaa1305f3b2c430d54cbbf5",
+          "protocol_revision": "lamina-production-7",
+          "stages": {
+            "production_read": {
+              "calls": 6,
+              "usage": {
+                "input_tokens": 16699,
+                "output_tokens": 9010,
+                "thinking_tokens": 4883,
+                "total_tokens": 30592
+              }
+            }
+          },
+          "checks": {},
+          "error_type": "ProductionError"
+        }
+      ]
+    },
+    {
+      "report_sha256": "eab6ae9af102508995ddf43e4e1120c445735fd712e98242c767a4c09abf9606",
+      "created_at": "2026-09-24T17:39:01.462434+00:00",
+      "protocol_revision": "lamina-production-7",
+      "stage": "production_read",
+      "dimension": "max_input_tokens",
+      "limits": [
+        8000
+      ],
+      "replicates_required": 2,
+      "promotion_policy": "all-declared-checks-two-replicates-v1",
+      "trials": [
+        {
+          "replicate": 1,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 105946.72712497413,
+          "usage": {
+            "input_tokens": 52134,
+            "output_tokens": 23633,
+            "total_tokens": 84157,
+            "cached_input_tokens": 4009
+          },
+          "corpus_sha256": "d00dec83521f051dce4ee8c6cc2fe4c7703a977300e1e91536bd6e60d0c727d3",
+          "load": 30,
+          "load_unit": "background paragraphs",
+          "source_bytes": 835632,
+          "provider_identity": "gemini:edd0ba38996e4ff0f648:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-7",
+          "stages": {
+            "production_read": {
+              "calls": 4,
+              "usage": {
+                "input_tokens": 30360,
+                "output_tokens": 8490,
+                "thinking_tokens": 3761,
+                "total_tokens": 42611
+              }
+            },
+            "production_group": {
+              "calls": 3,
+              "usage": {
+                "input_tokens": 12253,
+                "output_tokens": 5025,
+                "thinking_tokens": 2704,
+                "total_tokens": 19982
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 9521,
+                "output_tokens": 10118,
+                "thinking_tokens": 1925,
+                "total_tokens": 21564,
+                "cached_input_tokens": 4009
+              }
+            }
+          },
+          "checks": {},
+          "error_type": "ProductionValidationError"
+        },
+        {
+          "replicate": 2,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 205500.1823750208,
+          "usage": {
+            "input_tokens": 311414,
+            "output_tokens": 48034,
+            "total_tokens": 408595,
+            "cached_input_tokens": 19988
+          },
+          "idea_count": 36,
+          "corpus_sha256": "d00dec83521f051dce4ee8c6cc2fe4c7703a977300e1e91536bd6e60d0c727d3",
+          "load": 30,
+          "load_unit": "background paragraphs",
+          "source_bytes": 835632,
+          "provider_identity": "gemini:edd0ba38996e4ff0f648:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-7",
+          "stages": {
+            "production_read": {
+              "calls": 4,
+              "usage": {
+                "input_tokens": 30420,
+                "output_tokens": 8944,
+                "thinking_tokens": 3690,
+                "total_tokens": 43054
+              }
+            },
+            "production_group": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 14439,
+                "output_tokens": 3600,
+                "thinking_tokens": 1913,
+                "total_tokens": 19952
+              }
+            },
+            "production_route": {
+              "calls": 4,
+              "usage": {
+                "input_tokens": 12589,
+                "output_tokens": 9918,
+                "thinking_tokens": 3766,
+                "total_tokens": 26273,
+                "cached_input_tokens": 4961
+              }
+            },
+            "production_assign": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 19155,
+                "output_tokens": 2281,
+                "thinking_tokens": 1891,
+                "total_tokens": 23327
+              }
+            },
+            "production_write": {
+              "calls": 22,
+              "usage": {
+                "input_tokens": 91653,
+                "output_tokens": 10054,
+                "thinking_tokens": 14827,
+                "total_tokens": 116534,
+                "cached_input_tokens": 3993
+              }
+            },
+            "production_review": {
+              "calls": 20,
+              "usage": {
+                "input_tokens": 103032,
+                "output_tokens": 10597,
+                "thinking_tokens": 17348,
+                "total_tokens": 130977,
+                "cached_input_tokens": 11034
+              }
+            },
+            "production_repair": {
+              "calls": 7,
+              "usage": {
+                "input_tokens": 40126,
+                "output_tokens": 2640,
+                "thinking_tokens": 5712,
+                "total_tokens": 48478
+              }
+            }
+          },
+          "checks": {
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 4,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 4,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            }
+          },
+          "error_type": "ValidationFailure"
+        }
+      ]
+    },
+    {
+      "report_sha256": "4c8cd438d762c0d9248920c460442e6d990a9850d245eef1656613b7e827f08e",
+      "created_at": "2026-09-24T17:47:03.477620+00:00",
+      "protocol_revision": "lamina-production-8",
+      "stage": "production_read",
+      "dimension": "max_input_tokens",
+      "limits": [
+        8000
+      ],
+      "replicates_required": 2,
+      "promotion_policy": "all-declared-checks-two-replicates-v1",
+      "trials": [
+        {
+          "replicate": 1,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 221743.22545801988,
+          "usage": {
+            "input_tokens": 447702,
+            "output_tokens": 51209,
+            "total_tokens": 558604,
+            "cached_input_tokens": 34295,
+            "thinking_tokens": 59693
+          },
+          "idea_count": 36,
+          "corpus_sha256": "d00dec83521f051dce4ee8c6cc2fe4c7703a977300e1e91536bd6e60d0c727d3",
+          "load": 8,
+          "load_unit": "source units",
+          "source_bytes": 835632,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-8",
+          "corpus_tokens": 9624,
+          "read_source_token_exposure": 9624,
+          "ideas_per_1000_source_tokens": 3.7406483790523692,
+          "stages": {
+            "production_read": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 14915,
+                "output_tokens": 7890,
+                "thinking_tokens": 1768,
+                "total_tokens": 24573
+              }
+            },
+            "production_route": {
+              "calls": 3,
+              "usage": {
+                "input_tokens": 27402,
+                "output_tokens": 14625,
+                "thinking_tokens": 2840,
+                "total_tokens": 44867
+              }
+            },
+            "production_write": {
+              "calls": 22,
+              "usage": {
+                "input_tokens": 102208,
+                "output_tokens": 7712,
+                "thinking_tokens": 14849,
+                "total_tokens": 124769,
+                "cached_input_tokens": 4004
+              }
+            },
+            "production_review": {
+              "calls": 35,
+              "usage": {
+                "input_tokens": 221384,
+                "output_tokens": 16944,
+                "thinking_tokens": 29879,
+                "total_tokens": 268207,
+                "cached_input_tokens": 18098
+              }
+            },
+            "production_repair": {
+              "calls": 12,
+              "usage": {
+                "input_tokens": 81793,
+                "output_tokens": 4038,
+                "thinking_tokens": 10357,
+                "total_tokens": 96188,
+                "cached_input_tokens": 12193
+              }
+            }
+          },
+          "checks": {
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 4,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 4,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            }
+          },
+          "error_type": "ProductionValidationError"
+        },
+        {
+          "replicate": 2,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 35413.322083011735,
+          "usage": {
+            "input_tokens": 30658,
+            "output_tokens": 9228,
+            "total_tokens": 43739,
+            "thinking_tokens": 3853
+          },
+          "corpus_sha256": "d00dec83521f051dce4ee8c6cc2fe4c7703a977300e1e91536bd6e60d0c727d3",
+          "load": 8,
+          "load_unit": "source units",
+          "source_bytes": 835632,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-8",
+          "corpus_tokens": 9624,
+          "read_source_token_exposure": 19248,
+          "ideas_per_1000_source_tokens": null,
+          "stages": {
+            "production_read": {
+              "calls": 4,
+              "usage": {
+                "input_tokens": 30658,
+                "output_tokens": 9228,
+                "thinking_tokens": 3853,
+                "total_tokens": 43739
+              }
+            }
+          },
+          "checks": {},
+          "error_type": "ProductionError"
+        }
+      ]
+    },
+    {
+      "report_sha256": "77aea9b69d65fb0938d3c14ae64658548b04bb49a73420d40269b6e78124c4bb",
+      "created_at": "2026-09-24T17:48:43.959052+00:00",
+      "protocol_revision": "lamina-production-8",
+      "stage": "production_write",
+      "dimension": "max_items",
+      "limits": [
+        3,
+        6
+      ],
+      "replicates_required": 2,
+      "promotion_policy": "all-declared-checks-two-replicates-v1",
+      "trials": [
+        {
+          "replicate": 1,
+          "experimental_stage": "production_write",
+          "experimental_limit": 3,
+          "experimental_dimension": "max_items",
+          "status": "completed",
+          "engine_status": "review",
+          "wall_ms": 70495.46083301539,
+          "usage": {
+            "input_tokens": 63917,
+            "output_tokens": 10781,
+            "total_tokens": 91219,
+            "cached_input_tokens": 3925,
+            "thinking_tokens": 16521
+          },
+          "idea_count": 6,
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:c23551ff4568efc6c57e9d01215c91f1cde7be988772fb822d74376f2c7eb921",
+          "protocol_revision": "lamina-production-8",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": 4.415011037527594,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1099,
+                "thinking_tokens": 737,
+                "total_tokens": 4355
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 4078,
+                "output_tokens": 4302,
+                "thinking_tokens": 1887,
+                "total_tokens": 10267,
+                "cached_input_tokens": 1949
+              }
+            },
+            "production_write": {
+              "calls": 6,
+              "usage": {
+                "input_tokens": 12166,
+                "output_tokens": 1020,
+                "thinking_tokens": 2735,
+                "total_tokens": 15921
+              }
+            },
+            "production_review": {
+              "calls": 9,
+              "usage": {
+                "input_tokens": 27504,
+                "output_tokens": 3335,
+                "thinking_tokens": 7660,
+                "total_tokens": 38499,
+                "cached_input_tokens": 1976
+              }
+            },
+            "production_repair": {
+              "calls": 6,
+              "usage": {
+                "input_tokens": 17650,
+                "output_tokens": 1025,
+                "thinking_tokens": 3502,
+                "total_tokens": 22177
+              }
+            }
+          },
+          "checks": {
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            },
+            "initial_draft": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            },
+            "finished_output": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "error_type": null
+        },
+        {
+          "replicate": 2,
+          "experimental_stage": "production_write",
+          "experimental_limit": 3,
+          "experimental_dimension": "max_items",
+          "status": "failed",
+          "wall_ms": 38544.92825001944,
+          "usage": {
+            "input_tokens": 6587,
+            "output_tokens": 5745,
+            "total_tokens": 15029,
+            "thinking_tokens": 2697
+          },
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:c23551ff4568efc6c57e9d01215c91f1cde7be988772fb822d74376f2c7eb921",
+          "protocol_revision": "lamina-production-8",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": null,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1104,
+                "thinking_tokens": 669,
+                "total_tokens": 4292
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 4068,
+                "output_tokens": 4641,
+                "thinking_tokens": 2028,
+                "total_tokens": 10737
+              }
+            }
+          },
+          "checks": {},
+          "error_type": "ProductionValidationError"
+        },
+        {
+          "replicate": 1,
+          "experimental_stage": "production_write",
+          "experimental_limit": 6,
+          "experimental_dimension": "max_items",
+          "status": "failed",
+          "wall_ms": 58167.240542010404,
+          "usage": {
+            "input_tokens": 67449,
+            "output_tokens": 8798,
+            "total_tokens": 93627,
+            "cached_input_tokens": 8881,
+            "thinking_tokens": 17380
+          },
+          "idea_count": 6,
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:6ae4887a463e2af60e132c6baba00e99fa9f1caca6735094c4a2c5deb689feb9",
+          "protocol_revision": "lamina-production-8",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": 4.415011037527594,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1100,
+                "cached_input_tokens": 1966,
+                "thinking_tokens": 810,
+                "total_tokens": 4429
+              }
+            },
+            "production_route": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2004,
+                "output_tokens": 2452,
+                "thinking_tokens": 831,
+                "total_tokens": 5287
+              }
+            },
+            "production_write": {
+              "calls": 6,
+              "usage": {
+                "input_tokens": 13748,
+                "output_tokens": 1021,
+                "thinking_tokens": 2438,
+                "total_tokens": 17207
+              }
+            },
+            "production_review": {
+              "calls": 13,
+              "usage": {
+                "input_tokens": 39920,
+                "output_tokens": 3754,
+                "thinking_tokens": 10841,
+                "total_tokens": 54515,
+                "cached_input_tokens": 6915
+              }
+            },
+            "production_repair": {
+              "calls": 3,
+              "usage": {
+                "input_tokens": 9258,
+                "output_tokens": 471,
+                "thinking_tokens": 2460,
+                "total_tokens": 12189
+              }
+            }
+          },
+          "checks": {
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "error_type": "ProductionValidationError"
+        },
+        {
+          "replicate": 2,
+          "experimental_stage": "production_write",
+          "experimental_limit": 6,
+          "experimental_dimension": "max_items",
+          "status": "failed",
+          "wall_ms": 69210.89566603769,
+          "usage": {
+            "input_tokens": 62249,
+            "output_tokens": 10853,
+            "total_tokens": 90114,
+            "cached_input_tokens": 4908,
+            "thinking_tokens": 17012
+          },
+          "idea_count": 6,
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:6ae4887a463e2af60e132c6baba00e99fa9f1caca6735094c4a2c5deb689feb9",
+          "protocol_revision": "lamina-production-8",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": 4.415011037527594,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1107,
+                "thinking_tokens": 753,
+                "total_tokens": 4379
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 4074,
+                "output_tokens": 4190,
+                "thinking_tokens": 1823,
+                "total_tokens": 10087,
+                "cached_input_tokens": 1949
+              }
+            },
+            "production_write": {
+              "calls": 6,
+              "usage": {
+                "input_tokens": 12417,
+                "output_tokens": 980,
+                "thinking_tokens": 2046,
+                "total_tokens": 15443
+              }
+            },
+            "production_review": {
+              "calls": 10,
+              "usage": {
+                "input_tokens": 27887,
+                "output_tokens": 3735,
+                "thinking_tokens": 8293,
+                "total_tokens": 39915,
+                "cached_input_tokens": 2959
+              }
+            },
+            "production_repair": {
+              "calls": 5,
+              "usage": {
+                "input_tokens": 15352,
+                "output_tokens": 841,
+                "thinking_tokens": 4097,
+                "total_tokens": 20290
+              }
+            }
+          },
+          "checks": {
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-2",
+              "preserved": 0,
+              "total": 2,
+              "fraction": 0.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 0,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "error_type": "ProductionValidationError"
+        }
+      ]
+    },
+    {
+      "report_sha256": "6a1e8c1a09f340379d4e2662b4fe49b06128374890bc3f81f9dc8642e8d2fd0d",
+      "created_at": "2026-09-24T18:02:25.230192+00:00",
+      "protocol_revision": "lamina-production-9",
+      "stage": "production_read",
+      "dimension": "max_input_tokens",
+      "limits": [
+        8000
+      ],
+      "replicates_required": 2,
+      "promotion_policy": "all-declared-checks-two-replicates-v1",
+      "trials": [
+        {
+          "replicate": 1,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 40294.716125004925,
+          "usage": {
+            "input_tokens": 6691,
+            "output_tokens": 6947,
+            "total_tokens": 16180,
+            "cached_input_tokens": 1954,
+            "thinking_tokens": 2542
+          },
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "evaluation_sha256": "17e6a31b6a5c3808b31dd56b734dccc633f20fca310724b29c3ef08c1be5a643",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-9",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": null,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1096,
+                "thinking_tokens": 752,
+                "total_tokens": 4367
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 4172,
+                "output_tokens": 5851,
+                "thinking_tokens": 1790,
+                "total_tokens": 11813,
+                "cached_input_tokens": 1954
+              }
+            }
+          },
+          "checks": {
+            "source_control": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "error_type": "ProductionValidationError"
+        },
+        {
+          "replicate": 2,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "completed",
+          "engine_status": "ready",
+          "wall_ms": 49938.590415986255,
+          "usage": {
+            "input_tokens": 23091,
+            "output_tokens": 6986,
+            "total_tokens": 36167,
+            "cached_input_tokens": 3931,
+            "thinking_tokens": 6090
+          },
+          "idea_count": 6,
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "evaluation_sha256": "17e6a31b6a5c3808b31dd56b734dccc633f20fca310724b29c3ef08c1be5a643",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-9",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": 4.415011037527594,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1125,
+                "cached_input_tokens": 1966,
+                "thinking_tokens": 652,
+                "total_tokens": 4296
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 4861,
+                "output_tokens": 4927,
+                "thinking_tokens": 1729,
+                "total_tokens": 11517,
+                "cached_input_tokens": 1965
+              }
+            },
+            "production_write": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 5844,
+                "output_tokens": 916,
+                "thinking_tokens": 1821,
+                "total_tokens": 8581
+              }
+            },
+            "production_review": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 9867,
+                "output_tokens": 18,
+                "thinking_tokens": 1888,
+                "total_tokens": 11773
+              }
+            }
+          },
+          "checks": {
+            "source_control": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            },
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 1,
+              "total": 2,
+              "fraction": 0.5,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 1,
+                  "total": 2
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 1,
+              "total": 2,
+              "fraction": 0.5,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 1,
+                  "total": 2
+                }
+              }
+            },
+            "initial_draft": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 1,
+              "total": 2,
+              "fraction": 0.5,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 1,
+                  "total": 2
+                }
+              }
+            },
+            "finished_output": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 1,
+              "total": 2,
+              "fraction": 0.5,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 1,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "error_type": null
+        }
+      ]
+    },
+    {
+      "report_sha256": "bddaa270dd3245b1f1cc9ab0bd4e12fda1192c49b4b607f7b2f9eac5b3c39540",
+      "created_at": "2026-09-24T18:02:25.229975+00:00",
+      "protocol_revision": "lamina-production-9",
+      "stage": "production_read",
+      "dimension": "max_input_tokens",
+      "limits": [
+        8000
+      ],
+      "replicates_required": 2,
+      "promotion_policy": "all-declared-checks-two-replicates-v1",
+      "trials": [
+        {
+          "replicate": 1,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "completed",
+          "engine_status": "review",
+          "wall_ms": 64172.07704199245,
+          "usage": {
+            "input_tokens": 29494,
+            "output_tokens": 6890,
+            "total_tokens": 51275,
+            "thinking_tokens": 14891
+          },
+          "idea_count": 10,
+          "corpus_sha256": "0e7fad67d57dc8a2255f6782af7655b9bd9cc82c8b3572acd1364b46f20cac20",
+          "evaluation_sha256": "00d6a19ea02529ec309a37e813fba8aa4ecd28346029d7a72d5f8353042d5115",
+          "load": 3,
+          "load_unit": "background paragraphs",
+          "source_bytes": 847,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-9",
+          "corpus_tokens": 238,
+          "read_source_token_exposure": 238,
+          "ideas_per_1000_source_tokens": 42.016806722689076,
+          "stages": {
+            "production_read": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 1377,
+                "output_tokens": 889,
+                "thinking_tokens": 1548,
+                "total_tokens": 3814
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 4382,
+                "output_tokens": 4180,
+                "thinking_tokens": 1769,
+                "total_tokens": 10331
+              }
+            },
+            "production_write": {
+              "calls": 7,
+              "usage": {
+                "input_tokens": 7341,
+                "output_tokens": 522,
+                "thinking_tokens": 2344,
+                "total_tokens": 10207
+              }
+            },
+            "production_review": {
+              "calls": 10,
+              "usage": {
+                "input_tokens": 11961,
+                "output_tokens": 1049,
+                "thinking_tokens": 7611,
+                "total_tokens": 20621
+              }
+            },
+            "production_repair": {
+              "calls": 4,
+              "usage": {
+                "input_tokens": 4433,
+                "output_tokens": 250,
+                "thinking_tokens": 1619,
+                "total_tokens": 6302
+              }
+            }
+          },
+          "checks": {
+            "source_control": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 6,
+              "total": 6,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 2,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 1,
+                  "total": 1
+                }
+              }
+            },
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 6,
+              "fraction": 0.3333333333333333,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 6,
+              "fraction": 0.3333333333333333,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            },
+            "initial_draft": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 3,
+              "total": 6,
+              "fraction": 0.5,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 1,
+                  "total": 1
+                }
+              }
+            },
+            "finished_output": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 3,
+              "total": 6,
+              "fraction": 0.5,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 1,
+                  "total": 1
+                }
+              }
+            }
+          },
+          "error_type": null
+        },
+        {
+          "replicate": 2,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 47898.608207993675,
+          "usage": {
+            "input_tokens": 24115,
+            "output_tokens": 6422,
+            "total_tokens": 40591,
+            "cached_input_tokens": 1957,
+            "thinking_tokens": 10054
+          },
+          "idea_count": 10,
+          "corpus_sha256": "0e7fad67d57dc8a2255f6782af7655b9bd9cc82c8b3572acd1364b46f20cac20",
+          "evaluation_sha256": "00d6a19ea02529ec309a37e813fba8aa4ecd28346029d7a72d5f8353042d5115",
+          "load": 3,
+          "load_unit": "background paragraphs",
+          "source_bytes": 847,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-9",
+          "corpus_tokens": 238,
+          "read_source_token_exposure": 238,
+          "ideas_per_1000_source_tokens": 42.016806722689076,
+          "stages": {
+            "production_read": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 1377,
+                "output_tokens": 911,
+                "thinking_tokens": 1195,
+                "total_tokens": 3483
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 4406,
+                "output_tokens": 4232,
+                "thinking_tokens": 1862,
+                "total_tokens": 10500,
+                "cached_input_tokens": 1957
+              }
+            },
+            "production_write": {
+              "calls": 7,
+              "usage": {
+                "input_tokens": 7071,
+                "output_tokens": 538,
+                "thinking_tokens": 1792,
+                "total_tokens": 9401
+              }
+            },
+            "production_review": {
+              "calls": 8,
+              "usage": {
+                "input_tokens": 9147,
+                "output_tokens": 617,
+                "thinking_tokens": 4202,
+                "total_tokens": 13966
+              }
+            },
+            "production_repair": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 2114,
+                "output_tokens": 124,
+                "thinking_tokens": 1003,
+                "total_tokens": 3241
+              }
+            }
+          },
+          "checks": {
+            "source_control": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 6,
+              "total": 6,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 2,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 1,
+                  "total": 1
+                }
+              }
+            },
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 6,
+              "fraction": 0.3333333333333333,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 6,
+              "fraction": 0.3333333333333333,
+              "counterfacts": 0,
+              "by_position": {
+                "end": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle": {
+                  "preserved": 1,
+                  "total": 1
+                },
+                "middle-table": {
+                  "preserved": 0,
+                  "total": 2
+                },
+                "separate-source": {
+                  "preserved": 0,
+                  "total": 1
+                },
+                "start": {
+                  "preserved": 0,
+                  "total": 1
+                }
+              }
+            }
+          },
+          "error_type": "ProductionValidationError"
+        }
+      ]
+    },
+    {
+      "report_sha256": "559af27b8b7acdedfea21bbcf0ebce2314af017dee19b212fb753ef41d9e8f3e",
+      "created_at": "2026-09-24T18:06:40.539068+00:00",
+      "protocol_revision": "lamina-production-10",
+      "stage": "production_read",
+      "dimension": "max_input_tokens",
+      "limits": [
+        8000
+      ],
+      "replicates_required": 2,
+      "promotion_policy": "all-declared-checks-two-replicates-v1",
+      "trials": [
+        {
+          "replicate": 1,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "completed",
+          "engine_status": "ready",
+          "wall_ms": 35415.62562499894,
+          "usage": {
+            "input_tokens": 32585,
+            "output_tokens": 3464,
+            "total_tokens": 44821,
+            "thinking_tokens": 8772
+          },
+          "idea_count": 6,
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "evaluation_sha256": "17e6a31b6a5c3808b31dd56b734dccc633f20fca310724b29c3ef08c1be5a643",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-10",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": 4.415011037527594,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1094,
+                "thinking_tokens": 704,
+                "total_tokens": 4317
+              }
+            },
+            "production_route": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 1998,
+                "output_tokens": 1340,
+                "thinking_tokens": 908,
+                "total_tokens": 4246
+              }
+            },
+            "production_write": {
+              "calls": 6,
+              "usage": {
+                "input_tokens": 12308,
+                "output_tokens": 976,
+                "thinking_tokens": 1958,
+                "total_tokens": 15242
+              }
+            },
+            "production_review": {
+              "calls": 6,
+              "usage": {
+                "input_tokens": 15760,
+                "output_tokens": 54,
+                "thinking_tokens": 5202,
+                "total_tokens": 21016
+              }
+            }
+          },
+          "checks": {
+            "source_control": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            },
+            "extraction": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            },
+            "assignment": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            },
+            "initial_draft": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            },
+            "finished_output": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "error_type": null
+        },
+        {
+          "replicate": 2,
+          "experimental_stage": "production_read",
+          "experimental_limit": 8000,
+          "experimental_dimension": "max_input_tokens",
+          "status": "failed",
+          "wall_ms": 57374.65429195436,
+          "usage": {
+            "input_tokens": 7806,
+            "output_tokens": 11111,
+            "total_tokens": 21309,
+            "cached_input_tokens": 1966,
+            "thinking_tokens": 2392
+          },
+          "corpus_sha256": "c802b276435d598d41bad382447fd5d5c5a4f6c250103fa5a4b9df3efa623178",
+          "evaluation_sha256": "17e6a31b6a5c3808b31dd56b734dccc633f20fca310724b29c3ef08c1be5a643",
+          "load": 2,
+          "load_unit": "source units",
+          "source_bytes": 302523,
+          "provider_identity": "gemini:3b6ac6570dc1123636c1:experiment:51a209f4c7f834650b7ad00d7e154a7b6dc0e1152de2d0ab1c55ad7ac549dae3",
+          "protocol_revision": "lamina-production-10",
+          "corpus_tokens": 1359,
+          "read_source_token_exposure": 1359,
+          "ideas_per_1000_source_tokens": null,
+          "stages": {
+            "production_read": {
+              "calls": 1,
+              "usage": {
+                "input_tokens": 2519,
+                "output_tokens": 1295,
+                "cached_input_tokens": 1966,
+                "thinking_tokens": 695,
+                "total_tokens": 4509
+              }
+            },
+            "production_route": {
+              "calls": 2,
+              "usage": {
+                "input_tokens": 5287,
+                "output_tokens": 9816,
+                "thinking_tokens": 1697,
+                "total_tokens": 16800
+              }
+            }
+          },
+          "checks": {
+            "source_control": {
+              "oracle": "local-qualified-phrase-and-source-3",
+              "preserved": 2,
+              "total": 2,
+              "fraction": 1.0,
+              "counterfacts": 0,
+              "by_position": {
+                "middle": {
+                  "preserved": 2,
+                  "total": 2
+                }
+              }
+            }
+          },
+          "error_type": "ProductionValidationError"
+        }
+      ]
+    }
+  ]
+}

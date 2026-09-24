@@ -63,3 +63,5 @@ The [production guide](docs/production.md) documents workflows, controls, revisi
 pip install -e '.[test,pdf,slides,http,tokens]'
 python -m pytest -q
 ```
+
+Run [`lamina calibrate`](docs/calibration.md) to measure workload settings on your model and save a report-linked profile. The [engineering decisions](docs/engineering-decisions.md) compare source pointers, output formats, scheduling and optimization approaches. [Live model results](docs/live-model-evaluation.md) include actual token usage, failed trials and the changes they prompted.

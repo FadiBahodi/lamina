@@ -1,0 +1,46 @@
+{
+  "production_read": {
+    "max_items": 96,
+    "basis": "configured"
+  },
+  "production_route": {
+    "max_items": 64,
+    "basis": "configured"
+  },
+  "production_group": {
+    "max_items": 24,
+    "basis": "configured"
+  },
+  "production_assign": {
+    "max_items": 24,
+    "basis": "configured"
+  },
+  "production_targets": {
+    "max_items": 12,
+    "basis": "configured"
+  },
+  "production_write": {
+    "max_items": 6,
+    "basis": "configured"
+  },
+  "production_review": {
+    "max_items": 6,
+    "basis": "configured"
+  },
+  "production_repair": {
+    "max_items": 6,
+    "basis": "configured"
+  },
+  "production_consistency": {
+    "max_items": 2,
+    "basis": "configured"
+  },
+  "assessment_blind_solve": {
+    "max_items": 1,
+    "basis": "configured"
+  },
+  "assessment_judge": {
+    "max_items": 1,
+    "basis": "configured"
+  }
+}

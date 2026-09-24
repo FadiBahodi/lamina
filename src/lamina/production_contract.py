@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-REVISION = "lamina-production-6"
+REVISION = "lamina-production-10"
 
 from .evidence import ValidationFailure, QuoteMatchError, resolve_quote
-from .verification import CLAIM_SHAPE, VerificationError, validate_claims
+from .verification import VerificationError, validate_claims
 
 FORMATS = {"document", "guide", "podcast-script", "assessment"}
 _BASE = (
@@ -67,9 +67,8 @@ _SHAPES = {
         ],
     },
     "production_write": {
-        "body": "Markdown str",
+        "body_marked": "Markdown str with compact source markers such as [s3] or [s3-s5] after supported text",
         "used_idea_ids": ["assigned idea id"],
-        "evidence": [{"unit_id": "str", "quote": "exact source substring"}],
     },
     "production_review": {
         "findings": [
@@ -81,9 +80,8 @@ _SHAPES = {
         ]
     },
     "production_repair": {
-        "body": "revised Markdown str",
+        "body_marked": "revised Markdown str with compact source markers such as [s3] or [s3-s5] after supported text",
         "used_idea_ids": ["assigned idea id"],
-        "evidence": [{"unit_id": "str", "quote": "exact source substring"}],
     },
 }
 
@@ -526,15 +524,49 @@ def _authored_check(raw, section: dict, units: dict[str, dict], fmt: str) -> dic
             raise ProductionError(
                 "writer must account for exactly its assigned retrieval targets"
             )
-    evidence = _evidence(raw.get("evidence"), units, "writer")
+    from .writer_markers import materialize_marked_body
+
     if fmt == "assessment":
-        candidate = _str(raw.get("candidate_body"), "candidate_body", 200000)
-        marking = _str(raw.get("marking_body"), "marking_body", 200000)
-        claims = validate_claims(
-            raw.get("claims"),
-            {"candidate_body": candidate, "marking_body": marking},
-            units,
-        )
+        marked = "candidate_body_marked" in raw or "marking_body_marked" in raw
+        if marked:
+            if "candidate_body_marked" not in raw or "marking_body_marked" not in raw:
+                raise ProductionError(
+                    "marked assessments need candidate_body_marked and marking_body_marked"
+                )
+            if "claims" in raw or "evidence" in raw:
+                raise ProductionError(
+                    "marked writer replies derive claims and evidence; do not repeat them"
+                )
+            candidate_result = materialize_marked_body(
+                raw["candidate_body_marked"],
+                units,
+                body_field="candidate_body",
+                claim_prefix="candidate_claim",
+            )
+            marking_result = materialize_marked_body(
+                raw["marking_body_marked"],
+                units,
+                body_field="marking_body",
+                claim_prefix="marking_claim",
+            )
+            evidence, seen = [], set()
+            for row in candidate_result["evidence"] + marking_result["evidence"]:
+                key = (row["unit_id"], row["quote"])
+                if key not in seen:
+                    evidence.append(row)
+                    seen.add(key)
+            candidate = candidate_result["body"]
+            marking = marking_result["body"]
+            claims = candidate_result["claims"] + marking_result["claims"]
+        else:
+            evidence = _evidence(raw.get("evidence"), units, "writer")
+            candidate = _str(raw.get("candidate_body"), "candidate_body", 200000)
+            marking = _str(raw.get("marking_body"), "marking_body", 200000)
+            claims = validate_claims(
+                raw.get("claims"),
+                {"candidate_body": candidate, "marking_body": marking},
+                units,
+            )
         return {
             "id": section["id"],
             "title": section["title"],
@@ -546,8 +578,21 @@ def _authored_check(raw, section: dict, units: dict[str, dict], fmt: str) -> dic
             "evidence": evidence,
             "claims": claims,
         }
-    body = _str(raw.get("body"), "body", 200000)
-    claims = validate_claims(raw.get("claims"), {"body": body}, units)
+    if "body_marked" in raw:
+        if "claims" in raw or "evidence" in raw:
+            raise ProductionError(
+                "marked writer replies derive claims and evidence; do not repeat them"
+            )
+        marked = materialize_marked_body(raw["body_marked"], units)
+        body, evidence, claims = (
+            marked["body"],
+            marked["evidence"],
+            marked["claims"],
+        )
+    else:
+        evidence = _evidence(raw.get("evidence"), units, "writer")
+        body = _str(raw.get("body"), "body", 200000)
+        claims = validate_claims(raw.get("claims"), {"body": body}, units)
     return {
         "id": section["id"],
         "title": section["title"],
@@ -592,5 +637,5 @@ def _review_check(raw, units: dict[str, dict]) -> dict:
     return {"findings": findings}
 
 
-for _stage in ("production_write", "production_repair"):
-    _SHAPES[_stage]["claims"] = [CLAIM_SHAPE]
+# Legacy replies may still return body/evidence/claims. New requests prefer
+# marked bodies so the engine can derive the duplicated structures locally.

@@ -2,6 +2,7 @@
 
 import copy
 from dataclasses import replace
+import re
 import threading
 import time
 
@@ -18,8 +19,14 @@ from lamina.production import (
     run_production,
 )
 from lamina.providers import CommandProvider, ProviderError, StageProvider
+from lamina.source_spans import source_spans
 from lamina.store import Workspace
 from test_production import FixtureProvider, workspace
+
+
+def addressed_source(unit):
+    """Test adapter compatibility helper for the marker-addressed protocol."""
+    return re.sub(r"\[s\d+\]", "", unit["addressed_text"])
 
 
 class SourceWriter(FixtureProvider):
@@ -34,11 +41,12 @@ class SourceWriter(FixtureProvider):
             units = data["assigned_units"]
             result = {
                 "title": "Wind and blades",
-                "body": "\n\n".join(u["text"] for u in units),
+                "body": "\n\n".join(addressed_source(u) for u in units),
                 "used_unit_ids": [u["id"] for u in units],
                 "omitted_units": [],
                 "evidence": [
-                    {"unit_id": u["id"], "quote": u["text"][:100]} for u in units
+                    {"unit_id": u["id"], "quote": addressed_source(u)[:100]}
+                    for u in units
                 ],
             }
             if data["format"] == "assessment":
@@ -121,10 +129,10 @@ def test_assigned_context_is_not_ownership_and_revision_is_local(tmp_path):
         if s == "production_write" and p["input"]["section"]["id"] == "writes"
     )
     units = {unit["id"]: unit for unit in plan["units"]}
-    assert {u["text"] for u in request["assigned_units"]} == {
+    assert {addressed_source(u) for u in request["assigned_units"]} == {
         units[uid]["text"] for uid in ("u3", "u4")
     }
-    assert [u["text"] for u in request["earlier_evidence_units"]] == [
+    assert [addressed_source(u) for u in request["earlier_evidence_units"]] == [
         units["u2"]["text"]
     ]
     assert {u["id"] for u in request["assigned_units"]}.isdisjoint(
@@ -210,6 +218,11 @@ def test_local_source_edit_reuses_other_reader_interpretations(tmp_path):
         + "The shaft carries rotation. Another statement. " * 50
     )
     ws, provider = Workspace(tmp_path / "db"), FixtureProvider()
+    ingest_paths([path], ws)
+    reader_limit = max(
+        len(source_spans(unit["id"], unit["text"], unit.get("kind")))
+        for unit in ws.units()
+    )
     original_budget = provider.budget_for
 
     def one_structure_reader(stage):
@@ -217,16 +230,15 @@ def test_local_source_edit_reuses_other_reader_interpretations(tmp_path):
         return (
             replace(
                 budget,
-                workload=replace(budget.workload, max_items=1),
+                workload=replace(budget.workload, max_items=reader_limit),
             )
             if stage == "production_read"
             else budget
         )
 
-    # Separate owned structures explicitly so this edit-locality test does
+    # Fit exactly one section's owned spans so this edit-locality test does
     # not depend on incidental instruction/schema byte lengths.
     provider.budget_for = one_structure_reader
-    ingest_paths([path], ws)
     old_id = ws.sources()[0]["id"]
     options = {"workflow": "planned"}
     first = plan_production(ws, provider, "Explain", [old_id], options)

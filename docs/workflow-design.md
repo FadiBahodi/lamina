@@ -12,7 +12,7 @@ Current Lamina does not divide every file into fixed passages with a fixed neigh
 - PowerPoint slide text, tables, shapes and speaker notes, with material from one slide kept together;
 - PDF pages as text units, with an explicit warning that extraction does not interpret figures or guarantee reading order.
 
-Without an evaluated reading workload policy, one model call owns one parser structure. When a configured policy permits several structures in one call, Lamina packs complete structures within the measured request and workload limits. It does not cut a list, table or slide group merely to fill the available context.
+Without a reading workload policy, one call groups up to eight adjacent prose blocks from the same section. PDF pages and slide groups remain indivisible. When a configured policy permits several structures in one call, Lamina packs complete structures within the measured request and workload limits. It does not cut a list, table or slide group merely to fill the available context.
 
 No neighboring source structure is sent by default. A reader that cannot interpret its owned material at a boundary can request the structure immediately before or after it and state the missing dependency. Lamina adds the complete neighboring structure and records that request. The added material supplies context; it does not become that reader's source ownership.
 
@@ -116,7 +116,7 @@ The following observations come from saved records in the earlier audio system's
 
 The 82-part sample included four recorded model-cache hits and had a median delivered duration of 18.47 minutes. Subtracting the median script and ready times does not recover one stage duration because jobs and parts shared setup and waited on different resources. The private source text and production logs are outside this repository.
 
-Current Lamina benchmarks use scripted adapters and declared fixture workloads to exercise request limits, scheduling, recovery and cache reuse. They do not measure live-model comprehension, cost or latency. The 0.10 validation deliberately includes a scripted case that returns valid cited records while silently omitting one required fact; the separate quality evaluator catches that omission. Operational completion and complete source-unit citation are therefore not evidence of semantic recall.
+Lamina uses scripted fixtures to check scheduling, recovery and cache reuse, and [live model runs](live-model-evaluation.md) to measure actual requests and failures. The 0.10 fixture deliberately returns valid cited records while dropping a required fact; the quality evaluator catches the omission. The live experiments also test the evaluator itself against real PDF text.
 
 For total service work on resource `r`, `W_r`, capacity `c_r`, and longest dependency chain `D`, completion time has the lower bound:
 

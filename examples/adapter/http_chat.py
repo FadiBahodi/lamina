@@ -59,6 +59,8 @@ def request_body(request):
         "max_tokens": output_limit,
     }
     schema = request.get("response_schema")
+    if schema is None and os.environ.get("LAMINA_JSON_MODE") == "1":
+        body["response_format"] = {"type": "json_object"}
     if schema is not None:
         # The endpoint must explicitly support this dialect. expected_shape remains
         # prompt documentation and is never guessed into a JSON Schema.
@@ -85,9 +87,18 @@ def response_usage(envelope):
     for source_key, target_key in (
         ("prompt_tokens", "input_tokens"),
         ("completion_tokens", "output_tokens"),
+        ("total_tokens", "total_tokens"),
     ):
         if type(usage.get(source_key)) is int and usage[source_key] >= 0:
             measured[target_key] = usage[source_key]
+    output_details = usage.get("completion_tokens_details")
+    reasoning = (
+        output_details.get("reasoning_tokens")
+        if isinstance(output_details, dict)
+        else None
+    )
+    if type(reasoning) is int and reasoning >= 0:
+        measured["reasoning_tokens"] = reasoning
     details = usage.get("prompt_tokens_details")
     cached = details.get("cached_tokens") if isinstance(details, dict) else None
     if type(cached) is int and cached >= 0:
@@ -150,7 +161,9 @@ def http_failure(status, retry_after=None):
             else (
                 "unavailable"
                 if status >= 500
-                else "authentication" if status in {401, 403} else "invalid_request"
+                else "authentication"
+                if status in {401, 403}
+                else "invalid_request"
             )
         )
     )

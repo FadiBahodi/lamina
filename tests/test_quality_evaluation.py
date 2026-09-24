@@ -1,11 +1,13 @@
 """These tests exercise oracle behavior, never model capability."""
 
+import hashlib
 import importlib.util
 from pathlib import Path
 
 import pytest
 
 from lamina.quality_evaluation import Canary, score_canaries, run_trial, summarize
+from lamina.store import digest
 
 
 def fixture_module():
@@ -84,7 +86,128 @@ def test_no_paraphrase_entailment_claim():
         {"correct": "primary.md"},
     )
     assert result["preserved"] == 0
-    assert result["oracle"] == "local-qualified-phrase-and-source-2"
+    assert result["oracle"] == "local-qualified-phrase-and-source-3"
+
+
+def test_source_quote_pdf_hard_wraps_do_not_break_local_support():
+    source = (
+        "Torus fractures are not associated\n"
+        "with angulation, displacement, or physeal injury."
+    )
+    canary = Canary(
+        "torus",
+        "primary.pdf",
+        "Torus fractures",
+        ("Torus fractures", "not", "angulation"),
+        (),
+        "middle",
+        "negation",
+    )
+    authored = "Torus fractures are not associated with angulation."
+    result = score_canaries(
+        [canary], [row(authored, source)], {"correct": "primary.pdf"}
+    )
+    assert result["fraction"] == 1
+
+
+def test_hard_wrap_join_still_cannot_borrow_from_another_named_subject():
+    facts = [
+        Canary(
+            "torus",
+            "primary.pdf",
+            "Torus fractures",
+            ("Torus fractures", "not", "angulation"),
+            (),
+            "middle",
+            "negation",
+        ),
+        Canary(
+            "greenstick",
+            "primary.pdf",
+            "greenstick fracture",
+            ("greenstick fracture", "convex", "concave"),
+            (),
+            "middle",
+            "association",
+        ),
+    ]
+    crossed = (
+        "Torus fractures occur without displacement\n"
+        "A greenstick fracture may show angulation on the convex side and concave side."
+    )
+    result = score_canaries(facts, [row(crossed, crossed)], {"correct": "primary.pdf"})
+    assert result["checks"][0]["status"] == "required_phrase_missing"
+    assert result["checks"][1]["status"] == "preserved"
+
+
+def test_markdown_rows_remain_separate_when_source_prose_wraps_are_joined():
+    canary = Canary(
+        "torus",
+        "primary.pdf",
+        "Torus fractures",
+        ("Torus fractures", "not", "angulation"),
+        (),
+        "middle",
+        "negation",
+    )
+    split_across_rows = (
+        "| Injury | Finding |\n"
+        "| --- | --- |\n"
+        "| Torus fractures | Stable pattern |\n"
+        "| Other fractures | not associated with angulation |"
+    )
+    result = score_canaries(
+        [canary], [row(split_across_rows)], {"correct": "primary.pdf"}
+    )
+    assert result["checks"][0]["status"] == "required_phrase_missing"
+
+
+def test_trial_fails_source_control_before_any_model_call(tmp_path):
+    source = tmp_path / "split-source.txt"
+    source.write_text(
+        "Rotor Umber exists. It does not reset while its red lamp is illuminated.",
+        encoding="utf-8",
+    )
+    provider = fixture_provider()
+    provider_calls = 0
+    original_call = provider.call
+
+    def counted_call(stage, payload):
+        nonlocal provider_calls
+        provider_calls += 1
+        return original_call(stage, payload)
+
+    provider.call = counted_call
+    trial = run_trial(
+        provider,
+        tmp_path / "trial",
+        load=1,
+        reading="task",
+        complete=False,
+        corpus=(
+            [source],
+            [
+                Canary(
+                    "split-negation",
+                    source.name,
+                    "Rotor Umber",
+                    ("Rotor Umber", "does not reset", "red lamp"),
+                    (),
+                    "middle",
+                    "negation",
+                )
+            ],
+            "Preserve the source statement.",
+        ),
+    )
+    assert trial["status"] == "failed"
+    assert trial["error_type"] == "ValueError"
+    assert "source control failed" in trial["error"]
+    assert "split-negation=required_phrase_missing" in trial["error"]
+    assert trial["source_control"]["preserved"] == 0
+    assert trial["source_control"]["total"] == 1
+    assert trial["calls"] == []
+    assert provider_calls == 0
 
 
 def test_silent_omission_passes_engine_but_fails_output_oracle(tmp_path):
@@ -92,6 +215,24 @@ def test_silent_omission_passes_engine_but_fails_output_oracle(tmp_path):
         fixture_provider(), tmp_path / "trial", load=6, reading="task", complete=True
     )
     assert trial["status"] == "completed", trial
+    assert trial["evaluation_sha256"] == digest(trial["evaluation_identity"])
+    assert trial["evaluation_identity"]["brief"].startswith(
+        "Prepare an exhaustive reference"
+    )
+    assert trial["evaluation_identity"]["canaries"] == trial["canaries"]
+    assert trial["evaluation_identity"]["options"] == trial["options"]
+    identity_sources = trial["evaluation_identity"]["sources"]
+    assert {row["filename"] for row in identity_sources} == {
+        "current.md",
+        "historical.md",
+    }
+    assert all(
+        row["sha256"]
+        == hashlib.sha256(
+            (tmp_path / "trial" / "sources" / row["filename"]).read_bytes()
+        ).hexdigest()
+        for row in identity_sources
+    )
     assert trial["engine_status"] == "ready"
     assert trial["citation_coverage"]["reading"]["uncited_unit_ids"] == []
     assert (

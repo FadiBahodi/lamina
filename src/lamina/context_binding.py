@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 
+from .source_spans import source_spans
+
 _REF_LISTS = {
     "unit_ids",
     "context_unit_ids",
@@ -31,6 +33,8 @@ def _references(value, mapping):
             "target_id",
             "from_target_id",
             "to_target_id",
+            "span_id",
+            "end_span_id",
         }:
             result[key] = mapping.get(item, item) if isinstance(item, str) else item
         elif key in _REF_LISTS and isinstance(item, list):
@@ -39,7 +43,10 @@ def _references(value, mapping):
             key == "id"
             and isinstance(item, str)
             and (
-                ("source_id" in value and "text" in value)
+                (
+                    "source_id" in value
+                    and ("text" in value or "addressed_text" in value)
+                )
                 or "explanation" in value
                 or "member_idea_ids" in value
                 or "filename" in value
@@ -60,6 +67,17 @@ def bind_context(data, units):
     Every semantic field the model receives remains in the cache key.
     """
     aliases = {uid: f"unit:{n}" for n, uid in enumerate(units)}
+    spans = {
+        uid: source_spans(uid, unit["text"], unit.get("kind"))
+        for uid, unit in units.items()
+    }
+    span_aliases = {
+        span["id"]: f"s{number}"
+        for number, span in enumerate(
+            span for uid in units for span in spans[uid]
+        )
+    }
+    aliases.update(span_aliases)
     source_ids = list(dict.fromkeys(u["source_id"] for u in units.values()))
     aliases.update({sid: f"source:{n}" for n, sid in enumerate(source_ids)})
     ideas = data.get("assigned_ideas", []) + data.get("earlier_planned_ideas", [])
@@ -84,18 +102,31 @@ def bind_context(data, units):
         "heading",
         "heading_path",
         "kind",
-        "text",
         "role",
         "reference_context",
     }
     for key in ("assigned_units", "earlier_evidence_units", "shared_evidence_units"):
-        result[key] = [
-            {k: v for k, v in row.items() if k in semantic_fields}
-            for row in result.get(key, [])
-        ]
+        addressed = []
+        for row in result.get(key, []):
+            entry = {k: v for k, v in row.items() if k in semantic_fields}
+            entry["addressed_text"] = "".join(
+                f"[{span_aliases[span['id']]}]"
+                + row["text"][span["start"] : span["end"]]
+                for span in spans[row["id"]]
+            )
+            addressed.append(entry)
+        result[key] = addressed
     result = _references(result, aliases)
     normalized_units = {
-        aliases[uid]: {**u, "id": aliases[uid]} for uid, u in units.items()
+        aliases[uid]: {
+            **u,
+            "id": aliases[uid],
+            "spans": [
+                {**span, "id": span_aliases[span["id"]]}
+                for span in spans[uid]
+            ],
+        }
+        for uid, u in units.items()
     }
     return (
         result,

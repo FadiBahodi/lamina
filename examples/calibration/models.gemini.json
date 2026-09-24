@@ -1,0 +1,18 @@
+{
+  "default": {
+    "transport": "jsonl",
+    "command": ["python", "examples/adapter/http_service.py"],
+    "request_format": "lamina-chat-1",
+    "version": "gemini-2.5-flash-json-1",
+    "max_pending": 4,
+    "timeout": 180,
+    "env": {
+      "LAMINA_API_BASE": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "LAMINA_MODEL": "gemini-2.5-flash",
+      "LAMINA_JSON_MODE": "1",
+      "LAMINA_MAX_OUTPUT_TOKENS": "8192",
+      "LAMINA_TEMPERATURE": "0.2"
+    },
+    "workload": "starter"
+  }
+}

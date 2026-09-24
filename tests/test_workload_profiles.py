@@ -230,7 +230,11 @@ def test_observed_profile_binds_provider_protocol_and_report(tmp_path):
                         "calls": [{"stage": "production_read", "status": "completed"}],
                         "stage_budgets": {
                             "production_read": {
-                                "configuration_identity": provider.configuration_identity
+                                "configuration_identity": provider.configuration_identity,
+                                "workload": {
+                                    "max_items": 2,
+                                    "max_input_tokens": None,
+                                },
                             }
                         },
                     }
@@ -292,7 +296,15 @@ def test_custom_provider_observed_profile_binding_is_checked_at_both_runtime_bou
                         "protocol_revision": "test-protocol",
                         "experimental_stage": stage,
                         "calls": [{"stage": stage, "status": "completed"}],
-                        "stage_budgets": {stage: {"configuration_identity": identity}},
+                        "stage_budgets": {
+                            stage: {
+                                "configuration_identity": identity,
+                                "workload": {
+                                    "max_items": 2,
+                                    "max_input_tokens": None,
+                                },
+                            }
+                        },
                     }
                 ],
             }

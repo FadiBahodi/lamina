@@ -4,6 +4,8 @@ A context limit states what an endpoint accepts. A workload policy states how mu
 
 `benchmarks/quality_titration.py` exercises the production reader, planner, writer, reviewer and repair paths with original fictional equipment specifications. It imports Markdown through the normal parser, uses production prompts and validators, and creates a fresh workspace for each observation. Canaries carry a negation, an exception, quantities, a sequence, two table associations and a conflicting historical source. They occur at the beginning, middle and end of the growing source; the report records their actual positions within reader requests after packing.
 
+Use [`lamina calibrate`](calibration.md) for repeatable experiments and report-linked profiles. The lower-level benchmark below remains available for adversarial fixtures and corpus-load studies.
+
 ## Run a configured provider
 
 Configure an adapter using [Adapters](adapters.md), including its tokenizer, context size, output allowance and explicit stage workload policies. Run this example experiment:

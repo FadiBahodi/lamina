@@ -112,13 +112,19 @@ class WorkloadProfile:
                 for call in calls
             ):
                 continue
+            workload = budget.get("workload") if isinstance(budget, dict) else None
             if isinstance(budget, dict) and (
                 budget.get("configuration_identity")
                 == self.evidence["provider_identity"]
+                and isinstance(workload, dict)
+                and all(
+                    workload.get(name) == getattr(self, name)
+                    for name in ("max_input_tokens", "max_items")
+                )
             ):
                 return
         raise ValueError(
-            "workload report has no matching provider and stage observation"
+            "workload report has no matching provider, stage and limit observation"
         )
 
     def validate_binding(self, *, provider_identity=None, protocol_revision=None):

@@ -33,7 +33,7 @@ Commands run without a shell. Python callers can use `CommandProvider`, `Persist
 }
 ```
 
-This example selects transports and models. Add the required [workload policies](#workload-limits) and model token settings below before running production. Unlisted stages use the default adapter. A stage selects its configured model directly. Keep API keys in the process environment. The bundled HTTP examples require `LAMINA_API_BASE`, `LAMINA_MODEL` and `LAMINA_API_KEY`; install `lamina-engine[http]` for the persistent example. `http_service.py` shares one HTTPX connection pool across its workers. HTTP/2 is opt-in with `LAMINA_HTTP2=1`.
+This example selects transports and models. Add `"workload": "starter"` to each adapter row for initial stage settings, or supply the [workload policies](#workload-limits) below. Use [calibration](calibration.md) to measure settings on your model. Unlisted stages use the default adapter. A stage selects its configured model directly. Keep API keys in the process environment. The bundled HTTP examples require `LAMINA_API_BASE`, `LAMINA_MODEL` and `LAMINA_API_KEY`; install `lamina-engine[http]` for the persistent example. `http_service.py` shares one HTTPX connection pool across its workers. HTTP/2 is opt-in with `LAMINA_HTTP2=1`.
 
 Both transports accept `command`, `env`, `timeout`, `version`, `max_request_bytes`, optional `request_format` and per-stage `workload` policies. Persistent transport also accepts `max_pending` and `max_response_bytes`. These are resource ceilings. `max_pending` bounds requests admitted to the adapter process; extra callers wait under their call deadline. Match it to the endpoint's permitted concurrency. The runtime's worker limit can be lower.
 
@@ -66,7 +66,7 @@ Usage belongs to the current calling thread. The bundled HTTP adapters retain re
 
 Each stage can select its own configured adapter, request capacity and workload policy. Direct and supplied-assignment workflows skip the source-planning stages they do not need.
 
-Reader input units contain the original `text` once and a `spans` list of `{id, start, end}`. Offsets count Unicode characters. Readers return `evidence_refs: [{span_id, end_span_id?, phrase?}]`; a range must be contiguous within one owned unit, and an optional phrase must occur exactly once in that range. Code materializes the original quotation. Existing `{unit_id, quote}` evidence remains supported.
+Reader inputs provide ordered source spans. Prose spans follow conservative sentence boundaries; tables, lists and code blocks remain intact. Offsets count Unicode characters. Readers return `evidence_refs: [{span_id, end_span_id?, phrase?}]`; a range must be contiguous within one owned unit, and an optional phrase must resolve uniquely in that range using the quotation normalizer. Code materializes the original quotation. Existing `{unit_id, quote}` evidence remains supported. Writers receive compact span aliases and return `body_marked`, placing markers such as `[s3]` or `[s3-s5]` after supported statements. Lamina resolves the markers into source quotations and claim records, then removes them from the finished text. Assessment prompts and marking text are processed separately.
 
 An extraction-row correction supplies `repair.invalid_ideas: [{index, idea, error}]`. The response supplies only `replacements: [{index, idea}]` for those indices. The validator retains accepted rows, merges replacements and checks the complete result under the same attempt allowance.
 
@@ -99,7 +99,7 @@ Replace placeholders with positive JSON integers. These values are operator choi
 
 Item counts describe objects supplied to the task; a source unit or sentence can contain many propositions. Use token limits as well when object sizes vary. Unowned context contributes to the token measurement.
 
-Multi-item planning, writing and review require a declared workload policy. Planned workflows check required route, write and review policies before reading sources. An unprofiled reader owns one parser structure; an explicitly assigned single structure can run without a policy only when no additional source units, form exemplars or retained observations enter its context. Its semantic quality remains unmeasured. The engine never silently substitutes the model context limit for a missing workload policy.
+Multi-item planning, writing and review require a declared workload policy. Planned workflows check required route, write and review policies before reading sources. An unprofiled reader groups up to eight adjacent prose blocks within a section, while preserving whole PDF pages and slide groups; an explicitly assigned single structure can run without a policy only when no additional source units, form exemplars or retained observations enter its context. Its semantic quality remains unmeasured. The engine never silently substitutes the model context limit for a missing workload policy.
 
 `basis="configured"` is the default. Evaluate selected loads on the actual model, task, domain and output requirements before treating them as supported operating limits. The [quality evaluation protocol](quality-evaluation.md) describes experiments and their scope.
 

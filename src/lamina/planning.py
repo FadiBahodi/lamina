@@ -332,6 +332,7 @@ def _outline(cards, shared, brief, budget, workers, instruction, report):
     current = cards
     level = 0
     shape = _route_shape()
+    shape["shared_context"] = []
     route_data = lambda rows: _route_data(shared, brief, rows)
     while not budget.allows(
         "production_route", instruction, shape, route_data(current)
@@ -394,6 +395,11 @@ def _outline(cards, shared, brief, budget, workers, instruction, report):
     expected = {card["id"] for card in current}
 
     def check(raw):
+        if isinstance(raw, dict) and raw.get("shared_context"):
+            raise ProductionError(
+                "Summary cards have no source references; return shared_context: []; "
+                "later assignment adds relationships"
+            )
         restored = _restore_shared(raw, [])
         _diagnose_route(restored, expected)
         return _route_check(restored, expected, {})
@@ -411,6 +417,7 @@ def _diagnose_route(raw, expected):
     ):
         raise ProductionError("route requires sections and omitted lists")
     owned = []
+    empty = []
     for row in raw.get("sections", []):
         if (
             not isinstance(row, dict)
@@ -418,7 +425,15 @@ def _diagnose_route(raw, expected):
             or any(not isinstance(x, str) for x in row["idea_ids"])
         ):
             raise ProductionError("route sections require idea_ids lists")
+        if not row["idea_ids"]:
+            empty.append(row.get("id"))
         owned.extend(row["idea_ids"])
+    if empty:
+        raise ProductionError(
+            "Every outline section must own at least one supplied card; empty sections "
+            f"{empty} are invalid. Put overview relationships in shared_context attached "
+            "to populated sections, or merge the heading into a populated section."
+        )
     for row in raw.get("omitted", []):
         if not isinstance(row, dict) or not isinstance(row.get("idea_id"), str):
             raise ProductionError("route omissions require idea_id")

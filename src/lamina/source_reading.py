@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from .context_budget import pack_units, OversizedUnit
 from .execution import bounded_collect
 from .production_contract import (
@@ -37,14 +38,18 @@ CONTEXT_INSTRUCTION = (
     "Request this only when additional adjacent source text is necessary, and never fabricate it."
 )
 REFERENCE_INSTRUCTION = (
-    "Cite evidence_refs using each unit's ordered spans: span_id and, for a contiguous "
-    "range within that unit, end_span_id. Spans address paragraphs or intact structural blocks; "
-    "their Unicode-character offsets identify exact positions in the unchanged text. "
-    "Keep complete qualifying conditions, table associations and exceptions in the cited range. "
-    "An optional phrase must be an exact unique substring within that range. "
-    "Code materializes the original quotations; do not copy them into your response. "
+    "Each unit supplies ordered source spans with an ID and its exact text. Cite evidence_refs "
+    "with span_id or, for adjacent spans in the same unit, span_id plus end_span_id. Sentence "
+    "spans keep prose addressable; tables, lists and code remain intact structural spans. Include "
+    "every span needed for a complete qualification, table association or exception. Code "
+    "materializes the cited original text; do not copy source text into your response. "
 )
 
+# Without an evaluated workload profile, headings provide a conservative
+# semantic batching boundary for Markdown/text. This is a dispatch policy, not
+# a claim about model capacity; the complete request budget can split it further.
+_UNPROFILED_SECTION_UNITS = 8
+_MAX_CONTEXT_EXTENSIONS = 2
 
 from .call_runtime import make_envelope as envelope, request_budget as _request_budget
 
@@ -65,25 +70,30 @@ def reader_input(window, source, task, options):
     )
 
     def local(rows):
-        return [
-            {
-                "id": aliases[u["id"]] if aliases else u["id"],
-                "heading": u["heading"],
-                "text": u["text"],
-                "role": u["role"],
-                "spans": source_spans(
-                    aliases[u["id"]] if aliases else u["id"],
-                    u["text"],
-                    u.get("kind"),
-                ),
-                **{
-                    k: u[k]
-                    for k in ("heading_path", "kind", "reference_context")
-                    if k in u
-                },
-            }
-            for u in rows
-        ]
+        result = []
+        for u in rows:
+            local_id = aliases[u["id"]] if aliases else u["id"]
+            spans = source_spans(local_id, u["text"], u.get("kind"))
+            result.append(
+                {
+                    "id": local_id,
+                    "heading": u["heading"],
+                    "role": u["role"],
+                    "spans": [
+                        {
+                            "id": span["id"],
+                            "text": u["text"][span["start"] : span["end"]],
+                        }
+                        for span in spans
+                    ],
+                    **{
+                        k: u[k]
+                        for k in ("heading_path", "kind", "reference_context")
+                        if k in u
+                    },
+                }
+            )
+        return result
 
     source = (
         {k: v for k, v in source.items() if k not in {"id", "sha256"}}
@@ -106,6 +116,50 @@ def reader_input(window, source, task, options):
         # a source says without treating that source as an instruction or truth.
         data["source"] = {k: v for k, v in source.items() if k != "policy"}
     return data, aliases
+
+
+def _reader_groups(units):
+    """Keep native structures intact and batch nearby prose within one section.
+
+    PDF pages and PowerPoint slides declare ``structural_group`` and remain
+    indivisible. Markdown/text units declare ``section_id``; a small number of
+    contiguous blocks from one section can share a reader call. Units without
+    either relationship remain independent.
+    """
+    groups = []
+    seen_structures = set()
+    current_key = None
+    for unit in units:
+        structure = unit.get("structural_group")
+        if structure:
+            key = ("structure", unit["source_id"], structure)
+            if key == current_key:
+                groups[-1].append(unit)
+                continue
+            if key in seen_structures:
+                raise ValueError(f"structural group {structure!r} is not contiguous")
+            seen_structures.add(key)
+            groups.append([unit])
+            current_key = key
+            continue
+
+        section = unit.get("section_id")
+        key = (
+            "section",
+            unit["source_id"],
+            section,
+            unit.get("section_index"),
+        )
+        if (
+            section
+            and key == current_key
+            and len(groups[-1]) < _UNPROFILED_SECTION_UNITS
+        ):
+            groups[-1].append(unit)
+        else:
+            groups.append([unit])
+        current_key = key if section else None
+    return groups
 
 
 class ReaderReplyValidator:
@@ -168,6 +222,29 @@ class ReaderReplyValidator:
             partial=self.partial,
         )
 
+    @staticmethod
+    def _reference_guidance(idea):
+        guidance = []
+        pattern = re.compile(r"^(.*):s(\d+)$")
+        for ref in idea.get("evidence_refs", []) if isinstance(idea, dict) else []:
+            if not isinstance(ref, dict) or "end_span_id" not in ref:
+                continue
+            first, last = ref.get("span_id"), ref.get("end_span_id")
+            start, end = pattern.fullmatch(first or ""), pattern.fullmatch(last or "")
+            if not start or not end:
+                continue
+            if start.group(1) != end.group(1):
+                guidance.append(
+                    f"{first} -> {last} crosses source units. A range cannot cross units; "
+                    "use multiple evidence_refs, with a separate range or span_id for each unit."
+                )
+            elif int(start.group(2)) > int(end.group(2)):
+                guidance.append(
+                    f"{first} -> {last} is reversed. In a same-unit range, end_span_id "
+                    "must have an ordinal greater than or equal to span_id; select or reorder the endpoints."
+                )
+        return guidance
+
     def repair_request(self, original, failure):
         feedback = failure.feedback()
         if self.pending is None:
@@ -191,6 +268,9 @@ class ReaderReplyValidator:
                             "index": index,
                             "idea": self.rows[index],
                             "error": errors[index]["message"],
+                            "reference_guidance": self._reference_guidance(
+                                self.rows[index]
+                            ),
                         }
                         for index in self.pending
                     ],
@@ -199,7 +279,7 @@ class ReaderReplyValidator:
             },
             "validation_feedback": {
                 **feedback,
-                "instruction": "Return replacements only for the supplied invalid indexes. Preserve each row's intended meaning and fix the reported defect. Accepted rows are retained by the engine and must not be repeated, changed, or deleted.",
+                "instruction": "Return replacements only for the supplied invalid indexes. Preserve each row's intended meaning and fix every defect described by reference_guidance. A source range stays within one unit and follows increasing span order; cite support across units with multiple evidence_refs. Accepted rows are retained by the engine and must not be repeated, changed, or deleted.",
             },
         }
 
@@ -247,26 +327,10 @@ def read_sources(
     elif getattr(budget, "workload", None) is not None:
         windows = [window(batch.units) for batch in pack_units(units, request, budget)]
     else:
-        # With no evaluated task profile, use the parser's existing work unit.
-        # The model's context limit only checks whether that unit can fit.
-        groups, seen_groups = [], set()
-        for unit in units:
-            if (
-                groups
-                and unit.get("structural_group")
-                and unit["source_id"] == groups[-1][0]["source_id"]
-                and unit["structural_group"] == groups[-1][0].get("structural_group")
-            ):
-                groups[-1].append(unit)
-            else:
-                if unit.get("structural_group"):
-                    key = (unit["source_id"], unit["structural_group"])
-                    if key in seen_groups:
-                        raise ValueError(
-                            f"structural group {key[1]!r} is not contiguous"
-                        )
-                    seen_groups.add(key)
-                groups.append([unit])
+        # With no evaluated workload profile, keep native page/slide structures
+        # intact and batch a few contiguous prose blocks within one source
+        # section. The complete request budget can still split prose batches.
+        groups = _reader_groups(units)
         windows = []
         for group in groups:
             # Reuse the packer's exact budget/oversize diagnostics, while the
@@ -279,6 +343,13 @@ def read_sources(
         local = by_source.setdefault(unit["source_id"], [])
         positions[unit["id"]] = len(local)
         local.append(unit)
+    context_groups, context_group_for = {}, {}
+    for group in _reader_groups(units):
+        source_groups = context_groups.setdefault(group[0]["source_id"], [])
+        group_number = len(source_groups)
+        source_groups.append(group)
+        for unit in group:
+            context_group_for[unit["id"]] = group_number
 
     def read(original):
         current = {
@@ -291,6 +362,13 @@ def read_sources(
             data, aliases = reader_input(
                 current, source_map[current["source_id"]], task, options
             )
+            owned = [
+                {
+                    **unit,
+                    "id": aliases[unit["id"]] if aliases else unit["id"],
+                }
+                for unit in current["core"]
+            ]
 
             def check(raw):
                 if isinstance(raw, dict) and "context_request" in raw:
@@ -305,7 +383,7 @@ def read_sources(
                             "context_request needs before/after and a specific reason"
                         )
                     return {"context_request": row}
-                return validated(_read_check, raw, data["core"], data["window_id"])
+                return validated(_read_check, raw, owned, data["window_id"])
 
             validator = ReaderReplyValidator(check)
             work_items = sum(len(u["spans"]) for u in data["core"])
@@ -338,18 +416,22 @@ def read_sources(
                     raise ProductionError(
                         f"Reader needs unavailable {request_more['direction']} context: {request_more['reason']}"
                     )
-                extra = [local[index]]
-                group = local[index].get("structural_group")
-                if group:
-                    direction = -1 if request_more["direction"] == "before" else 1
-                    j = index + direction
-                    while (
-                        0 <= j < len(local)
-                        and local[j].get("structural_group") == group
-                    ):
-                        extra.append(local[j])
-                        j += direction
-                    extra.sort(key=lambda u: positions[u["id"]])
+                if len(extensions) >= _MAX_CONTEXT_EXTENSIONS:
+                    raise ProductionError(
+                        "Reader requested more than two adjacent context groups; "
+                        "revise the source boundary or supply explicit reading context"
+                    )
+                visible_ids = {unit["id"] for unit in visible}
+                groups = context_groups[current["source_id"]]
+                extra = [
+                    unit
+                    for unit in groups[context_group_for[local[index]["id"]]]
+                    if unit["id"] not in visible_ids
+                ]
+                if not extra:
+                    raise ProductionError(
+                        "Reader context grouping could not advance to new source material"
+                    )
                 if request_more["direction"] == "before":
                     current["before"] = extra + current["before"]
                 else:

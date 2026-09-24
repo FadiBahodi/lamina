@@ -7,8 +7,10 @@ import re
 
 import pytest
 
+from lamina.call_runtime import CallTracker
 from lamina.planning import compact_cards, plan_bounded, request_size, target_bounded
-from lamina.production_contract import ProductionError
+from lamina.production_contract import ProductionError, validated
+from lamina.store import Workspace
 
 
 def corpus(count=32, sources=8, topics=8):
@@ -231,6 +233,54 @@ def test_duplicate_owner_gets_precise_error_and_no_silent_first_owner_policy():
     assert len(provider.calls) == 1
 
 
+def test_empty_route_section_retry_explains_how_to_preserve_overview(tmp_path):
+    ideas, units = corpus(8)
+
+    class EmptyOverview:
+        identity = "empty-overview-retry"
+
+        def __init__(self):
+            self.script = ScriptedPlanner()
+            self.requests = []
+
+        def call(self, stage, payload):
+            self.requests.append(copy.deepcopy(payload))
+            raw = self.script.response(stage, payload["instruction"], payload["input"])
+            if stage == "production_route" and "validation_feedback" not in payload:
+                raw["sections"].insert(0, section(99, []))
+            return raw
+
+    provider, tracker = EmptyOverview(), CallTracker(max_attempts=2)
+    workspace = Workspace(tmp_path)
+
+    def invoke(stage, item, instruction, shape, data, checker):
+        return tracker.call(
+            workspace,
+            provider,
+            stage,
+            item,
+            instruction,
+            shape,
+            data,
+            lambda raw: validated(checker, raw),
+            31_000,
+            workload_items=len(data.get("cards", data.get("ideas", []))),
+        )
+
+    route, _ = plan_bounded(
+        ideas, units, {"goal": "Compare conditions"}, invoke, max_bytes=30_000
+    )
+
+    route_requests = [
+        request for request in provider.requests if request["stage"] == "production_route"
+    ]
+    assert len(route_requests) == 2
+    message = route_requests[1]["validation_feedback"]["message"]
+    assert "must own at least one supplied card" in message
+    assert "overview relationships in shared_context" in message
+    assert sum(len(row["idea_ids"]) for row in route["sections"]) == len(ideas)
+
+
 def test_missing_assignment_is_repaired_only_by_callers_explicit_validation_policy():
     ideas, units = corpus(300)
     provider = ScriptedPlanner(inject="production_assign", recover=True)
@@ -244,6 +294,77 @@ def test_missing_assignment_is_repaired_only_by_callers_explicit_validation_poli
     assert sum(len(s["idea_ids"]) for s in route["sections"]) == len(ideas)
     # The planner itself added no hidden correction stage or guessed ownership.
     assert len(report["requests"]) == len(provider.calls)
+
+
+def test_summary_outline_forbids_references_and_retry_gets_actionable_feedback(tmp_path):
+    ideas, units = corpus(300)
+
+    class ReferencingSummaryOutline:
+        identity = "summary-outline-retry"
+
+        def __init__(self):
+            self.script = ScriptedPlanner()
+            self.requests = []
+            self.invalid_outline_sent = False
+
+        def call(self, stage, payload):
+            self.requests.append(copy.deepcopy(payload))
+            raw = self.script.response(stage, payload["instruction"], payload["input"])
+            if stage == "production_route" and not self.invalid_outline_sent:
+                self.invalid_outline_sent = True
+                raw["shared_context"] = [
+                    {
+                        "statement": "The summary groups are related.",
+                        "section_ids": [raw["sections"][0]["id"]],
+                        "evidence_refs": [
+                            {
+                                "idea_id": payload["input"]["ideas"][0]["id"],
+                                "evidence_index": 0,
+                            }
+                        ],
+                    }
+                ]
+            return raw
+
+    provider, tracker = ReferencingSummaryOutline(), CallTracker(max_attempts=2)
+    workspace = Workspace(tmp_path)
+
+    def invoke(stage, item, instruction, shape, data, checker):
+        return tracker.call(
+            workspace,
+            provider,
+            stage,
+            item,
+            instruction,
+            shape,
+            data,
+            lambda raw: validated(checker, raw),
+                13_000,
+            workload_items=len(data.get("cards", data.get("ideas", []))),
+        )
+
+    route, report = plan_bounded(
+        ideas, units, {"goal": "Compare conditions"}, invoke, max_bytes=12_000
+    )
+
+    assert report["mode"] == "hierarchical"
+    outline_requests = [
+        request for request in provider.requests if request["stage"] == "production_route"
+    ]
+    assert len(outline_requests) == 2
+    assert outline_requests[0]["expected_shape"]["shared_context"] == []
+    assert outline_requests[1]["validation_feedback"]["message"] == (
+        "Summary cards have no source references; return shared_context: []; "
+        "later assignment adds relationships"
+    )
+    assert sum(len(section["idea_ids"]) for section in route["sections"]) == len(ideas)
+    assignment_shapes = [
+        request["expected_shape"]
+        for request in provider.requests
+        if request["stage"] == "production_assign"
+    ]
+    assert assignment_shapes
+    assert assignment_shapes[0]["shared_context"][0]["evidence_refs"]
 
 
 def test_noncontracting_summary_fails_explicitly():

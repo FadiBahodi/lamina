@@ -86,9 +86,14 @@ class FixtureAdapter:
                 "ideas": [
                     {
                         "title": u["heading"],
-                        "explanation": u["text"],
+                        "explanation": "".join(s["text"] for s in u["spans"]),
                         "unit_ids": [u["id"]],
-                        "evidence": [{"unit_id": u["id"], "quote": u["text"]}],
+                        "evidence_refs": [
+                            {
+                                "span_id": u["spans"][0]["id"],
+                                "end_span_id": u["spans"][-1]["id"],
+                            }
+                        ],
                     }
                     for u in data["core"]
                 ]

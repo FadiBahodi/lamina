@@ -7,7 +7,7 @@ import pytest
 from lamina.call_runtime import CallTracker
 from lamina.context_budget import RequestBudget
 from lamina.evidence import ValidationFailure
-from lamina.production_contract import _SHAPES, _read_check, validated
+from lamina.production_contract import ProductionError, _SHAPES, _read_check, validated
 from lamina.source_reading import ReaderReplyValidator, read_sources, reader_input
 from lamina.source_spans import materialize_references, source_spans
 from lamina.store import Workspace, canonical
@@ -33,6 +33,10 @@ def idea(ref, title="Operating limit", **extra):
         "evidence_refs": [ref],
         **extra,
     }
+
+
+def addressed_text(row):
+    return "".join(span["text"] for span in row["spans"])
 
 
 def options(**extra):
@@ -89,7 +93,7 @@ def run_read(tmp_path, provider, units, *, tracker=None, ws=None, **overrides):
 def test_spans_preserve_abbreviations_conditions_and_unicode_offsets():
     text = "Dr. A. uses 2.5 mg, i.e. the lower amount. Only if stable.\r\n\r\nDo not repeat if K⁺ < 3.5."
     spans = source_spans("u0", text)
-    assert len(spans) == 2
+    assert len(spans) == 3
     assert "".join(text[s["start"] : s["end"]] for s in spans) == text
     result = materialize_references(
         [{"span_id": spans[0]["id"], "end_span_id": spans[-1]["id"]}],
@@ -138,7 +142,7 @@ def test_phrase_is_exact_and_unambiguous_within_its_address():
 
 def test_reader_resolves_references_and_accepts_legacy_quotes():
     owned = unit(text="first sentence. Its exception matters.\n\nAnother claim.")
-    raw = {"ideas": [idea({"span_id": "u0:s0", "end_span_id": "u0:s1"})]}
+    raw = {"ideas": [idea({"span_id": "u0:s0", "end_span_id": "u0:s2"})]}
     result = _read_check(raw, [owned], "w")
     assert result["ideas"][0]["evidence"] == [{"unit_id": "u0", "quote": owned["text"]}]
     assert result["ideas"][0]["unit_ids"] == ["u0"]
@@ -162,6 +166,8 @@ def test_source_text_occurs_once_in_reader_input():
         options(),
     )
     assert canonical(data).count(owned["text"]) == 1
+    assert "text" not in data["core"][0]
+    assert addressed_text(data["core"][0]) == owned["text"]
     assert data["core"][0]["spans"][0]["id"] == aliases[owned["id"]] + ":s0"
 
 
@@ -215,6 +221,39 @@ def test_delta_repair_retains_valid_rows_and_caches_the_merged_result(tmp_path):
     assert call() == result
     assert len(provider.requests) == 2
     assert tracker.metrics()["recovered_requests"] == 1
+
+
+def test_reader_range_repair_names_cross_unit_and_reversed_endpoints():
+    owned = [
+        unit("u0", "First sentence. Second sentence."),
+        unit("u1", "Third sentence. Fourth sentence."),
+    ]
+    raw = {
+        "ideas": [
+            idea({"span_id": "u0:s1", "end_span_id": "u1:s0"}),
+            idea(
+                {"span_id": "u1:s1", "end_span_id": "u1:s0"},
+                title="Reversed range",
+            ),
+        ]
+    }
+    validator = ReaderReplyValidator(
+        lambda value: validated(_read_check, value, owned, "w")
+    )
+
+    with pytest.raises(ValidationFailure) as failure:
+        validator(raw)
+    repair = validator.repair_request({"input": {}}, failure.value)
+
+    guidance = [
+        row["reference_guidance"][0]
+        for row in repair["input"]["repair"]["invalid_ideas"]
+    ]
+    assert "u0:s1 -> u1:s0 crosses source units" in guidance[0]
+    assert "use multiple evidence_refs" in guidance[0]
+    assert "u1:s1 -> u1:s0 is reversed" in guidance[1]
+    assert "select or reorder the endpoints" in guidance[1]
+    assert "increasing span order" in repair["validation_feedback"]["instruction"]
 
 
 def test_delta_cannot_replace_valid_rows_or_drop_unresolved_rows(tmp_path):
@@ -302,6 +341,51 @@ def test_unprofiled_reading_uses_structural_groups_and_preserves_slide_parts(tmp
     assert len(ideas) == 3
 
 
+def test_unprofiled_reading_batches_contiguous_prose_by_section(tmp_path):
+    provider = Provider()
+    rows = [
+        unit(
+            f"u{index}",
+            f"Section text {index}.",
+            section_id="section-a" if index < 10 else "section-b",
+            section_index=0 if index < 10 else 1,
+        )
+        for index in range(12)
+    ]
+    windows, ideas = run_read(tmp_path, provider, rows)
+    assert [[uid for uid in window["core"]] for window in windows] == [
+        [f"u{index}" for index in range(8)],
+        ["u8", "u9"],
+        ["u10", "u11"],
+    ]
+    assert [request["workload_items"] for request in provider.requests] == [8, 2, 2]
+    assert len(ideas) == 12
+
+
+def test_section_batching_still_obeys_complete_request_budget(tmp_path):
+    class SmallBudgetProvider(Provider):
+        def budget_for(self, stage):
+            # A deterministic fixture ceiling for the complete serialized request;
+            # it is not a supported model workload size.
+            return RequestBudget(3_250)
+
+    provider = SmallBudgetProvider()
+    rows = [
+        unit(
+            f"u{index}",
+            "A bounded paragraph with enough source text to affect the complete request. "
+            * 3,
+            section_id="section-a",
+            section_index=0,
+        )
+        for index in range(4)
+    ]
+    windows, _ = run_read(tmp_path, provider, rows)
+    assert len(windows) > 1
+    assert all(request["input"]["core"] for request in provider.requests)
+    assert all(len(canonical(request).encode()) <= 3_250 for request in provider.requests)
+
+
 def test_profile_limits_owned_span_count_independently_of_context_capacity(tmp_path):
     provider = Provider(workload=WorkloadProfile(stage="production_read", max_items=2))
     windows, ideas = run_read(tmp_path, provider, [unit("a"), unit("b"), unit("c")])
@@ -321,7 +405,7 @@ def test_cached_local_references_rebind_to_current_source_revision(tmp_path):
 def test_context_request_keeps_ownership_and_is_cached(tmp_path):
     def handler(request):
         data = request["input"]
-        if data["core"][0]["text"] == "Only in that condition." and not data["before"]:
+        if addressed_text(data["core"][0]) == "Only in that condition." and not data["before"]:
             return {
                 "context_request": {
                     "direction": "before",
@@ -341,3 +425,67 @@ def test_context_request_keeps_ownership_and_is_cached(tmp_path):
     assert ideas[1]["unit_ids"] == ["b"]
     run_read(tmp_path, provider, rows, ws=ws)
     assert len(provider.requests) == 3
+
+
+def test_context_request_adds_one_complete_adjacent_section_group(tmp_path):
+    def handler(request):
+        data = request["input"]
+        if addressed_text(data["core"][0]) == "Needs the next section." and not data["after"]:
+            return {
+                "context_request": {
+                    "direction": "after",
+                    "reason": "The next section defines the operating condition",
+                }
+            }
+        return {
+            "ideas": [idea({"span_id": row["spans"][0]["id"]}) for row in data["core"]]
+        }
+
+    provider = Provider(handler)
+    rows = [
+        unit("a", "Needs the next section.", section_id="first", section_index=0),
+        unit("b", "Condition part one.", section_id="second", section_index=1),
+        unit("c", "Condition part two.", section_id="second", section_index=1),
+        unit("d", "Later material.", section_id="third", section_index=2),
+    ]
+    windows, ideas = run_read(tmp_path, provider, rows)
+    first = next(window for window in windows if window["core"] == ["a"])
+    assert first["after"] == ["b", "c"]
+    assert first["context_requests"][0]["unit_ids"] == ["b", "c"]
+    assert next(row for row in ideas if row["unit_ids"] == ["a"])
+
+
+def test_context_requests_stop_after_two_adjacent_group_extensions(tmp_path):
+    def handler(request):
+        data = request["input"]
+        if addressed_text(data["core"][0]) == "Keep asking for context.":
+            return {
+                "context_request": {
+                    "direction": "after",
+                    "reason": "Fixture requests another source section",
+                }
+            }
+        return {
+            "ideas": [idea({"span_id": row["spans"][0]["id"]}) for row in data["core"]]
+        }
+
+    provider = Provider(handler)
+    rows = [
+        unit("a", "Keep asking for context.", section_id="first", section_index=0),
+        unit("b", "Second section.", section_id="second", section_index=1),
+        unit("c", "Third section.", section_id="third", section_index=2),
+        unit("d", "Fourth section.", section_id="fourth", section_index=3),
+    ]
+    with pytest.raises(ProductionError, match="more than two adjacent context groups"):
+        run_read(tmp_path, provider, rows)
+    requests = [
+        request
+        for request in provider.requests
+        if addressed_text(request["input"]["core"][0]) == "Keep asking for context."
+    ]
+    assert len(requests) == 3
+    assert [[addressed_text(row) for row in request["input"]["after"]] for request in requests] == [
+        [],
+        ["Second section."],
+        ["Second section.", "Third section."],
+    ]

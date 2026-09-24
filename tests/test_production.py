@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+import re
 
 import pytest
 
@@ -80,22 +81,31 @@ class FixtureProvider:
         data = payload["input"]
         if stage == "production_read":
             core = data["core"]
+            def source_text(unit):
+                return "".join(span["text"] for span in unit["spans"])
+
             response = {
                 "ideas": [
                     {
                         "title": unit["heading"],
-                        "explanation": unit["text"].split(". ")[0],
+                        "explanation": source_text(unit).split(". ")[0],
                         "unit_ids": [unit["id"]],
-                        "evidence": [
+                        **(
                             {
-                                "unit_id": unit["id"],
-                                "quote": (
-                                    "invented"
-                                    if self.bad_quote
-                                    else unit["text"].split(". ")[0] + "."
-                                ),
+                                "evidence": [
+                                    {"unit_id": unit["id"], "quote": "invented"}
+                                ]
                             }
-                        ],
+                            if self.bad_quote
+                            else {
+                                "evidence": [
+                                    {
+                                        "unit_id": unit["id"],
+                                        "quote": unit["spans"][0]["text"],
+                                    }
+                                ]
+                            }
+                        ),
                     }
                     for unit in core
                 ]
@@ -254,12 +264,41 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
         assert {row["id"] for row in by_section[f"sec_{n}"]["shared_route"]} == {
             f"sec_{j}" for j in (n - 1, n, n + 1) if 1 <= j <= 4
         }
-    assert (
-        by_section["sec_2"]["earlier_evidence_units"][0]["text"] == units["u1"]["text"]
-    )
+    addressed = by_section["sec_2"]["earlier_evidence_units"][0]["addressed_text"]
+    assert re.sub(r"\[s\d+\]", "", addressed) == units["u1"]["text"]
     assert by_section["sec_2"]["earlier_evidence_units"][0]["id"] not in {
         unit["id"] for unit in by_section["sec_2"]["assigned_units"]
     }
+
+    review_inputs = [
+        payload["input"]
+        for stage, payload in provider.requests
+        if stage == "production_review"
+    ]
+    assert review_inputs
+    for review_input in review_inputs:
+        visible = sum(
+            (review_input.get(key, []) for key in (
+                "assigned_units",
+                "earlier_evidence_units",
+                "shared_evidence_units",
+            )),
+            [],
+        )
+        assert visible
+        assert all("text" in unit and "addressed_text" not in unit for unit in visible)
+
+    write_inputs = [
+        payload["input"]
+        for stage, payload in provider.requests
+        if stage == "production_write"
+    ]
+    assert write_inputs
+    assert all(
+        "addressed_text" in unit and "text" not in unit
+        for write_input in write_inputs
+        for unit in write_input.get("assigned_units", [])
+    )
     assert by_section["sec_2"]["section"]["representation"]["kind"] == "mechanism"
     review_inputs = [
         p["input"] for stage, p in provider.requests if stage == "production_review"

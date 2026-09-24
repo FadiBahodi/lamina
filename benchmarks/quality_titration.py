@@ -72,12 +72,13 @@ class SilentOmissionProvider:
         if stage == "production_read":
             ideas = []
             for unit in data["core"]:
+                text = "".join(span["text"] for span in unit["spans"])
                 idea = {
                     "title": "Source equipment statement",
                     "explanation": (
                         "Rotor Umber has a red indicator."
-                        if "Rotor Umber does not reset" in unit["text"]
-                        else unit["text"]
+                        if "Rotor Umber does not reset" in text
+                        else text
                     ),
                     "unit_ids": [unit["id"]],
                 }
@@ -89,7 +90,7 @@ class SilentOmissionProvider:
                         }
                     ]
                 else:
-                    idea["evidence"] = [{"unit_id": unit["id"], "quote": unit["text"]}]
+                    idea["evidence"] = [{"unit_id": unit["id"], "quote": text}]
                 ideas.append(idea)
             return {"ideas": ideas}
         if stage == "production_route":

@@ -580,7 +580,7 @@ def configured_provider(path):
     data = json.loads(Path(path).read_text())
     if (
         not isinstance(data, dict)
-        or set(data) - {"default", "stages"}
+        or set(data) - {"default", "stages", "qc_report"}
         or "default" not in data
     ):
         raise ValueError("provider configuration needs default and optional stages")
@@ -604,6 +604,10 @@ def configured_provider(path):
         if transport not in {"command", "jsonl"} or set(row) - fields:
             raise ValueError("invalid adapter configuration")
         row = dict(row)
+        if row.get("workload") == "starter":
+            from .calibration import starter_workloads
+
+            row["workload"] = starter_workloads()
         if isinstance(row.get("workload"), dict):
             row["workload"] = json.loads(json.dumps(row["workload"]))
             for profile in row["workload"].values():
@@ -626,7 +630,13 @@ def configured_provider(path):
     stages = data.get("stages", {})
     if not isinstance(stages, dict) or any(not isinstance(k, str) for k in stages):
         raise ValueError("stages must map stage names to adapter configurations")
-    return StageProvider(make(data["default"]), {k: make(v) for k, v in stages.items()})
+    provider = StageProvider(make(data["default"]), {k: make(v) for k, v in stages.items()})
+    if "qc_report" in data:
+        if not isinstance(data["qc_report"], str):
+            provider.close()
+            raise ValueError("qc_report must be a report path")
+        provider.qc_report = str((Path(path).resolve().parent / data["qc_report"]).resolve())
+    return provider
 
 
 class DemoProvider:

@@ -25,6 +25,43 @@ def parser() -> argparse.ArgumentParser:
     )
     cli.add_argument("--version", action="version", version=__version__)
     commands = cli.add_subparsers(dest="command", required=True)
+    calibration = commands.add_parser(
+        "calibrate",
+        help="Measure workload settings on your model and save passing profiles",
+    )
+    calibration.add_argument("--models", required=True, type=Path)
+    calibration.add_argument("--output", required=True, type=Path)
+    calibration.add_argument(
+        "--stage",
+        choices=["production_read", "production_write"],
+        default="production_read",
+    )
+    calibration.add_argument(
+        "--limits",
+        default="12,24,48",
+        help="Comma-separated item limits, or token limits with --dimension",
+    )
+    calibration.add_argument(
+        "--dimension", choices=["max_items", "max_input_tokens"], default="max_items"
+    )
+    calibration.add_argument("--replicates", type=int, default=3)
+    calibration.add_argument(
+        "--load",
+        type=int,
+        default=30,
+        help="Background paragraphs in the bundled corpus",
+    )
+    calibration.add_argument(
+        "--corpus",
+        type=Path,
+        help="JSON manifest with source paths, brief and lexical canaries",
+    )
+    calibration.add_argument("--minimum-fraction", type=float, default=1.0)
+    calibration.add_argument("--maximum-counterfacts", type=int, default=0)
+    starter = commands.add_parser(
+        "starter-profile", help="Write initial per-stage workload settings"
+    )
+    starter.add_argument("--output", type=Path, required=True)
     ingest = commands.add_parser(
         "ingest", help="Import user-owned documents with stable provenance"
     )
@@ -282,7 +319,35 @@ def main(argv: list[str] | None = None) -> int:
         return provider
 
     try:
-        if args.command == "ingest":
+        if args.command == "starter-profile":
+            from .calibration import starter_workloads
+
+            with args.output.open("x") as stream:
+                json.dump(starter_workloads(), stream, indent=2)
+                stream.write("\n")
+            result = {"output": str(args.output), "basis": "configured"}
+        elif args.command == "calibrate":
+            from .calibration import calibrate, read_corpus, write_model_configuration
+            from .providers import configured_provider
+
+            provider = own(configured_provider(args.models))
+            result = calibrate(
+                provider,
+                args.output,
+                stage=args.stage,
+                limits=tuple(int(value) for value in args.limits.split(",")),
+                dimension=args.dimension,
+                replicates=args.replicates,
+                load=args.load,
+                corpus=read_corpus(args.corpus) if args.corpus else None,
+                minimum_fraction=args.minimum_fraction,
+                maximum_counterfacts=args.maximum_counterfacts,
+                progress=lambda row: print(
+                    json.dumps(row), file=sys.stderr, flush=True
+                ),
+            )
+            result["models"] = write_model_configuration(args.models, result)
+        elif args.command == "ingest":
             result = ingest_paths(
                 args.paths, Workspace(args.workspace), role=args.role, ocr=args.ocr
             )
@@ -569,7 +634,7 @@ def main(argv: list[str] | None = None) -> int:
                 server.server_close()
             return 0
         print(json.dumps(result, indent=2, ensure_ascii=False))
-        return 0
+        return 1 if args.command == "calibrate" and not result["promoted"] else 0
     except (OSError, ValueError, RuntimeError, TimeoutError) as exc:
         print(f"lamina: {exc}", file=sys.stderr)
         return 1

@@ -728,14 +728,23 @@ def _write_request(plan, section, context=None, note=None):
     if plan.get("retrieval_targets"):
         shape["used_target_ids"] = ["assigned canonical target id"]
     if opts["format"] == "assessment":
-        shape.pop("body")
-        shape.update(candidate_body="Markdown str", marking_body="Markdown str")
+        shape.pop("body_marked")
+        shape.update(
+            candidate_body_marked="Markdown str with source markers; markers are removed before candidate export",
+            marking_body_marked="Markdown str with source markers; markers are removed before examiner export",
+        )
     instruction = (
         "Write the finished section from its assigned sources or ideas. The outline contains this section, "
         "its neighbors and declared dependencies; other writers' future prose is unavailable. "
         + _FORM[opts["format"]]
         + " Follow the planned representation and requirements. Preserve qualifications and conflicting source "
-        "claims. Return claims linking exact body spans to supporting original quotes; account for assigned "
+        "claims. Source passages are prefixed with compact span aliases such as [s3]. Add [s3] or a same-unit "
+        "range such as [s3-s5] immediately after each source-supported statement. "
+        "Use only s-number source aliases inside markers. Put idea IDs only in used_idea_ids, never in citations. "
+        "Escape literal bracket text that resembles a source marker with a Markdown backslash. "
+        "Return body_marked (or both "
+        "candidate_body_marked and marking_body_marked for an assessment); Lamina removes markers and derives "
+        "claim links and exact quotations. Account for assigned "
         "material. Historical source claims remain historical; supplements cannot silently override authority. "
         + (
             "Preserve each assigned retrieval target's prompt and answer groups. Report used_target_ids exactly. "
@@ -752,7 +761,25 @@ _REVIEW_INSTRUCTION = (
     "omissions and contradictions. used_idea_ids and claims are writer reports; inspect their "
     "meaning and support. Flag unsupported claims, missing assignment meaning, broken conditions, "
     "answer leakage and unanswerable prompts. Preserve candidate/marking boundaries. "
+    'Return {"findings": []} when there is no material defect. Each finding must identify '
+    "a specific change needed; keep approval statements and style preferences out of findings. "
 )
+
+
+def _review_text_context(bound, bound_units):
+    """Show reviewers the exact text their quote contract validates.
+
+    Writers and repairers need inline span aliases for marker output. Reviewers
+    still return legacy exact quotations, so exposing alias-injected text asks
+    them to copy a string that the validator will reject. Unit IDs remain local
+    and canonical; only the source-text presentation differs by stage.
+    """
+    for key in ("assigned_units", "earlier_evidence_units", "shared_evidence_units"):
+        for row in bound.get(key, []):
+            unit = bound_units[row["id"]]
+            row["text"] = unit["text"]
+            row.pop("addressed_text", None)
+    return bound
 
 
 def _section_capacity(plan, section, provider, options, context=None):
@@ -766,7 +793,8 @@ def _section_capacity(plan, section, provider, options, context=None):
     from .source_reading import envelope, request_budget
 
     instruction, shape, data, units = _write_request(plan, section, context)
-    bound, _, _ = bind_context(data, units)
+    bound, bound_units, _ = bind_context(data, units)
+    review_bound = _review_text_context(copy.deepcopy(bound), bound_units)
     items = _section_items(section)
     requests = {
         "production_write": envelope(
@@ -776,12 +804,12 @@ def _section_capacity(plan, section, provider, options, context=None):
             "production_review",
             _REVIEW_INSTRUCTION + _FORM[options["format"]],
             _SHAPES["production_review"],
-            {**bound, "draft": {}},
+            {**review_bound, "draft": {}},
             workload_items=items,
         ),
         "production_repair": envelope(
             "production_repair",
-            "Repair this section's concrete findings. Preserve supported work and update claim links. "
+            "Repair this section's concrete findings. Preserve supported work and update inline source markers. "
             + _FORM[options["format"]],
             shape,
             {
@@ -892,6 +920,8 @@ def run_production(
         from .context_binding import bind_context, restore_references
 
         bound, bound_units, reverse = bind_context(data, units)
+        if stage == "production_review":
+            bound = _review_text_context(bound, bound_units)
         result = tracker.call(
             workspace,
             provider,
@@ -980,14 +1010,17 @@ def run_production(
         if plan.get("retrieval_targets"):
             shape["used_target_ids"] = ["assigned canonical target id"]
         if opts["format"] == "assessment":
-            shape.pop("body")
+            shape.pop("body_marked")
             shape.update(
-                {"candidate_body": "Markdown str", "marking_body": "Markdown str"}
+                {
+                    "candidate_body_marked": "Markdown str with source markers; markers are removed before candidate export",
+                    "marking_body_marked": "Markdown str with source markers; markers are removed before examiner export",
+                }
             )
         return section_call(
             "production_repair",
             section,
-            "Repair this section's concrete findings. Preserve supported work and update claim links. "
+            "Repair this section's concrete findings. Preserve supported work and update inline source markers. "
             + _FORM[opts["format"]],
             shape,
             data,
@@ -1166,6 +1199,18 @@ def run_production(
     from .verification import coverage_report
 
     receipt["coverage"] = coverage_report(plan, authored)
+    from .calibration import quality_status
+
+    receipt["quality_control"] = quality_status(
+        provider,
+        (
+            "production_read",
+            "production_route",
+            "production_write",
+            "production_review",
+            "production_repair",
+        ),
+    )
     return receipt
 
 

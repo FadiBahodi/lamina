@@ -100,7 +100,7 @@ Code can establish that:
 
 Model review asks whether a draft lost assigned meaning, changed a condition, introduced an unsupported claim or leaked an answer. Optional document review compares completed neighboring or explicitly related sections. These checks can miss defects. Receipts therefore retain missing claim maps, unperformed comparisons, unresolved findings and `semantic_recall: "unmeasured"`.
 
-An independent quality experiment must follow important facts through parsing, extraction, assignment and finished output. The included scripted fixtures test information flow and known canaries. They do not establish how a live model handles unfamiliar documents.
+Quality experiments follow selected facts through extraction, assignment and finished output. [Live model results](live-model-evaluation.md) record the actual calls, failed trials and output checks. The scripted fixtures isolate scheduling and injected failures.
 
 ## Current boundaries
 

@@ -1,16 +1,20 @@
 # Systems benchmarks
 
-## Current workflow and scheduling checks
+## Live model runs
 
-The current [mixed-document evaluation](optimization-evidence.md) imports five PDFs and three PowerPoint decks, then exercises direct, planned and supplied-assignment workflows through writing, review, repair and source revision. Its [raw result](../benchmarks/results/workflow-matrix.json) records each stage. Responses and delays are scripted; no live model quality, billing or latency is measured.
+The September 24 [model evaluation](live-model-evaluation.md) records actual Gemini calls on clinical source material, including failed trials, token usage and the changes those failures prompted. The [calibration guide](calibration.md) explains how to run the same pipeline on your own material.
 
-The [quality evaluation](quality-evaluation.md) separately checks known facts through extraction, assignment and finished prose. Its [scripted silent-omission result](../benchmarks/results/quality-silent-omission.json) demonstrates a failure that successful execution does not catch: every source unit is cited and the engine returns `ready`, but a negation disappears and only five of six canaries survive. The oracle catches this at both tested background loads. This validates detection of the injected defect; no real model's preservation rate is measured.
+## Workflow and scheduling fixtures
+
+The current [mixed-document evaluation](optimization-evidence.md) imports five PDFs and three PowerPoint decks, then exercises direct, planned and supplied-assignment workflows through writing, review, repair and source revision. Its [raw result](../benchmarks/results/workflow-matrix.json) records each stage. Responses and delays in this fixture are scripted. Live runs are reported separately above.
+
+The [quality evaluation](quality-evaluation.md) separately checks known facts through extraction, assignment and finished prose. Its [scripted silent-omission result](../benchmarks/results/quality-silent-omission.json) demonstrates a failure that successful execution does not catch: every source unit is cited and the engine returns `ready`, but a negation disappears and only five of six canaries survive. The oracle catches this at both tested background loads. This checks detection of the injected defect.
 
 The [finite-capacity scheduling result](../benchmarks/results/execution-scaling.json) compares identical work and worker limits with variable service times and injected failures. Across three seeds, the median barrier/chain ratios were 1.35 for the variable-call fixture, 1.46 with one reviewer slot, and 1.36 with failures. A constructed case reverses the result: barriers complete in nine service-time units and chains in ten. Earlier completed sections and earlier complete documents are different outcomes.
 
 On a reversed 1,024-node chain, adjacency construction, topological validation and depth ranking took 1.14 ms versus 16.65 ms for repeated readiness scans on this machine. This measures graph bookkeeping; inference time is excluded. Reproduce with `PYTHONPATH=src python benchmarks/execution_scaling.py --output RESULT.json`.
 
-The [25,000-word fixture result](../benchmarks/results/source-workflows-current.json) was regenerated with production protocol revision 6. It makes 22 cold calls (one read, one route, ten writes and ten reviews), zero repeat calls and two calls for one section revision. Reader source exposure is 1.00×. Its scripted provider explicitly declares a configured ceiling of 100 items per stage and returns fixed short ideas; it has no real model output limit. The single reader call measures this finite oracle's mechanics and provides no evidence for a suitable textbook batch size. Production operators must supply their own stage policies, with measured preservation checks when claiming an observed operating range.
+The [25,000-word fixture result](../benchmarks/results/source-workflows-current.json) was regenerated with production protocol revision 6. It makes 22 cold calls (one read, one route, ten writes and ten reviews), zero repeat calls and two calls for one section revision. Reader source exposure is 1.00×. Its scripted provider explicitly declares a configured ceiling of 100 items per stage and returns fixed short ideas; it has no real model output limit. The single reader call measures this finite oracle's mechanics and provides no evidence for a suitable textbook batch size. The runtime now supplies starter policies and a calibration command; the older fixture remains useful for comparing execution mechanics.
 
 ## Earlier measurements
 

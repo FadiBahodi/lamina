@@ -1,8 +1,8 @@
 """Deterministic addresses into unchanged source text.
 
-Spans follow blank-line paragraph boundaries. Tables, list blocks and other
-parser-owned structures stay intact. These are text addresses, not sentences,
-claims, or an estimate of how much meaning an extraction preserved.
+Prose spans use conservative sentence boundaries inside parser-owned units.
+Tables, list blocks and other atomic structures stay intact. Boundaries make
+source pointers convenient; exact offsets and source text remain authoritative.
 """
 
 from __future__ import annotations
@@ -18,13 +18,83 @@ _ATOMIC_KINDS = {
     "bullet_list",
     "ordered_list",
     "code",
+    "code_block",
     "fence",
     "html_block",
 }
 
+_ABBREVIATIONS = {
+    "approx",
+    "dept",
+    "dr",
+    "e.g",
+    "etc",
+    "fig",
+    "i.e",
+    "mr",
+    "mrs",
+    "ms",
+    "no",
+    "prof",
+    "st",
+    "vs",
+}
+
+
+def _sentence_boundaries(text: str, start: int, end: int) -> list[int]:
+    """Return conservative ends, attaching whitespace to the prior sentence.
+
+    This deliberately leaves uncertain abbreviations and lowercase continuations
+    together. A missed boundary only produces a broader address; source offsets
+    and materialized text do not change.
+    """
+    boundaries = []
+    position = start
+    while position < end:
+        if text[position] not in ".!?":
+            position += 1
+            continue
+        punctuation_start = position
+        while position + 1 < end and text[position + 1] in ".!?":
+            position += 1
+        punctuation_end = position + 1
+        while punctuation_end < end and text[punctuation_end] in '\"\'”’)]}':
+            punctuation_end += 1
+        if punctuation_end < end and not text[punctuation_end].isspace():
+            position += 1
+            continue
+        prefix = text[start : position + 1]
+        if text[position] == ".":
+            word = re.search(r"([A-Za-z]+(?:\.[A-Za-z]+)*)\.$", prefix)
+            token = word.group(1).lower() if word else ""
+            if token in _ABBREVIATIONS or (len(token) == 1 and token.isalpha()):
+                position += 1
+                continue
+            if (
+                punctuation_start > start
+                and punctuation_start + 1 < end
+                and text[punctuation_start - 1].isdigit()
+                and text[punctuation_start + 1].isdigit()
+            ):
+                position += 1
+                continue
+        next_start = punctuation_end
+        while next_start < end and text[next_start].isspace():
+            next_start += 1
+        if next_start < end and text[next_start].islower():
+            position += 1
+            continue
+        boundary = next_start if next_start < end else end
+        if boundary > start and boundary not in boundaries:
+            boundaries.append(boundary)
+        position = max(position + 1, next_start)
+    if not boundaries or boundaries[-1] != end:
+        boundaries.append(end)
+    return boundaries
+
 
 def source_spans(unit_id: str, text: str, kind: str | None = None) -> list[dict]:
-    """Address complete paragraphs, retaining every original character once.
+    """Address prose sentences, retaining every original character once.
 
     Separating whitespace belongs to the preceding paragraph. A reference to a
     contiguous range therefore reconstructs the original source byte-for-byte
@@ -32,13 +102,20 @@ def source_spans(unit_id: str, text: str, kind: str | None = None) -> list[dict]
     """
     if not text:
         return []
-    ends = (
-        []
-        if kind in _ATOMIC_KINDS
-        else [match.end() for match in _PARAGRAPH_BREAK.finditer(text)]
-    )
-    if not ends or ends[-1] != len(text):
-        ends.append(len(text))
+    if kind in _ATOMIC_KINDS:
+        ends = [len(text)]
+    else:
+        paragraphs, paragraph_start = [], 0
+        for match in _PARAGRAPH_BREAK.finditer(text):
+            paragraphs.append((paragraph_start, match.end()))
+            paragraph_start = match.end()
+        if paragraph_start < len(text):
+            paragraphs.append((paragraph_start, len(text)))
+        ends = [
+            boundary
+            for paragraph_start, paragraph_end in paragraphs
+            for boundary in _sentence_boundaries(text, paragraph_start, paragraph_end)
+        ]
     result, start = [], 0
     for end in ends:
         if end > start:

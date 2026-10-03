@@ -507,13 +507,20 @@ def main(argv: list[str] | None = None) -> int:
                 options["section_notes"] = json.loads(
                     args.section_notes.read_text(encoding="utf-8")
                 )
-            receipt = run_production(workspace, provider, plan, options)
             audio_provider = own(
                 make_provider(
                     args.audio_adapter,
                     version=args.audio_adapter_version,
                     timeout=args.timeout,
                 )
+            )
+            receipt = run_production(
+                workspace,
+                provider,
+                plan,
+                options,
+                audio_provider=audio_provider,
+                audio_output=args.output,
             )
             links = deliver_production(
                 workspace,

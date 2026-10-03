@@ -301,11 +301,14 @@ def _read_and_plan(
             envelope(stage, instruction, shape, data, workload_items=items)
         )
 
+    from .production_contract import podcast_plan
+
     shared = {
         "format": opts["format"],
         "sources": sources,
         "form_exemplars": form_exemplars,
         "experience": selection["observations"],
+        **({"podcast": podcast_plan(opts)} if podcast_plan(opts) else {}),
     }
     workers = min(opts["workers"], opts["reader_workers"])
     relation_report = None
@@ -472,10 +475,16 @@ def plan_production(
         capacity = _section_capacity(
             candidate, direct_route["sections"][0], provider, opts
         )
+        multi_episode = (
+            opts["format"] == "podcast-script"
+            and opts["episodes"] != "auto"
+            and opts["episodes"] > 1
+        )
         selected_workflow = (
             "direct"
             if not opts["retrieval_targets"]
             and not opts["compare_relations"]
+            and not multi_episode
             and capacity["fits"]
             else "planned"
         )
@@ -795,12 +804,44 @@ def _markdown(route: dict, sections: list[dict], fmt: str) -> str:
         )
         return "# Practice assessment\n\n" + candidate + "\n"
     title = "# " + route["title"]
+    by_section = {row["id"]: row for row in route["sections"]}
+    episodes = {by_section.get(s["id"], {}).get("episode") for s in sections}
+    if fmt == "podcast-script" and len(episodes - {None}) > 1:
+        parts, current = [], None
+        for s in sections:
+            number = by_section.get(s["id"], {}).get("episode", 1)
+            if number != current:
+                parts.append(f"## Episode {number}")
+                current = number
+            parts.append("### " + s["title"] + "\n\n" + s["body"])
+        return title + "\n\n" + "\n\n".join(parts) + "\n"
     return (
         title
         + "\n\n"
         + "\n\n".join("## " + s["title"] + "\n\n" + s["body"] for s in sections)
         + "\n"
     )
+
+
+def episode_scripts(route: dict, sections: list[dict]) -> list[dict]:
+    """One script per episode, in listening order, with its sections' bodies."""
+    by_section = {row["id"]: row for row in route["sections"]}
+    episodes = {}
+    for s in sections:
+        number = by_section.get(s["id"], {}).get("episode", 1)
+        row = episodes.setdefault(
+            number,
+            {"number": number, "title": f"Episode {number}", "section_ids": [], "markdown": ""},
+        )
+        row["section_ids"].append(s["id"])
+        row["markdown"] += "## " + s["title"] + "\n\n" + s["body"] + "\n\n"
+    result = []
+    for number in sorted(episodes):
+        row = episodes[number]
+        row["markdown"] = f"# {route['title']} — {row['title']}\n\n" + row["markdown"].rstrip() + "\n"
+        row["words"] = len(row["markdown"].split())
+        result.append(row)
+    return result
 
 
 def _write_request(plan, section, context=None, note=None):
@@ -830,6 +871,13 @@ def _write_request(plan, section, context=None, note=None):
         "Write the finished section from its assigned sources or ideas. The outline contains this section, "
         "its neighbors and declared dependencies; other writers' future prose is unavailable. "
         + _FORM[opts["format"]]
+        + (
+            " This section belongs to episode "
+            f"{section.get('episode', 1)} and should take about {section['target_words']} spoken words; "
+            "write for the ear, with a clear opening and a landing, and no headings inside the body. "
+            if opts["format"] == "podcast-script" and section.get("target_words")
+            else ""
+        )
         + " Follow the planned representation and requirements. Preserve qualifications and conflicting source "
         "claims. Source passages are prefixed with compact span aliases such as [s3]. Add [s3] or a same-unit "
         "range such as [s3-s5] immediately after each source-supported statement. "
@@ -1348,6 +1396,11 @@ def run_production(
             examiner_markdown += "\n" + retrieval_markdown
     elif retrieval_markdown:
         markdown += "\n" + retrieval_markdown
+    by_section_episode = {
+        row["id"]: row["episode"]
+        for row in plan["route"]["sections"]
+        if row.get("episode") is not None
+    }
     document_checks = None
     if opts["document_review"]:
         from .verification import check_document_sections
@@ -1428,7 +1481,17 @@ def run_production(
         "markdown": markdown,
         "candidate_markdown": markdown if opts["format"] == "assessment" else None,
         "examiner_markdown": examiner_markdown,
-        "sections": authored,
+        "sections": [
+            {**row, "episode": by_section_episode[row["id"]]}
+            if row["id"] in by_section_episode
+            else row
+            for row in authored
+        ],
+        "episodes": (
+            episode_scripts(output_route, authored)
+            if opts["format"] == "podcast-script"
+            else None
+        ),
         "retrieval_targets": plan.get("retrieval_targets"),
         "retrieval_markdown": retrieval_markdown,
         "initial_findings": initial_findings,

@@ -232,6 +232,15 @@ def parser() -> argparse.ArgumentParser:
         help="Sweep route: similarity at or above which a later card is suppressed as a duplicate (default by method)",
     )
     produce.add_argument(
+        "--episodes",
+        help="Podcast: number of episodes (1–64) or auto (default) to size them from the material",
+    )
+    produce.add_argument(
+        "--episode-minutes",
+        type=int,
+        help="Podcast: target listening time per episode in minutes (default 20; about 150 spoken words per minute)",
+    )
+    produce.add_argument(
         "--audio-when",
         choices=["ready", "any"],
         default="any",
@@ -472,6 +481,12 @@ def main(argv: list[str] | None = None) -> int:
                     "reading_failures": args.reading_failures,
                     "audit_rate": args.audit_rate,
                     "dedup_threshold": args.dedup_threshold,
+                    "episodes": (
+                        None
+                        if args.episodes is None
+                        else ("auto" if args.episodes == "auto" else int(args.episodes))
+                    ),
+                    "episode_minutes": args.episode_minutes,
                     "source_policy": (
                         json.loads(args.source_policy.read_text(encoding="utf-8"))
                         if args.source_policy

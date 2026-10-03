@@ -77,6 +77,13 @@ def source_route(task, units, options):
             {"idea_id": row.get("unit_id"), "reason": row.get("reason")}
         )
     route = _route_check(raw, {u["id"] for u in units}, {u["id"]: u for u in units})
+    from .production_contract import episode_check, podcast_plan
+
+    plan = podcast_plan(options)
+    if plan:
+        for section in route["sections"]:
+            section.setdefault("episode", 1)
+        route = episode_check(route, {**plan, "episodes": "auto"})
     for section in route["sections"]:
         section["unit_ids"] = section["idea_ids"]
         section["context_unit_ids"] = context[section["id"]]

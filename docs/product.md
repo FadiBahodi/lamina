@@ -1,6 +1,6 @@
 # Building useful artifacts from source collections
 
-Lamina turns source files into reference documents, guides, podcast scripts and assessments. A project starts with files, a description of the intended result and a configured model adapter. It finishes with an artifact, its source-aware plan and a receipt that records model calls, reuse, findings and known gaps.
+Lamina turns source files into cards, reference documents, guides, podcast scripts and assessments. A project starts with files, a description of the intended result and a configured model adapter. It finishes with an artifact, its source-aware plan and a receipt that records model calls, reuse, findings and known gaps.
 
 The main production path serves people who need to make a substantial artifact from more material than one model call should handle. Lamina preserves source structure, assigns material to bounded tasks, gives each task the context it needs and saves validated results for later revision. Models decide meaning and editorial form. Code controls source identity, ownership, capacity, execution and exact accounting.
 
@@ -14,14 +14,15 @@ Suppose an engineering team has several manuals and incident reviews about safe 
 4. Each writer receives its owned material, the original source passages and declared context. A reviewer checks the completed section against the same assignment and sources. A concrete finding can trigger one repair and recheck.
 5. Lamina exports Markdown, HTML and optional PDF, together with the plan and receipt. Repeating an unchanged request reuses its validated result. A local section revision can leave unrelated requests unchanged.
 
-The same engine supports assessments and listening scripts. Assessments separate candidate material from examiner material and run a blind solve plus a separate judging call. A configured speech adapter can turn a completed podcast script into a checked PCM WAV. These are production boundaries: the exported assessment is not a live oral-exam application, and a structurally valid WAV still needs listening review.
+The same engine supports assessments and listening scripts. Assessments separate candidate material from examiner material and run a blind solve plus a separate judging call. A configured speech adapter can render sections as they leave review and assemble them into episode WAV files. These are production boundaries: the exported assessment is not a live oral-exam application, and a structurally valid WAV still needs listening review.
 
-## Three production routes
+## Production routes
 
 `workflow="auto"` selects the simplest route that fits the declared request and workload limits.
 
 | Route | When to use it | Model work before writing |
 | --- | --- | --- |
+| Sweep | You want cards directly from the source. | Readers write cards; local duplicate suppression and a sampled audit follow. |
 | Direct | The complete source assignment and review request fit one call. | None. The writer works from the original source units. |
 | Planned | The collection needs source reading, cross-file organization or retrieval-target reconciliation. | Readers produce source-addressed ideas; a planner creates sections and assigns every idea or records an omission. |
 | Assigned | A person or upstream agent already knows the sections and source ownership. | None inside Lamina. The supplied assignments must account for every selected factual unit. |
@@ -48,7 +49,7 @@ These records establish specific mechanical facts. They can show that a source u
 
 ## Interfaces
 
-The local Projects interface, `lamina produce` and the Python production API use the same source-to-artifact engine. The browser app binds to loopback, stores project state locally and uses the adapter configured at startup. Selected source text may be sent to that adapter's model service.
+The local Projects interface, `lamina produce` and the Python production API use the same source-to-artifact engine. The browser app binds to loopback, stores project state locally and uses the adapter configured at startup. The public website provides installation instructions and documentation. Selected source text may be sent to that adapter's model service.
 
 The separate [Method runtime](methods.md) runs declared dependency graphs with task-field selection, completed-result inputs, resource lanes and caching. It is a general JSON-object workflow runtime. It does not automatically add Production's source ownership, evidence resolution, section review or artifact contracts; a method author must define the behavior its nodes require.
 

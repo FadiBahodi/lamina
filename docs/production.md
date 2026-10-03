@@ -65,7 +65,7 @@ Writers place compact source markers after supported statements. Lamina resolves
 | `format` | `document` | Also `guide`, `assessment`, `podcast-script`, `cards`; selects the output contract. `cards` selects the sweep workflow. |
 | `workflow` | `auto` | Selects the route above. |
 | `reading` | `task` | Reads for the current brief. `reusable` explicitly shares an unassessed inventory across goals. |
-| `reader_context_spans` | `6` | Boundary halo: every reader also sees the last *n* sentence spans of the preceding unit and the first *n* of the following unit, with their real span IDs, so a boundary cut is visible without a second serial call (0–64; shrinks to fit the budget). `0` relies on context requests alone. See [flow geometry](flow-geometry.md#4-what-the-halo-was-for). |
+| `reader_context_spans` | `6` | Boundary halo: every reader also sees the last *n* sentence spans of the preceding unit and the first *n* of the following unit, with their real span IDs, so a boundary cut is visible without a second serial call (0–64; shrinks to fit the budget). `0` relies on context requests alone. See [halo tradeoffs](flow-geometry.md#why-a-small-halo-can-help). |
 | `reading_failures` | `continue` | `continue` plans from the successful reads, records unresolved windows in `plan.planning.unresolved_reads` and the receipt, and leaves a planned receipt in `review`. `abort` stops the plan on any unresolved read. |
 | `audit_rate` | `0.25` | Sweep: fraction of reader windows that receive one source-centred audit call (0–1; sampling is deterministic per window). |
 | `dedup_threshold` | by method | Sweep: similarity at or above which a later card is suppressed as a duplicate (0.92 for embeddings, 0.80 for TF-IDF). |

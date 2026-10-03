@@ -142,11 +142,6 @@
 .pb-save-note-fields label { display: grid; gap: 5px; color: #4c6875; font-size: 11px; font-weight: 700; }
 .pb-save-note-fields textarea { width: 100%; min-height: 80px; border: 1px solid #a6bac3; border-radius: 3px; padding: 9px; color: #17232b; font: 12px/1.45 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; resize: vertical; }
 .pb-save-feedback { display: inline-block; margin-left: 10px; color: #526e79; font-size: 12px; }
-.pb-replay { display: flex; justify-content: space-between; align-items: center; gap: 20px; border-top: 1px solid #cbd5da; padding: 18px 5px; }
-.pb-replay strong { font-size: 14px; }
-.pb-replay p { color: #647983; font-size: 12px; margin-top: 3px; }
-.pb-replay-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; }
-.pb-replay-note { border-left: 3px solid #5aa7bb; background: #eff7f9; padding: 11px 13px; margin: 0 0 19px; color: #456572; font-size: 12px; line-height: 1.5; }
 .pb-recent { border: 1px solid #d0dce1; background: #fafcfc; padding: 13px 18px; }
 .pb-recent[hidden] { display: none; }
 .pb-recent>summary { color: #336c82; font-size: 13px; font-weight: 700; cursor: pointer; }
@@ -169,8 +164,6 @@
   .pb-field { grid-template-columns: 1fr; gap: 7px; }
   .pb-capacity-fields,.pb-context-fields { grid-template-columns: 1fr; }
   .pb-worker input { max-width: none; }
-  .pb-replay { align-items: start; flex-direction: column; }
-  .pb-replay-actions { width: 100%; }
   .pb-upload-status { display: block; margin: 8px 0 0; }
   .pb-revision-feedback { display: block; margin: 8px 0 0; }
   .pb-saved-notes { padding: 17px 20px; }

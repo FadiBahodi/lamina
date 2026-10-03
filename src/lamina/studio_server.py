@@ -582,7 +582,6 @@ class StudioHandler(BaseHTTPRequestHandler):
             r"/api/projects/([0-9a-f]{32})/(revise|resume|observation)", path
         )
         if not project_action and path not in {
-            "/api/project-example",
             "/api/projects",
             "/api/sources",
             "/api/source-upload",
@@ -598,21 +597,7 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(201, self._stream_source())
                 return
             body = self._body()
-            if path == "/api/project-example":
-                if body:
-                    raise ValueError("The original example takes no custom input.")
-                from .project_api import run_project_example
-
-                run = run_project_example(self.server)
-                self._json(
-                    201,
-                    {
-                        "id": run["id"],
-                        "status": run["status"],
-                        "url": f"/api/runs/{run['id']}",
-                    },
-                )
-            elif path == "/api/projects" or project_action:
+            if path == "/api/projects" or project_action:
                 from .project_api import start_project
 
                 if project_action:
@@ -631,7 +616,7 @@ class StudioHandler(BaseHTTPRequestHandler):
                         return
                     if parent.get("example"):
                         raise ValueError(
-                            "Run the original example again, or start your own project with a model adapter."
+                            "This saved fixture cannot be revised. Start a project with source files and a model adapter."
                         )
                     if project_action[2] == "revise":
                         if set(body) != {"section_notes"}:

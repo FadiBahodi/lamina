@@ -1255,7 +1255,32 @@ def run_production(
                 workload_items=envelope["workload_items"],
             )
 
-        values = call_sections(
+        def finish(job, value):
+            # Match the single-section contract: insufficient review capacity
+            # remains explicit unfinished verification, even in deferred calls.
+            if stage == "production_review":
+                from .context_budget import ContextBudgetError
+
+                if isinstance(value, ProductionError) and isinstance(
+                    value.__cause__, ContextBudgetError
+                ):
+                    value = {
+                        "findings": [
+                            {
+                                "issue": "Review was not performed: " + str(value),
+                                "repair_instruction": "Use a reviewer with sufficient capacity or revise the section boundaries.",
+                                "evidence": [],
+                                "verification_unperformed": True,
+                            }
+                        ]
+                    }
+            return (
+                value
+                if isinstance(value, Exception)
+                else restore_references(value, job["reverse"])
+            )
+
+        return call_sections(
             jobs,
             workspace=workspace,
             provider=provider,
@@ -1263,34 +1288,8 @@ def run_production(
             stage=stage,
             max_bytes=request_limit(opts),
             single=single,
+            finish=finish,
         )
-        # Match the single-section contract: insufficient review capacity is
-        # visible unfinished verification, not a failed writer or approval.
-        if stage == "production_review":
-            from .context_budget import ContextBudgetError
-
-            values = [
-                {
-                    "findings": [
-                        {
-                            "issue": "Review was not performed: " + str(value),
-                            "repair_instruction": "Use a reviewer with sufficient capacity or revise the section boundaries.",
-                            "evidence": [],
-                            "verification_unperformed": True,
-                        }
-                    ]
-                }
-                if isinstance(value, ProductionError)
-                and isinstance(value.__cause__, ContextBudgetError)
-                else value
-                for value in values
-            ]
-        return [
-            value
-            if isinstance(value, Exception)
-            else restore_references(value, job["reverse"])
-            for value, job in zip(values, jobs)
-        ]
 
     first_useful_ms = None
     speech = _SpeechLane(workspace, audio_provider, audio_output, opts, progress)

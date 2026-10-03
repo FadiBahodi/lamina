@@ -2,40 +2,29 @@
 
 A method describes the jobs for a task: what each worker receives, which completed results it needs, and how many jobs can run at once. Independent readers can work together; an editor starts when their results are ready. Repeated inputs reuse cached results. Use [procedures](procedures.md) to configure the structured lesson pipeline.
 
-## Try it
+## Run a method
 
-From the repository root with Python 3.11+ and `python -m pip install -e .`:
+Configure a [model adapter](adapters.md), then validate a method file:
 
 ```sh
 lamina method validate examples/methods/field-guide.json
-python examples/methods/demo.py
 ```
 
-The [method JSON](../examples/methods/field-guide.json) runs `site-read` and `plant-read` before `guide`. The [offline demo](../examples/methods/demo.py) runs three tasks in a temporary workspace. When site notes change, Lamina reruns the site reader and guide and reuses the plant reader.
+The [field-guide definition](../examples/methods/field-guide.json) contains two independent readers, `site-read` and `plant-read`, followed by `guide`, which receives both completed results. Adapt its instructions and task fields to your work. Save matching inputs as `garden-task.json`:
 
-For a CLI run, create `garden-task.json` with `{"site_notes":"morning shade, one tap","plant_notes":"tomatoes and mint","audience":"Saturday volunteers"}`. Save this echo adapter as `my_method_adapter.py`:
-
-```python
-import json
-import sys
-
-request = json.load(sys.stdin)
-if request.get("protocol") != "lamina-stage-1" or request.get("stage") != "method_node":
-    raise ValueError("unexpected stage")
-data = request["input"]
-json.dump({"node": data["node"]["id"], "task": data["task"],
-           "upstream": sorted(data["dependencies"])}, sys.stdout)
-sys.stdout.write("\n")
+```json
+{"site_notes":"morning shade, one tap","plant_notes":"tomatoes and mint","audience":"Saturday volunteers"}
 ```
+
+Run it with the configured model:
 
 ```sh
 lamina method run --method examples/methods/field-guide.json \
   --task ./garden-task.json --workspace .lamina \
-  --adapter 'python ./my_method_adapter.py' --adapter-version echo-v1 \
-  --output ./garden-receipt.json
+  --adapter @models.json --output ./garden-receipt.json
 ```
 
-The guide node receives both reader results. The example adapter echoes the request context. A model adapter reads one JSON request from standard input with `protocol: "lamina-stage-1"`, `stage: "method_node"`, `instruction`, `expected_shape`, and `input`, then writes one JSON object to standard output. The bundled `examples/adapter/http_chat.py` accepts this envelope for a compatible model endpoint. Configure the executable, model, and credentials outside the method file. The command provider invokes the adapter directly and limits requests to 2 MB by default. Change `--adapter-version` or `LAMINA_ADAPTER_VERSION` when model or configuration semantics change.
+An adapter receives `protocol: "lamina-stage-1"`, `stage: "method_node"`, instructions, an expected shape and the node's inputs, then returns a JSON object. Keep model configuration and credentials outside the method file. Change the adapter version when its model or behavior changes.
 
 ## Contract and context
 
@@ -75,11 +64,9 @@ lamina method experience --family field-guides --workspace .lamina
 
 The first command saves an operator judgment with a local 32-character ID and timestamp; the second lists recent family observations. `failure` and `note` are optional. To use a note, add its ID to a node's `observation_ids` (at most 20 unique IDs). Before any worker runs, Lamina checks that selected IDs exist in the method family. It sends those notes as labelled `operator_observation` reference data under `input.experience` and records their IDs in the node receipt. Missing or wrong-family IDs fail before calls. Selecting a note changes the worker's next request; saving one leaves existing requests and cache entries alone. Cross-task selection and revision have a [measurement plan](measurement.md).
 
-`lamina.method_example.method_demo()` runs a deterministic incident-guide fixture. It returns three receipts and captured adapter requests for an initial guide, a changed deployment note, and a revision that consumes one operator caution. For cached nodes, `request_sources` labels the displayed earlier request `reused_prior_request`. Use the trace to inspect task fields, dependencies, and experience sent to each worker.
-
 ## Local browser workbench
 
-Start `lamina app --adapter 'python examples/adapter/http_chat.py'`, then open **Projects → Advanced tools → Custom workflow**. Load the technical brief example or import a method JSON, edit the task, validate, and run. The graph shows dependencies and selected task fields. Results show returned objects and cache decisions; download the receipt for a copy outside the browser.
+Start `lamina app --adapter @models.json` and open **Custom workflow** in the local app. Import a method JSON, edit the task, validate, and run. The graph shows dependencies and selected task fields. Results show returned objects and cache decisions; download the receipt for a copy outside the browser.
 
 For a completed run, select a worker and save a note, outcome, and applicability. The browser inserts the observation ID into that worker's method definition for review and a later run. To use the method in another workspace, select observations available there or remove the old IDs.
 
@@ -92,8 +79,8 @@ The browser uses the adapter configured at startup and accepts local, same-origi
 | `GET /api/runs/{id}` | Current status and completed receipt |
 | `POST /api/method-observations` with `{run_id,node_id,note,outcome,applicability}` | Stored observation ID |
 
-The public site lets visitors edit and download methods and inspect recorded examples. The local app runs them. Custom workflow progress lives in browser memory; committed jobs and receipts persist in SQLite. Browser responses and downloads redact failed-node diagnostics; full diagnostics stay local. A reviewer node can return a domain verdict such as `revise` after its runtime call succeeds.
+The website provides installation instructions and documentation; method runs happen in the local app or CLI. Custom workflow progress lives in browser memory; committed jobs and receipts persist in SQLite. Browser responses and downloads redact failed-node diagnostics; full diagnostics stay local. A reviewer node can return a domain verdict such as `revise` after its runtime call succeeds.
 
 ## Limits
 
-The generic runtime checks object shape, scheduling, and cache identity. `expected_shape` guides the adapter but does not enforce its reply structure. It does not verify citations, completeness, correctness, teaching quality, or usefulness. An observation records a person's judgment, without verifying the claimed digest or outcome. The fixture demonstrates execution and cache behavior, not guide quality or measured method improvement.
+The generic runtime checks object shape, scheduling, and cache identity. `expected_shape` guides the adapter but does not enforce its reply structure. It does not verify citations, completeness, correctness, teaching quality, or usefulness. An observation records a person's judgment, without verifying the claimed digest or outcome.

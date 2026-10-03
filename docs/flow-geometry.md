@@ -258,53 +258,65 @@ not a reason to withhold 129 others from the speech lane.
   last section finishes. That pipelining is the remaining step; today audio
   is a separate phase of `S / P_audio` with `P_audio = 1` by default.
 
-## 8. Changes made in this branch
+## 8. What this branch changes
 
-- `reader_context_spans` (0–64, default 0): a span halo on every budgeted
-  reader window (section 4). Packing measures the window with its halo. The
+- `reader_context_spans` defaults to 6: a span halo on every budgeted reader
+  window (section 4), shrinking to fit the reader budget rather than
+  rejecting owned material. Packing measures the haloed window. The
   context-request path still works; a request in a direction whose adjacent
   unit is partial first completes that unit, then steps to the next group.
-  Recommended starting value: 6.
-- `reading_failures` (`abort` | `continue`, default `abort`): with `continue`,
-  unresolved reading batches are recorded in `plan["planning"]["unresolved_reads"]`
-  and in the receipt metrics, reading proceeds with the successful windows,
-  and the receipt status is `review`. Recommended for any run longer than a
-  few pages (section 5).
-- Planning locality: level-0 grouping batches keep source order instead of
-  round-robin interleaving across sources. Adjacent cards from one source are
-  what a grouping call can actually relate; cross-source mixing happens at the
-  summary levels, where the inputs are already group descriptions, and in the
-  assignment pass, which sees the whole outline.
-- `audio_when` (`ready` | `any`, default `ready`): with `any`, a podcast script
-  in `review` still renders; sections with remaining findings are listed in the
-  audio manifest. This removes the section-6 gate for the cases where the
-  listener is the person who will revise.
+  The cost is wider invalidation on edits: an edit to one unit now rereads
+  its two neighbours as well.
+- `reading_failures` defaults to `continue`: unresolved reading batches are
+  recorded in `plan["planning"]["unresolved_reads"]` and the receipt, reading
+  proceeds with the successful windows, and a planned receipt stays in
+  `review` (section 5). The sweep stays `ready` and reports the gap.
+- `workflow="sweep"`, selected by `format="cards"`: the depth-2 route.
+  Readers write cards; `similarity.py` suppresses near-duplicates locally
+  against the kept set only (no chain merges, no model calls); a
+  deterministic sample of windows (`audit_rate`) gets one source-centred
+  audit call whose findings are attached, never gating; the deck exports to
+  Anki. Reading is the whole critical path.
+- Planning tree streams: a grouping level starts as soon as a full batch of
+  the level below exists, and only after the arrived summaries already
+  exceed the outline budget, so no grouping call is spent on a level that
+  could have gone straight to the outline. Level-0 batches keep source
+  order. The outline sees one original exemplar card per group. Barriers
+  `B = 1 + L + 1 + R` (section 3) become `B = 1 + 1 + R`: the reading
+  barrier and the outline call.
+- `compare_relations` nominates by similarity (provider `embed` when
+  offered, otherwise TF-IDF) above `relation_threshold`, plus same-unit and
+  same-structure lanes. Model work is bounded by the threshold and `k`
+  rather than by every lexical overlap (section 7).
+- Podcast sections are synthesized the moment they leave review, on a
+  speech lane bounded by the adapter's `audio_concurrency`, as the same
+  cached segments delivery assembles. Audio overlaps writing. Scripts in
+  `review` render by default; the manifest lists the provisional sections.
+- `workers` and the Gemini adapter's `max_concurrency` default to 16.
 
-## 9. What I would do next, in order
+Revised critical path for the planned route after these changes, best case:
+read (1) + grouping levels still serial per card (L, but overlapped across
+levels) + outline (1) + assign (1) + write + review (2) ≈ 5 + L calls with
+far fewer barriers; realistic ≈ 8 + L. For the sweep: 1 read + 1 audit on
+the sampled windows, the audit overlapping nothing because it is the last
+step; `D = 2`.
 
-1. Flip the defaults above once a calibration run confirms the halo fits the
-   reader policy: `reader_context_spans = 6`, `reading_failures = "continue"`.
-   Raise `workers` and the Gemini adapter's `max_concurrency` together; at
-   `P = 4` nothing else matters.
-2. Collapse the planning chain. Replace the per-level barrier with a streaming
-   tree: a grouping call starts as soon as `C_group` cards exist from reading,
-   and the outline call starts when the top level fits. That turns
-   `B = 1 + L + 1` into overlapping work. The outline call still sees only
-   summaries; give it the top-level group explanations plus one exemplar card
-   per group so it does not design sections from descriptions of descriptions.
-3. Replace `compare_relations` nomination with embeddings and a similarity
-   threshold; keep the model comparison only for pairs above threshold and
-   only for the relation kinds the format needs.
-4. Start speech synthesis per section when that section leaves review, inside
-   the same pool with its own lane, rather than after `ready`.
-5. Remove the thinking budget from review and recheck calls before adding
-   request grouping. Measure card density per page under grouping before
-   making it a default anywhere.
-6. Make the sweep an explicit route: `workflow = "sweep"` with read → local
-   embedding dedup → audit, cards as the output format, no planner. That is
-   the product the original system was, it is what a single textbook section
-   needs, and it is a `D = 2` path that the current engine can host without
-   touching the planned route.
+## 9. What is still open, in order
+
+1. Overlap reading with level-0 grouping: start grouping batches as reads
+   complete rather than after the reading barrier. The streaming tree makes
+   this a change in `_read_and_plan` only.
+2. Measure. The one comparison that settles the direction: the same 80-page
+   section through the sweep and the planned route, five cold runs each,
+   recording time to first card, time to completion, completion rate, cards
+   per page and human-judged coverage of twenty planted distinctions.
+3. Thinking budget off for review and recheck before any request grouping
+   is used; measure cards per page under grouping before it becomes a
+   default anywhere.
+4. Episode planning for podcasts: the orchestrator's legitimate job is to
+   size episodes from the card inventory and route locality-grouped
+   segments to writers; completed-prose callbacks remain a method-graph
+   dependency.
 
 ## Limits
 

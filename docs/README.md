@@ -1,6 +1,6 @@
 # Lamina documentation
 
-Start with [Production](production.md) to make a guide, podcast script or practice exam. It covers the browser app, CLI and Python API.
+Start with [Production](production.md) to make flashcards, a guide, a podcast or a practice exam. It covers the browser app, CLI and Python API.
 
 | Task | Read |
 | --- | --- |

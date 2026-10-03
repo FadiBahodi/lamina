@@ -2,21 +2,22 @@
 
 [Live site](https://fadibahodi.github.io/lamina/) · [Download](https://github.com/FadiBahodi/lamina/releases/latest) · [Documentation](docs/production.md)
 
-Lamina turns a collection of source files into a reference guide, podcast script or practice exam. Give it the files and describe what you want to make. Lamina divides the work into model calls that fit, gives each call the right source material and assembles the result with citations and an execution receipt.
+Lamina turns a pile of source files into something you can study from: a flashcard deck, a reference guide, a podcast with audio, or a practice exam. You give it the files and say what you want. It splits the reading across many model calls at once, keeps every claim tied to the exact passage it came from, and hands back the result with a receipt that shows what was read, what was written, and what still needs a human look.
 
-| What you can make | Example |
+| What you can make | How it is built |
 | --- | --- |
-| Reference guide | Combine chapters, slides and notes into an on-call handbook organized around the questions people need answered. |
-| Podcast script | Plan a teaching route through dense material, then let several writers develop its sections. Add a speech adapter to produce WAV audio. |
-| Practice exam | Build candidate questions and a separate marking guide, then have a blind solver attempt each question before another call judges the answer. |
+| Flashcards (`cards`) | The sweep route. Every reader window is one independent call that writes cards with citations. Duplicates are removed locally, a sample of windows is audited against its source, and the deck exports straight to Anki. No planner, no writer, no review chain. |
+| Reference guide, document | Readers extract ideas, a streaming planner groups them into sections, writers draft each section from its own evidence, reviewers check it, one repair if needed. |
+| Podcast script and audio | Same as a guide with a spoken-prose contract. Each section is synthesized the moment it leaves review, so the audio is assembled from cached segments rather than started after the last section. |
+| Practice exam | Candidate prompts and a separate marking guide, then a blind solver attempts each question before a judge marks it. |
 
-Lamina can plan the sections, write directly from a small collection or follow supplied assignments. Models decide what the sources mean, which ideas belong together and how to explain them. Lamina manages source identity, passage ownership, context, dependencies, concurrent work, saved results and cache reuse.
+Models decide what the sources mean, what belongs together and how to explain it. Code decides everything that must not drift: source identity, who owns which passage, what each call can see, how big a request may be, which work runs together, what gets cached, and what the receipt says.
 
 ![Lamina homepage with source-to-output workflow](docs/overview.png)
 
-## Try it locally
+## Try it
 
-Python 3.11+ and SQLite with FTS5 are required.
+Python 3.11+ and SQLite with FTS5.
 
 ```sh
 git clone https://github.com/FadiBahodi/lamina.git
@@ -25,43 +26,48 @@ pip install -e '.[pdf,slides,http,tokens]'
 lamina app --workspace .lamina
 ```
 
-Open `http://127.0.0.1:8048`. With no model adapter, the app offers a recorded project you can inspect from source reading through section revision. You can also run a deterministic guide fixture offline with `lamina demo --output demo`.
+Open `http://127.0.0.1:8048`. Without a model adapter the app shows a recorded project you can click through, and `lamina demo --output demo` builds a deterministic guide offline.
 
-To process your own files, configure a compatible chat endpoint in `models.json`, then start the app with:
+To run on your own files, describe a chat endpoint in `models.json` and start the app with it:
 
 ```sh
 lamina app --workspace .lamina --adapter @models.json
 ```
 
-The [adapter guide](docs/adapters.md) includes the file format, HTTP example, tokenizer and context settings, and workload limits. Test those limits on representative material; a request that fits can still produce incomplete work.
+The [adapter guide](docs/adapters.md) has the file format, an HTTP example, the Gemini example with native token counting, and the per-stage workload limits. From the command line:
 
-## How a planned project works
+```sh
+lamina ingest --workspace .lamina chapter.pdf slides.pptx
+lamina produce --workspace .lamina --adapter @models.json --format cards --brief "Flashcards for the emergency medicine board exam"
+```
 
-1. Lamina imports Markdown blocks, text paragraphs, PDF pages and PowerPoint slide components while retaining their source locations. Scanned PDFs can use local OCR.
-2. Readers own separate source structures and can ask for nearby context when a boundary cuts across a list or qualification. Each extracted idea points back to exact source text.
-3. A planner groups related ideas across files, builds a shared outline and gives every idea a section owner or an explicit reason for omission.
-4. Writers receive their assignments, original source passages, relevant shared relationships and the immediate neighboring sections. Independent sections run together. Work that needs a completed result can declare that dependency in a custom workflow.
-5. Review begins when a section finishes. A concrete finding can trigger one repair and recheck. Lamina exports Markdown, HTML, PDF and a receipt that records findings, request sizes, source coverage, timing and cache outcomes.
+## How a run works
 
-Automatic mode sends a small collection straight to a writer and uses planning when the declared limits require it. You can also choose a route or provide the section assignments. Reading, writing and review share a configurable worker limit. More workers help when several calls are ready; they do not shorten planning or a dependency chain.
+**Reading** runs first and runs wide. The sources are packed into windows that fit the reader's budget. Each window owns its core text and also sees the last few sentences of the previous unit and the first few of the next, so a list or qualification cut by a page break is visible without a second round trip. Readers cite spans by ID; code materializes the exact quotation. A window that fails after its retry is recorded and the run continues on what was read.
 
-Cache keys include the request's semantic inputs and adapter identity. Restarting reuses completed calls. A section revision reruns affected requests and keeps matching results. Reusable reading can save an inventory for later projects, although its omissions will also be reused.
+**The sweep** (`--format cards`) stops here: readers write the cards, local similarity suppresses near-duplicates, a quarter of the windows (configurable) get one audit call that looks for omissions and unsupported cards, and the deck is exported. Audit findings are attached to the receipt; they never remove a card.
 
-For other jobs, the [method runtime](docs/methods.md) executes a declared graph with completed-result dependencies and resource lanes. It reuses Lamina's scheduling, persistence and cache outside the document planner.
+**Planning**, for guides and podcasts, groups the extracted ideas into an outline. When the ideas do not fit one call, a tree of grouping calls summarizes them, and the tree streams: a level starts as soon as a full batch of the level below exists. The outline sees each group's description plus one original card as an exemplar. Every original idea is then assigned to exactly one section or explicitly omitted.
+
+**Writing and review** run per section in one shared pool: write, review, one repair, one recheck, with review of one section overlapping writing of another. Writers see their assigned ideas, the original passages, the exact supporting passages those ideas cited, and the titles of neighbouring sections.
+
+**Delivery** exports Markdown, HTML, PDF, a plan and a receipt. Podcast scripts render to WAV through a speech adapter; cards export to `cards.tsv` and `cards.json`.
+
+Workers default to 16 and apply across stages. Restarting a run reuses every completed call. Revising one section reruns only the requests that changed.
+
+## Where the time goes
+
+[Flow geometry](docs/flow-geometry.md) models the routes as dependency graphs: how many serial calls sit on the critical path, how many barriers wait on the slowest call of a batch, and which calls can end a run. The sweep is two calls deep. The planned route is deeper and buys an outline for it. The document gives the inequalities and the defaults they led to.
 
 ## Limits
 
-Source IDs and quotation matches establish where material came from. They do not prove that extraction was complete, a citation supports the claim or the finished artifact is accurate and useful. Evaluate the chosen model, workload and output on the material that matters.
+Source IDs and span citations prove where a sentence came from, not that extraction was complete or that a card tests the right thing. The sampled audit catches some omissions; it is not a recall measurement. Workload limits are configured, not learned; test them on your own material with `lamina calibrate`. PDF reading order and figures need inspection, and OCR gives text, not visual interpretation. Audio is checked for structure and duration, not for pronunciation or pacing. Keep the local app on loopback: project IDs are not authentication.
 
-A PDF page, slide or required context set can exceed the configured limits. PDF reading order and figures need inspection; OCR supplies text but does not provide general visual interpretation. Assessments are exported candidate and examiner files, not live oral examinations. Audio support synthesizes the whole podcast script and checks the WAV structure and duration, but it does not listen for pronunciation, pacing, fidelity or educational quality.
-
-Lamina runs declared production routes and custom graphs. It does not invent methods, train itself or choose a method autonomously. Keep the local app on loopback because project identifiers are not authentication tokens.
-
-The [production guide](docs/production.md) documents workflows, controls, revision and recovery. See [parsing](docs/parsing.md) for file handling, [quality evaluation](docs/quality-evaluation.md) for live model experiments and [architecture](docs/architecture.md) for scheduling details.
+## Developing
 
 ```sh
 pip install -e '.[test,pdf,slides,http,tokens]'
 python -m pytest -q
 ```
 
-Run [`lamina calibrate`](docs/calibration.md) to measure workload settings on your model and save a report-linked profile. The [engineering decisions](docs/engineering-decisions.md) compare source pointers, output formats, scheduling and optimization approaches. [Live model results](docs/live-model-evaluation.md) include actual token usage, failed trials and the changes they prompted.
+[Architecture](docs/architecture.md) covers scheduling, caching and recovery; [production](docs/production.md) covers every route, option and export; [engineering decisions](docs/engineering-decisions.md) records the alternatives considered; [live model results](docs/live-model-evaluation.md) record real runs, including the ones that failed.

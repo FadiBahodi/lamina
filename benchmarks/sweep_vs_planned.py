@@ -1,18 +1,25 @@
 """Compare the sweep and planned routes on the same material with a live adapter.
 
-This is the measurement the flow-geometry note asks for: the same sources,
-cold cache per run, both routes, recording time to first useful output, time
-to completion, completion status, call counts, reported token usage and
-output density. It makes real model calls and spends real money; nothing in
-it is a fixture.
+The two arms make different products: the sweep makes a card deck and the
+planned route makes a guide, document or podcast script, so this is a
+comparison of two workflow experiences on one source, cold cache per run.
+It cannot show that one arm produced the same required result faster; for a
+matched-plan comparison of execution policies use ``compare_execution.py``.
+
+Recorded per run: wall time from the production call, time to the first
+output a person could use (the sweep's deck written to disk; the planned
+route's first section leaving review), completion status, call counts,
+reported token usage, output density, and optionally which planted canary
+distinctions survive. Run order alternates between runs so neither arm always
+goes first, and every workspace and output directory is kept unless
+``--discard-workspaces`` is given.
 
     python benchmarks/sweep_vs_planned.py --adapter @models.json \\
         --files chapter.pdf --runs 3 --output results/sweep-vs-planned.json
 
-Add ``--audio-adapter`` to include podcast delivery in the planned arm, and
-``--canaries canaries.txt`` (one distinction per line) to count how many of
-them survive into each output, as a lexical proxy for coverage. Human-judged
-coverage still has to be done by a human.
+Add ``--audio-adapter`` to pass a speech adapter into the planned (podcast)
+arm so synthesis overlaps writing, and ``--canaries canaries.txt`` (one
+distinction per line). Human-judged coverage still has to be done by a human.
 """
 
 from __future__ import annotations
@@ -54,6 +61,7 @@ def _survivors(canaries, text):
 def _run(route, files, adapter, audio, brief, canaries, options):
     from lamina.production import build_production
     from lamina.production_delivery import deliver_production
+    from lamina.production_export import export_production
     from lamina.studio_server import make_provider
 
     workspace_dir = Path(tempfile.mkdtemp(prefix=f"lamina-bench-{route}-"))
@@ -68,7 +76,19 @@ def _run(route, files, adapter, audio, brief, canaries, options):
         basis = pages or unit_count
         record["density_basis"] = "pages" if pages else "source_units"
         started = time.monotonic()
-        receipt = build_production(workspace, provider, brief, ids, options)
+        receipt = build_production(
+            workspace,
+            provider,
+            brief,
+            ids,
+            options,
+            audio_provider=audio_provider,
+            audio_output=output_dir if audio_provider is not None else None,
+        )
+        if route == "sweep":
+            # The deck is usable once it is on disk, not when reading ends.
+            export_production(receipt, receipt["plan"], output_dir)
+            record["first_useful_s"] = round(time.monotonic() - started, 3)
         record["wall_s"] = round(time.monotonic() - started, 3)
         metrics = receipt["metrics"]
         plan = receipt["plan"]
@@ -79,16 +99,13 @@ def _run(route, files, adapter, audio, brief, canaries, options):
             retry_attempts=metrics.get("retry_attempts"),
             usage=metrics.get("usage"),
             unresolved_reader_windows=metrics.get("unresolved_reader_windows", 0),
-            first_useful_s=(
-                round(plan["planning"]["timing"]["read_ms"] / 1000, 3)
-                if route == "sweep"
-                else (
-                    round((plan["metrics"]["wall_ms"] + (metrics.get("first_useful_output_ms") or 0)) / 1000, 3)
-                    if metrics.get("first_useful_output_ms") is not None
-                    else None
-                )
-            ),
         )
+        if route != "sweep":
+            record["first_useful_s"] = (
+                round((plan["metrics"]["wall_ms"] + (metrics.get("first_useful_output_ms") or 0)) / 1000, 3)
+                if metrics.get("first_useful_output_ms") is not None
+                else None
+            )
         if route == "sweep":
             record.update(
                 cards=metrics.get("cards"),
@@ -108,11 +125,12 @@ def _run(route, files, adapter, audio, brief, canaries, options):
                 density=(round(plan["metrics"]["extracted_ideas"] / basis, 2) if basis and plan["metrics"].get("extracted_ideas") else None),
             )
             text = receipt["markdown"]
+            delivery_started = time.monotonic()
+            deliver_production(workspace, receipt, plan, output_dir, audio_provider=audio_provider)
+            record["delivery_s"] = round(time.monotonic() - delivery_started, 3)
             if audio_provider is not None:
-                audio_started = time.monotonic()
-                deliver_production(workspace, receipt, plan, output_dir, audio_provider=audio_provider)
-                record["audio_s"] = round(time.monotonic() - audio_started, 3)
                 record["audio_status"] = receipt.get("audio_delivery", {}).get("status")
+                record["speech_prefetch"] = metrics.get("speech_prefetch")
         if canaries:
             found = _survivors(canaries, text)
             record["canaries"] = {"total": len(canaries), "found": len(found), "missing": [c for c in canaries if c not in found]}
@@ -140,7 +158,7 @@ def main(argv=None):
     parser.add_argument("--planned-format", default="guide", choices=["guide", "document", "podcast-script"])
     parser.add_argument("--canaries", type=Path, help="Text file, one planted distinction per line")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--keep-workspaces", action="store_true")
+    parser.add_argument("--discard-workspaces", action="store_true", help="Delete each run's workspace and outputs after recording it")
     args = parser.parse_args(argv)
     canaries = _canaries(args.canaries)
     arms = {
@@ -156,10 +174,13 @@ def main(argv=None):
         "brief": args.brief,
         "arms": arms,
         "records": [],
-        "scope": "Live model runs on the named files; cold cache per run; latency and status are measured, coverage is a lexical proxy unless judged by hand.",
+        "scope": "Two products (card deck; planned guide/document/script) from the same files, cold cache per run, alternating order. Latency and status are measured; first_useful_s is the deck on disk or the first section leaving review; coverage is a lexical proxy unless judged by hand. Not a same-result speed comparison.",
     }
     for run in range(1, args.runs + 1):
-        for route, options in arms.items():
+        order = list(arms.items())
+        if run % 2 == 0:
+            order.reverse()
+        for route, options in order:
             print(f"run {run} {route} …", flush=True)
             record = _run(route, args.files, args.adapter, args.audio_adapter if route == "planned" else None, args.brief, canaries, options)
             record["run"] = run
@@ -169,7 +190,7 @@ def main(argv=None):
                 f"density={record.get('density')} first_useful={record.get('first_useful_s')}",
                 flush=True,
             )
-            if not args.keep_workspaces:
+            if args.discard_workspaces:
                 shutil.rmtree(record.pop("workspace"), ignore_errors=True)
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(json.dumps(results, indent=2) + "\n")

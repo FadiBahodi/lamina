@@ -116,7 +116,10 @@ def test_cards_format_selects_the_sweep_route_and_publishes_cards(tmp_path):
     assert stages.count("production_read") == windows
     assert stages.count("sweep_audit") == windows
     assert set(stages) == {"production_read", "sweep_audit"}
-    assert result["status"] == "ready"
+    # The fixture auditor reports one omission per window: the deck is
+    # available and downloadable, and its status says it needs review.
+    assert result["status"] == "review"
+    assert result["coverage"]["sweep"]["windows_with_findings"]
     assert result["format"] == "cards"
     assert len(result["cards"]) == 8
     assert all(card["kind"] == "basic" for card in result["cards"])
@@ -159,7 +162,7 @@ def test_sweep_suppresses_duplicates_locally_and_records_them(tmp_path):
     assert result["metrics"]["audited_windows"] == 0
 
 
-def test_sweep_continues_past_failed_windows_and_stays_ready(tmp_path):
+def test_sweep_continues_past_failed_windows_and_reports_review(tmp_path):
     from lamina.providers import ProviderError
 
     class FailsOne(CardReader):
@@ -176,9 +179,13 @@ def test_sweep_continues_past_failed_windows_and_stays_ready(tmp_path):
         ["s1", "s2"],
         {"format": "cards", "audit_rate": 0.0},
     )
-    assert result["status"] == "ready"
+    # The deck is available, but one window was never read: that is review,
+    # not ready, and the coverage object says which window.
+    assert result["status"] == "review"
     assert len(result["unresolved_reads"]) == 1
     assert result["unresolved_reads"][0]["core"] == ["u3", "u4"]
+    assert result["coverage"]["sweep"]["windows_read"] == result["coverage"]["sweep"]["windows"] - 1
+    assert result["coverage"]["sweep"]["unresolved_windows"] == [result["unresolved_reads"][0]["id"]]
     assert result["metrics"]["unresolved_reader_windows"] == 1
     assert len(result["cards"]) == 4
     # A failed window's units were never read, and the coverage report says so.
@@ -205,10 +212,23 @@ def test_sweep_export_writes_anki_tsv_and_card_json(tmp_path):
     links = export_production(result, result["plan"], tmp_path / "out")
     assert links["cards_tsv"] == "cards.tsv" and links["cards_json"] == "cards.json"
     tsv = (tmp_path / "out" / "cards.tsv").read_text()
-    rows = [line.split("\t") for line in tsv.strip().split("\n")]
-    assert len(rows) == 8 and all(len(row) == 3 for row in rows)
-    assert rows[0][0].startswith("What does the source say")
-    assert "Operations" in rows[0][2]
+    lines = tsv.strip().split("\n")
+    headers = [line for line in lines if line.startswith("#")]
+    assert headers[:5] == [
+        "#separator:tab", "#html:true", "#notetype column:1", "#guid column:2", "#tags column:5",
+    ]
+    rows = [line.split("\t") for line in lines if not line.startswith("#")]
+    assert len(rows) == 8 and all(len(row) == 5 for row in rows)
+    assert {row[0] for row in rows} <= {"Basic", "Cloze"}
+    assert all(len(row[1]) == 20 for row in rows)
+    assert rows[0][2].startswith("What does the source say")
+    assert "Operations" in rows[0][4]
+    # GUIDs are stable across runs of the same material, so a re-import updates.
+    again = build_production(
+        workspace(tmp_path / "ws2"), CardReader(), "Make flashcards", ["s1", "s2"],
+        {"format": "cards", "audit_rate": 0.0},
+    )
+    assert [c["guid"] for c in again["cards"]] == [c["guid"] for c in result["cards"]]
     cards = json.loads((tmp_path / "out" / "cards.json").read_text())
     assert cards == result["cards"]
     assert (tmp_path / "out" / "document.md").read_text().startswith("# Make flashcards")
@@ -221,7 +241,7 @@ def test_sweep_plan_runs_again_without_model_calls(tmp_path):
     before = len(provider.requests)
     receipt = run_production(ws, provider, plan)
     assert len(provider.requests) == before
-    assert receipt["status"] == "ready" and receipt["plan_digest"] == plan["plan_digest"]
+    assert receipt["status"] == "review" and receipt["plan_digest"] == plan["plan_digest"]
     # Deterministic sampling: the same windows are audited on a restart.
     again = plan_production(ws, provider, "Make flashcards", ["s1", "s2"], {"format": "cards", "audit_rate": 0.5})
     assert again["planning"]["audit"]["sampled_windows"] == plan["planning"]["audit"]["sampled_windows"]
@@ -239,9 +259,9 @@ def test_sampling_is_deterministic_and_rate_bounded():
 
 def test_cards_tsv_escapes_fields():
     text = cards_tsv(
-        [{"prompt": "A\tB", "answer": "line1\nline2", "source": "Book One", "heading": "Ch 2"}]
+        [{"kind": "basic", "guid": "x" * 20, "prompt": "A\tB", "answer": "line1\nline2", "source": "Book One", "heading": "Ch 2"}]
     )
-    assert text == "A B\tline1<br>line2\tBook_One Ch_2\n"
+    assert text.endswith("Basic\t" + "x" * 20 + "\tA B\tline1<br>line2\tBook_One Ch_2\n")
 
 
 def test_option_contract_for_sweep():
@@ -254,3 +274,28 @@ def test_option_contract_for_sweep():
         _options({"format": "cards", "audit_rate": 2})
     with pytest.raises(ProductionError, match="dedup_threshold"):
         _options({"format": "cards", "dedup_threshold": 0})
+
+
+def test_cards_tsv_escapes_html_and_types_cloze_notes():
+    from lamina.sweep import cards_tsv
+
+    rows = [
+        {"kind": "basic", "guid": "g" * 20, "prompt": "Is 5 < 7 & 7 > 5?", "answer": "Yes\nboth.", "source": "Maths", "heading": "Order"},
+        {"kind": "cloze", "guid": "h" * 20, "prompt": "The limit is {{c1::eight bar}}.", "answer": "", "source": "Manual", "heading": ""},
+    ]
+    text = cards_tsv(rows)
+    body = [line.split("\t") for line in text.strip().split("\n") if not line.startswith("#")]
+    assert body[0][0] == "Basic" and body[0][2] == "Is 5 &lt; 7 &amp; 7 &gt; 5?" and body[0][3] == "Yes<br>both."
+    assert body[1][0] == "Cloze" and "{{c1::eight bar}}" in body[1][2]
+    assert body[1][4] == "Manual"
+
+
+def test_a_card_deck_cannot_be_revised_by_section(tmp_path):
+    """The UI's section-revision control does not apply to decks: readers
+    wrote the cards directly. The engine says so instead of republishing the
+    same deck as if the note had been applied."""
+    provider = CardReader()
+    ws = workspace(tmp_path)
+    plan = plan_production(ws, provider, "Make flashcards", ["s1", "s2"], {"format": "cards", "audit_rate": 0.0})
+    with pytest.raises(ProductionError, match="no section writer"):
+        run_production(ws, provider, plan, {"section_notes": {plan["route"]["sections"][0]["id"]: "Add dosing."}})

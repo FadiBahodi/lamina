@@ -227,18 +227,19 @@ def test_counting_does_not_wait_for_generation_capacity(monkeypatch):
     assert provider.transport_metrics()["generation_requests"] == 0
 
 
-def test_mechanical_stages_default_to_no_thinking_and_the_map_is_in_identity(monkeypatch):
+def test_every_stage_keeps_the_thinking_budget_unless_a_map_says_otherwise(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "secret-test-key")
     provider = GeminiProvider()
     assert provider.thinking_for("production_read") == 1024
-    assert provider.thinking_for("production_review") == 0
-    assert provider.thinking_for("sweep_audit") == 0
+    assert provider.thinking_for("production_review") == 1024
+    assert provider.thinking_for("sweep_audit") == 1024
     review = stage_request()
     review["stage"] = "production_review"
     body = provider._generation_request(review)
-    assert body["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
-    assert provider._generation_request(stage_request())["generationConfig"]["thinkingConfig"] == {
-        "thinkingBudget": 1024
+    assert body["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 1024}
+    cheap = GeminiProvider(thinking_by_stage={"production_review": 0})
+    assert cheap._generation_request(review)["generationConfig"]["thinkingConfig"] == {
+        "thinkingBudget": 0
     }
     custom = GeminiProvider(thinking_by_stage={"production_review": 256})
     assert custom.thinking_for("production_review") == 256

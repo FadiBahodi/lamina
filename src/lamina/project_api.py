@@ -134,6 +134,11 @@ def start_project(server, body, *, parent=None, section_notes=None):
     if section_notes is not None:
         if not plan:
             raise ValueError("The earlier project has no saved plan to revise.")
+        if (plan.get("options") or {}).get("workflow") == "sweep":
+            raise ValueError(
+                "Card decks are written directly by readers and have no section to "
+                "revise. Change the brief or the sources and start a new project."
+            )
         if (
             not isinstance(section_notes, dict)
             or not section_notes

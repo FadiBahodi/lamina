@@ -415,6 +415,52 @@ def test_answer_cannot_borrow_support_from_another_members_unrelated_quote():
         validate_retrieval_targets({"targets": [target], "relations": []}, ideas, units)
 
 
+def test_answer_may_cite_the_neighbouring_unit_a_reader_kept_as_support():
+    """The reader owned u1 and cited the exception on the next page (u2) as
+    support. The target route must accept that same evidence instead of
+    rejecting it as outside the member ideas."""
+    units = [
+        {"id": "u1", "text": "The limit is eight bar."},
+        {"id": "u2", "text": "Older seals are limited to five bar."},
+    ]
+    ideas = [{"id": "i1", "unit_ids": ["u1"], "support_unit_ids": ["u2"]}]
+    target = {
+        "id": "limit",
+        "title": "Pressure limit",
+        "prompt": "What is the pressure limit?",
+        "context": "Seal generations",
+        "member_idea_ids": ["i1"],
+        "membership_relation": "unique",
+        "answer_groups": [
+            {
+                "label": "Answer",
+                "items": [
+                    {
+                        "text": "Older seals are limited to five bar.",
+                        "supports_idea_ids": ["i1"],
+                        "evidence": [{"unit_id": "u2", "quote": units[1]["text"]}],
+                    }
+                ],
+            }
+        ],
+    }
+    catalog = validate_retrieval_targets({"targets": [target], "relations": []}, ideas, units)
+    assert catalog["targets"][0]["answer_groups"][0]["items"][0]["evidence"] == [
+        {"unit_id": "u2", "quote": units[1]["text"]}
+    ]
+    stranger = {**target, "answer_groups": [{"label": "Answer", "items": [{
+        "text": "Braking stops the rotor.",
+        "supports_idea_ids": ["i1"],
+        "evidence": [{"unit_id": "u3", "quote": "Braking stops the rotor."}],
+    }]}]}
+    with pytest.raises(RetrievalTargetError):
+        validate_retrieval_targets(
+            {"targets": [stranger], "relations": []},
+            ideas,
+            units + [{"id": "u3", "text": "Braking stops the rotor."}],
+        )
+
+
 def test_many_target_relations_are_bounded_by_unique_known_pairs():
     count = 1100
     units = [{"id": "u", "text": "Reduce lift."}]

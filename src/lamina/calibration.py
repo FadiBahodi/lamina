@@ -229,8 +229,31 @@ def calibrate(
     }
 
 
+_MEASUREMENT_KEY = {"max_items": "workload_items", "max_input_tokens": "input_tokens"}
+
+
+def demonstrated_load(trials, stage, dimension):
+    """The largest load a completed request at ``stage`` actually carried
+    across these trials, in the experiment's dimension; ``None`` when no call
+    recorded it. Promotion is bounded by this, never by the configured ceiling."""
+    key = _MEASUREMENT_KEY[dimension]
+    values = [
+        value
+        for trial in trials
+        for call in trial.get("calls", [])
+        if call.get("stage") == stage and call.get("status") == "completed"
+        for value in [(call.get("measurement") or {}).get(key)]
+        if type(value) is int and value > 0
+    ]
+    return max(values) if values else None
+
+
 def promote_profiles(report_path):
-    """Select only a tested setting with all declared replicates passing the criteria."""
+    """Select a tested setting with all declared replicates passing the criteria.
+
+    The promoted limit is the load the passing trials demonstrated: the smaller
+    of the configured ceiling and the largest completed request at that stage.
+    """
     report_path = Path(report_path).resolve()
     raw = report_path.read_bytes()
     report = json.loads(raw)
@@ -286,15 +309,22 @@ def promote_profiles(report_path):
         identities = {b.get("configuration_identity") for b in budgets}
         if len(identities) != 1 or None in identities:
             continue
-        passing.append((limit, budgets[0]))
+        # A passing ceiling is evidence only up to the load the stage's requests
+        # actually carried. A trial whose reads never exceeded six items says
+        # nothing about ninety-six; promote what was exercised, not the knob.
+        exercised = demonstrated_load(trials, stage, dimension)
+        if exercised is None:
+            continue
+        passing.append((min(limit, exercised), limit, budgets[0]))
     if not passing:
         return {}
-    _, budget = max(passing, key=lambda row: row[0])
+    demonstrated, _, budget = max(passing, key=lambda row: (row[0], row[1]))
     limits = {
         name: budget["workload"][name]
         for name in ("max_items", "max_input_tokens")
         if budget["workload"].get(name) is not None
     }
+    limits[dimension] = demonstrated
     profile = WorkloadProfile(
         stage,
         **limits,

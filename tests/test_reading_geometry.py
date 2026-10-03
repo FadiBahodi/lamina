@@ -174,6 +174,35 @@ def test_halo_citation_resolves_against_the_full_neighbouring_unit(tmp_path):
     assert quotes[units[0]["id"]] == "Fourth sentence of page one."
 
 
+def test_a_citation_of_a_halo_span_the_request_never_showed_is_rejected(tmp_path):
+    """The validator indexes exactly the spans the reader saw. Page one has four
+    sentences and the halo shows its last one; citing its first sentence (real,
+    permitted, unshown) must fail as a foreign span rather than materialize."""
+    units = [unit(uid, text) for uid, text in PAGE.items()]
+    attempts = []
+
+    def cite_hidden(request):
+        data = request["input"]
+        core = data["core"][0]
+        idea = {
+            "title": "Idea",
+            "explanation": "Cites a neighbour.",
+            "evidence_refs": [{"span_id": core["spans"][0]["id"]}],
+        }
+        if data["before"] and data["before"][0].get("partial"):
+            shown = data["before"][0]["spans"][-1]["id"]
+            hidden = shown.rsplit(":s", 1)[0] + ":s0"
+            attempts.append(hidden)
+            idea["evidence_refs"].append({"span_id": hidden})
+        return {"ideas": [idea]}
+
+    provider = Provider(cite_hidden)
+    with pytest.raises(ProductionError) as failure:
+        run(tmp_path, provider, units, reader_context_spans=1, reading_failures="abort")
+    assert attempts, "the second window saw a cut halo and cited an unshown span"
+    assert "foreign_span" in str(failure.value) or "owned core spans" in str(failure.value)
+
+
 def test_context_request_completes_partial_halo_before_stepping_to_next_group(tmp_path):
     units = [unit(uid, text) for uid, text in PAGE.items()]
     asked = []

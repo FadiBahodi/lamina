@@ -80,21 +80,40 @@ def _card_text(idea: dict) -> str:
 
 
 def deduplicate(provider, ideas: list[dict], threshold) -> tuple[list[dict], dict, dict]:
-    """Return ``(kept, suppressed, report)``. Suppression compares each card only
-    with cards already kept, in source order, so chains cannot merge."""
+    """Return ``(kept, suppressed, report)``.
+
+    Two lanes drop a card: identical normalised text, or similarity at or
+    above the threshold *and* agreement on numbers, negations, abbreviations
+    and word order. A pair that reaches the threshold but differs in one of
+    those is kept and listed under ``report["related"]``. Each card is
+    compared only with cards already kept, in source order, so chains cannot
+    merge.
+    """
     if not ideas:
-        return [], {}, {"method": None, "threshold": None, "suppressed": 0}
-    method, vectors = vectors_for(provider, [_card_text(idea) for idea in ideas])
+        return [], {}, {"method": None, "threshold": None, "suppressed": 0, "related": {}}
+    texts = [_card_text(idea) for idea in ideas]
+    method, vectors = vectors_for(provider, texts)
     threshold = (
         DEFAULT_THRESHOLDS["duplicate"][method] if threshold is None else threshold
     )
-    kept_indexes, suppressed_rows = suppress_duplicates(vectors, threshold)
+    kept_indexes, suppressed_rows, related_rows = suppress_duplicates(
+        vectors, threshold, texts
+    )
     suppressed = {
         ideas[index]["id"]: {
             "duplicate_of": ideas[row["duplicate_of"]]["id"],
             "score": row["score"],
+            "kind": row["kind"],
         }
         for index, row in suppressed_rows.items()
+    }
+    related = {
+        ideas[index]["id"]: {
+            "related_to": ideas[row["related_to"]]["id"],
+            "score": row["score"],
+            "kept_because": row["kept_because"],
+        }
+        for index, row in related_rows.items()
     }
     return (
         [ideas[index] for index in kept_indexes],
@@ -103,7 +122,11 @@ def deduplicate(provider, ideas: list[dict], threshold) -> tuple[list[dict], dic
             "method": method,
             "threshold": threshold,
             "suppressed": len(suppressed),
-            "scope": "Near-duplicate suppression by local similarity; a kept card may still overlap a distinct one.",
+            "exact": sum(1 for row in suppressed.values() if row["kind"] == "exact"),
+            "related": related,
+            "scope": "Exact duplicates and guarded near-duplicates are suppressed; "
+            "a pair above the threshold that differs in a number, negation, "
+            "abbreviation or word order is kept and listed as related.",
         },
     )
 
@@ -292,21 +315,24 @@ def card_rows(plan: dict) -> list[dict]:
     """Flat card list for TSV/JSON export: prompt, answer, source, citations."""
     unit_map = {u["id"]: u for u in plan["units"]}
     source_map = {s["id"]: s for s in plan["sources"]}
+    idea_map = {i["id"]: i for i in plan["ideas"]}
     suppressed = set((plan.get("duplicates") or {}).keys())
     rows = []
     for section in plan["route"]["sections"]:
         for iid in section["idea_ids"]:
-            idea = next(i for i in plan["ideas"] if i["id"] == iid)
             if iid in suppressed:
                 continue
+            idea = idea_map[iid]
             first = unit_map[idea["unit_ids"][0]]
+            source = source_map[first["source_id"]]
             rows.append(
                 {
                     "id": idea["id"],
+                    "guid": card_guid(source, first, idea["title"]),
                     "prompt": idea["title"],
                     "answer": idea["explanation"],
                     "kind": "cloze" if "{{c1::" in idea["title"] else "basic",
-                    "source": source_map[first["source_id"]]["title"],
+                    "source": source["title"],
                     "locator": first["locator"],
                     "heading": first["heading"],
                     "unit_ids": idea["unit_ids"],
@@ -317,21 +343,63 @@ def card_rows(plan: dict) -> list[dict]:
     return rows
 
 
+def card_guid(source: dict, unit: dict, prompt: str) -> str:
+    """Stable note identity: the same source passage and prompt text give the
+    same GUID across runs, so re-importing a deck updates notes in place."""
+    key = "\x1f".join(
+        [
+            str(source.get("sha256") or source.get("id") or ""),
+            str(unit.get("content_id") or unit.get("id") or ""),
+            " ".join(prompt.split()).casefold(),
+        ]
+    )
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
+
+
+NOTE_TYPES = {"basic": "Basic", "cloze": "Cloze"}
+
+
 def cards_tsv(rows: list[dict]) -> str:
-    """Anki-importable TSV: prompt, answer, tags. Tabs and newlines in fields
-    become spaces/<br>, which Anki renders."""
+    """Anki text import with file headers.
+
+    Columns: note type, GUID, front (or cloze text), back (or back extra),
+    tags. The headers tell Anki the separator, that fields contain HTML, and
+    which columns carry the note type, GUID and tags, so one file imports
+    Basic and Cloze notes together and a re-import updates by GUID.
+    """
+    import html
 
     def field(text: str) -> str:
-        return text.replace("\t", " ").replace("\r", "").replace("\n", "<br>")
+        escaped = html.escape(text.replace("\t", " ").replace("\r", ""), quote=False)
+        return escaped.replace("\n", "<br>")
 
     def tag(text: str) -> str:
-        return "".join(c if c.isalnum() else "_" for c in text.strip())[:60] or "lamina"
+        return "".join(c if c.isalnum() else "_" for c in text.strip())[:60]
 
-    lines = []
+    lines = [
+        "#separator:tab",
+        "#html:true",
+        "#notetype column:1",
+        "#guid column:2",
+        "#tags column:5",
+        "#columns:notetype\tguid\tfront\tback\ttags",
+    ]
     for row in rows:
-        tags = " ".join(dict.fromkeys([tag(row["source"]), tag(row["heading"] or "")]))
-        lines.append("\t".join([field(row["prompt"]), field(row["answer"]), tags]))
-    return "\n".join(lines) + ("\n" if lines else "")
+        tags = " ".join(
+            dict.fromkeys(t for t in (tag(row["source"]), tag(row["heading"] or "")) if t)
+        ) or "lamina"
+        lines.append(
+            "\t".join(
+                [
+                    NOTE_TYPES[row["kind"]],
+                    row["guid"],
+                    field(row["prompt"]),
+                    field(row["answer"]),
+                    tags,
+                ]
+            )
+        )
+    return "\n".join(lines) + "\n"
 
 
 def plan_sweep(workspace, provider, task, opts, selection, sources, units, tracker, progress=None):

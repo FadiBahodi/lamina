@@ -1057,6 +1057,11 @@ def run_production(
         raise ProductionError("Selected source content changed; plan again")
     tracker = _Tracker(progress, max_attempts=opts["max_attempts"])
     if opts["workflow"] == "sweep":
+        if section_notes:
+            raise ProductionError(
+                "Card decks are written directly by readers and have no section "
+                "writer to revise. Change the brief or the sources and plan again."
+            )
         return _run_sweep(plan, opts, provider, started)
     sections = plan["route"]["sections"]
     if set(section_notes) - {s["id"] for s in sections}:
@@ -1657,10 +1662,22 @@ def _run_sweep(plan, opts, provider, started):
         },
         "output_bytes": len(markdown.encode("utf-8")),
     }
+    unresolved = planning.get("unresolved_reads") or []
+    coverage = {
+        "windows": len(plan.get("windows") or []),
+        "windows_read": len(plan.get("windows") or []) - len(unresolved),
+        "unresolved_windows": [row["id"] for row in unresolved],
+        "audited_windows": len(audit.get("audited", [])),
+        "windows_with_findings": sorted(findings),
+    }
+    # "ready" means every window was read and no sampled audit reported an
+    # omission or an unsupported card. Anything less is available but needs
+    # review: the deck downloads either way, labelled accordingly.
+    status = "ready" if not unresolved and not findings else "review"
     receipt = {
         "schema_version": "1.0",
         "revision": REVISION,
-        "status": "ready",
+        "status": status,
         "document_checks": None,
         "quality": plan["quality"],
         "format": "cards",
@@ -1682,13 +1699,14 @@ def _run_sweep(plan, opts, provider, started):
         "plan_digest": plan["plan_digest"],
         "metrics": metrics,
         "scope": (
-            "Cards written directly by readers with exact citations; duplicates suppressed "
-            "by local similarity; a sampled source-centred audit attached its findings. "
-            "Status is ready because every enabled check completed; audit findings and "
-            "unresolved windows are reported, not resolved."
+            "Cards written directly by readers with exact citations; exact and "
+            "guarded near-duplicates suppressed locally; a sampled source-centred "
+            "audit attached its findings. Status is ready only when every window "
+            "was read and no audit finding is open; otherwise the deck is "
+            "available for download with status review."
         ),
     }
-    receipt["coverage"] = coverage_report(plan, authored)
+    receipt["coverage"] = {**coverage_report(plan, authored), "sweep": coverage}
     receipt["quality_control"] = quality_status(
         provider, ("production_read", "sweep_audit")
     )
@@ -1702,12 +1720,22 @@ def build_production(
     source_ids: list[str],
     options: dict | None = None,
     progress: Callable[[dict], None] | None = None,
+    *,
+    audio_provider=None,
+    audio_output=None,
 ) -> dict:
     """Convenience route for one goal-to-artifact build; returns plan and receipt."""
     started = time.monotonic()
     plan = plan_production(workspace, provider, brief, source_ids, options, progress)
     try:
-        receipt = run_production(workspace, provider, plan, progress=progress)
+        receipt = run_production(
+            workspace,
+            provider,
+            plan,
+            progress=progress,
+            audio_provider=audio_provider,
+            audio_output=audio_output,
+        )
     except Exception as exc:
         exc.partial_results = {**getattr(exc, "partial_results", {}), "plan": plan}
         raise

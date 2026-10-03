@@ -105,27 +105,54 @@ class WorkloadProfile:
             budgets = trial.get("stage_budgets")
             budget = budgets.get(self.stage) if isinstance(budgets, dict) else None
             calls = trial.get("calls")
-            if not isinstance(calls, list) or not any(
-                isinstance(call, dict)
+            completed = [
+                call
+                for call in (calls if isinstance(calls, list) else [])
+                if isinstance(call, dict)
                 and call.get("stage") == self.stage
                 and call.get("status") == "completed"
-                for call in calls
-            ):
+            ]
+            if not completed:
                 continue
             workload = budget.get("workload") if isinstance(budget, dict) else None
-            if isinstance(budget, dict) and (
-                budget.get("configuration_identity")
-                == self.evidence["provider_identity"]
-                and isinstance(workload, dict)
-                and all(
-                    workload.get(name) == getattr(self, name)
-                    for name in ("max_input_tokens", "max_items")
-                )
-            ):
+            if not isinstance(budget, dict) or not isinstance(workload, dict):
+                continue
+            if budget.get("configuration_identity") != self.evidence["provider_identity"]:
+                continue
+            if self._demonstrated_by(workload, completed):
                 return
         raise ValueError(
             "workload report has no matching provider, stage and limit observation"
         )
+
+    def _demonstrated_by(self, workload: dict, completed: list[dict]) -> bool:
+        """A trial supports this profile when its configured limit was at least
+        the profile's and, where the profile sits below that ceiling, some
+        completed request actually carried the profile's load."""
+        for name, key in (("max_items", "workload_items"), ("max_input_tokens", "input_tokens")):
+            mine = getattr(self, name)
+            configured = workload.get(name)
+            if mine is None:
+                # The trial ran under a limit this profile does not declare:
+                # its evidence does not cover the profile's looser claim.
+                if configured is not None:
+                    return False
+                continue
+            if type(configured) is not int or configured < mine:
+                return False
+            if configured > mine:
+                carried = max(
+                    (
+                        value
+                        for call in completed
+                        for value in [(call.get("measurement") or {}).get(key)]
+                        if type(value) is int
+                    ),
+                    default=0,
+                )
+                if carried < mine:
+                    return False
+        return True
 
     def validate_binding(self, *, provider_identity=None, protocol_revision=None):
         if self.evidence is None:

@@ -122,8 +122,14 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
             )
         claimed.update(members)
         member_set = set(members)
+        # Ownership (unit_ids) decides coverage; permissible evidence also
+        # includes the neighbouring units a reader cited in support, so a
+        # qualification that lives on the next page survives this route too.
         member_units = {mid: set(idea_by_id[mid]["unit_ids"]) for mid in members}
-        allowed_units = set().union(*member_units.values())
+        member_support = {
+            mid: set(idea_by_id[mid].get("support_unit_ids") or ()) for mid in members
+        }
+        allowed_units = set().union(*member_units.values(), *member_support.values())
         groups = raw_target["answer_groups"]
         if not isinstance(groups, list) or not groups:
             raise RetrievalTargetError("target needs a nonempty answer_groups list")
@@ -197,7 +203,7 @@ def validate_retrieval_targets(raw: dict, ideas: list[dict], units: list[dict]) 
                         "answer item text must be an exact substring of its cited quote"
                     )
                 for mid in supports:
-                    if not member_units[mid] & supporting_units:
+                    if not (member_units[mid] | member_support[mid]) & supporting_units:
                         raise RetrievalTargetError(
                             "each claimed idea needs its own cited quote containing the answer text"
                         )

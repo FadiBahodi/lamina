@@ -467,8 +467,19 @@ def read_sources(
                 }
                 for unit in current["core"]
             ]
+            # The validator must see exactly what the reader saw: a halo unit
+            # cut to its nearest spans carries that cut, so a citation of a
+            # span the request never rendered is rejected, not materialized.
             context = [
-                {**unit, "id": aliases[unit["id"]] if aliases else unit["id"]}
+                {
+                    **unit,
+                    "id": aliases[unit["id"]] if aliases else unit["id"],
+                    **(
+                        {"visible_cut": dict(current["partial"][unit["id"]])}
+                        if unit["id"] in current["partial"]
+                        else {}
+                    ),
+                }
                 for unit in current["before"] + current["after"]
             ]
 

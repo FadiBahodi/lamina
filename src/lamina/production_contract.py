@@ -313,7 +313,7 @@ def _evidence(
 
 
 def _read_check(raw, core: list[dict], window_id: str, context=()) -> dict:
-    from .source_spans import index_source_spans, materialize_references
+    from .source_spans import index_source_spans, materialize_references, source_spans
 
     if not isinstance(raw, dict) or not isinstance(raw.get("ideas"), list):
         raise ProductionError("reader must return an ideas list")
@@ -321,6 +321,17 @@ def _read_check(raw, core: list[dict], window_id: str, context=()) -> dict:
     visible = {u["id"]: u for u in context}
     visible.update(own)
     references = index_source_spans(visible)
+    for unit in context:
+        cut = unit.get("visible_cut")
+        if not cut:
+            continue
+        # A boundary halo rendered only the spans nearest the core. Spans the
+        # request did not show cannot be cited, however real they are.
+        spans = source_spans(unit["id"], unit["text"], unit.get("kind"))
+        shown = cut["spans"]
+        hidden = spans[shown:] if cut["side"] == "head" else spans[: max(0, len(spans) - shown)]
+        for span in hidden:
+            references.pop(span["id"], None)
 
     def check_idea(idea, n):
         if not isinstance(idea, dict):

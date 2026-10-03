@@ -31,15 +31,13 @@ DEFAULT_MODEL = "models/gemini-2.5-flash"
 DEFAULT_CONTEXT_TOKENS = 1_048_576
 DEFAULT_OUTPUT_TOKENS = 8_192
 DEFAULT_THINKING_TOKENS = 1_024
-# Stages whose job is mechanical checking rather than composition. A thinking
-# budget there adds time to first token on every call and rarely changes the
-# verdict; composition stages keep the default budget.
-DEFAULT_THINKING_BY_STAGE = {
-    "production_review": 0,
-    "production_consistency": 0,
-    "sweep_audit": 0,
-    "assessment_judge": 0,
-}
+# Every stage gets the default thinking budget unless a per-stage map says
+# otherwise. Review, consistency, audit and judging are semantic checks
+# (does a qualification change the answer; was something omitted), and no
+# measurement here shows they verify as well without a budget, so none is
+# removed by default. Pass ``thinking_by_stage={"production_review": 0, ...}``
+# to trade verification for latency once a matched comparison supports it.
+DEFAULT_THINKING_BY_STAGE: dict[str, int] = {}
 
 
 def _positive_int(name, value, *, allow_zero=False):

@@ -1,10 +1,18 @@
 """Local similarity without model calls: term vectors or provider embeddings.
 
-Similarity nominates candidates. It never establishes equivalence, and a
-threshold relation is not transitive, so nothing here merges by connected
-components. Duplicate suppression compares each candidate against the kept
-set only, which prevents a chain of progressively different claims from
-collapsing into one.
+Similarity nominates candidates. It never establishes equivalence, so it is
+never sufficient authority to delete an output on its own. Duplicate
+suppression has two lanes: an exact-identity lane (normalised text identical)
+and a near-duplicate lane that requires the similarity threshold *and* a
+meaning guard. The guard compares the tokens a vector representation is blind
+to: numbers and units, negations, short abbreviations, and word order. Two
+cards that differ in any of those are kept, and the pair is reported as
+related instead of merged.
+
+Suppression compares each candidate against the kept set only, so a chain of
+progressively different claims cannot collapse into one, and pair work is
+bounded by an inverted index (sparse) or per-candidate products (dense)
+instead of an all-pairs matrix.
 
 A provider may expose ``embed(texts) -> list[list[float]]``. When it does, the
 dense vectors are used; otherwise TF-IDF term vectors over the same texts are
@@ -18,6 +26,22 @@ import re
 from collections import Counter, defaultdict
 
 _TOKEN = re.compile(r"\w+")
+_NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+_ABBREVIATION = re.compile(r"\b[A-Z][A-Z0-9]{0,5}\b")
+_UNITS = frozenset(
+    {
+        "mg", "mcg", "ug", "g", "kg", "ml", "l", "dl", "mmol", "mol", "meq", "iu", "u",
+        "mmhg", "kpa", "bpm", "min", "h", "hr", "hrs", "s", "sec", "d", "wk", "mo", "yr",
+        "ms", "cm", "mm", "m", "km", "lb", "oz", "pct",
+    }
+)
+_NEGATION = frozenset(
+    {
+        "no", "not", "never", "none", "nor", "neither", "without", "non", "cannot",
+        "unless", "except", "absent", "avoid", "lack", "lacks", "lacking",
+        "contraindicated", "contraindication", "false", "incorrect", "unlikely",
+    }
+)
 
 DEFAULT_THRESHOLDS = {
     # Nomination thresholds: pairs at or above go to a model comparison.
@@ -28,16 +52,57 @@ DEFAULT_THRESHOLDS = {
 
 
 def tokenize(text: str) -> list[str]:
-    return [
-        token
-        for token in _TOKEN.findall(text.casefold())
-        if len(token) > 2 or any(c.isdigit() for c in token)
-    ]
+    """Every word token, case-folded. Short tokens stay: "MI", "GI", "no" and
+    "IV" are exactly the tokens that distinguish otherwise identical cards."""
+    return _TOKEN.findall(text.casefold())
+
+
+def normalised(text: str) -> str:
+    """Identity key for the exact lane: tokens joined by single spaces."""
+    return " ".join(tokenize(text))
+
+
+def discriminators(text: str) -> dict:
+    """The parts of a text that similarity cannot see but meaning depends on.
+
+    ``numbers`` are the numeric literals in order (so 0.1 and 1 differ),
+    ``negations`` the negation tokens, ``short`` the capitalised abbreviations
+    (MI, GI, IV, ECG) and unit tokens, and ``bigrams`` the ordered token pairs
+    used for the word-order check. Lower-case function words ("a", "of") are
+    not discriminators; two phrasings of one fact may differ in those.
+    """
+    tokens = tokenize(text)
+    abbreviations = [match.casefold() for match in _ABBREVIATION.findall(text)]
+    return {
+        "numbers": tuple(_NUMBER.findall(text.casefold())),
+        "negations": Counter(token for token in tokens if token in _NEGATION),
+        "short": Counter(abbreviations)
+        + Counter(token for token in tokens if token in _UNITS),
+        "bigrams": set(zip(tokens, tokens[1:])),
+    }
+
+
+def same_meaning_guard(a: str, b: str) -> str | None:
+    """Return ``None`` when nothing the vectors are blind to differs between
+    ``a`` and ``b``; otherwise the name of the first difference found."""
+    da, db = discriminators(a), discriminators(b)
+    if da["numbers"] != db["numbers"]:
+        return "numbers"
+    if da["negations"] != db["negations"]:
+        return "negation"
+    if da["short"] != db["short"]:
+        return "abbreviation or unit"
+    union = da["bigrams"] | db["bigrams"]
+    if union and len(da["bigrams"] & db["bigrams"]) / len(union) < 0.5:
+        return "word order"
+    return None
 
 
 def term_vectors(texts: list[str]) -> list[dict[str, float]]:
     """L2-normalised TF-IDF vectors. Terms in more than max(32, N/5) texts are
-    dropped: they carry no discrimination and would dominate pair work."""
+    dropped from the *vector* because they carry no discrimination and would
+    dominate pair work; the exact lane and the meaning guard do not depend on
+    the vector, so a corpus of identical texts still collapses to one."""
     counts = [Counter(tokenize(text)) for text in texts]
     document_frequency = Counter()
     for count in counts:
@@ -99,23 +164,36 @@ def cosine(a, b) -> float:
     return sum(x * y for x, y in zip(a, b))
 
 
-def _dense_scores(vectors):
-    """All-pairs dot products for unit vectors, with numpy when available."""
+_BLOCK = 1024
+
+
+def _dense_rows(vectors, threshold: float):
+    """Yield ``(index, [(other, score), ...])`` with ``score >= threshold`` for
+    unit vectors, in blocks of rows so memory is O(block × N), never O(N²)."""
     try:
         import numpy  # type: ignore
-
-        matrix = numpy.asarray(vectors, dtype=float)
-        return (matrix @ matrix.T).tolist()
     except ImportError:  # pragma: no cover - exercised only without numpy
         n = len(vectors)
-        return [
-            [cosine(vectors[i], vectors[j]) if i != j else 1.0 for j in range(n)]
-            for i in range(n)
-        ]
+        for i in range(n):
+            yield i, [
+                (j, cosine(vectors[i], vectors[j]))
+                for j in range(n)
+                if j != i and cosine(vectors[i], vectors[j]) >= threshold
+            ]
+        return
+    matrix = numpy.asarray(vectors, dtype=float)
+    n = len(vectors)
+    for start in range(0, n, _BLOCK):
+        block = matrix[start : start + _BLOCK] @ matrix.T
+        for offset, row in enumerate(block):
+            index = start + offset
+            hits = numpy.nonzero(row >= threshold)[0]
+            yield index, [(int(j), float(row[j])) for j in hits if j != index]
 
 
-def _sparse_scores(vectors):
-    """Scores above zero for each row via an inverted index; O(Σ postings²)."""
+def _sparse_rows(vectors, threshold: float):
+    """Scores at or above ``threshold`` for each row via an inverted index;
+    O(Σ postings²) over the terms that survive the document-frequency cutoff."""
     postings = defaultdict(list)
     for index, vector in enumerate(vectors):
         for term, value in vector.items():
@@ -127,7 +205,8 @@ def _sparse_scores(vectors):
             for other, other_value in members:
                 if other != index:
                     row[other] += value * other_value
-    return rows
+    for index, row in enumerate(rows):
+        yield index, [(j, s) for j, s in row.items() if s >= threshold]
 
 
 def nearest_pairs(vectors, k: int, threshold: float) -> list[dict]:
@@ -140,15 +219,10 @@ def nearest_pairs(vectors, k: int, threshold: float) -> list[dict]:
     if not vectors:
         return []
     dense = not isinstance(vectors[0], dict)
-    scores = _dense_scores(vectors) if dense else _sparse_scores(vectors)
+    rows = _dense_rows(vectors, threshold) if dense else _sparse_rows(vectors, threshold)
     pairs = {}
-    for index, row in enumerate(scores):
-        candidates = (
-            [(j, s) for j, s in enumerate(row) if j != index and s >= threshold]
-            if dense
-            else [(j, s) for j, s in row.items() if s >= threshold]
-        )
-        candidates.sort(key=lambda item: (-item[1], item[0]))
+    for index, candidates in rows:
+        candidates = sorted(candidates, key=lambda item: (-item[1], item[0]))
         for other, score in candidates[:k]:
             key = (min(index, other), max(index, other))
             if key not in pairs or pairs[key] < score:
@@ -158,31 +232,98 @@ def nearest_pairs(vectors, k: int, threshold: float) -> list[dict]:
     ]
 
 
-def suppress_duplicates(vectors, threshold: float) -> tuple[list[int], dict]:
-    """Keep the first of each near-duplicate run in the given order.
+class _KeptIndex:
+    """Scores of one candidate against the kept set only, without all-pairs work."""
 
-    Returns ``(kept_indexes, suppressed)`` where ``suppressed`` maps a dropped
-    index to ``{"duplicate_of": kept_index, "score": s}``. An item is dropped
-    only when its similarity to an already kept item reaches ``threshold``, so
-    a→b and b→c cannot drop c through b when a and c are distinct.
+    def __init__(self, dense: bool):
+        self.dense = dense
+        self.kept: list[int] = []
+        self.postings: dict = defaultdict(list)
+        self.matrix = None
+        self.rows: list = []
+
+    def scores(self, index, vector) -> list[tuple[int, float]]:
+        if not self.kept:
+            return []
+        if self.dense:
+            try:
+                import numpy  # type: ignore
+
+                if self.matrix is None or len(self.matrix) != len(self.kept):
+                    self.matrix = numpy.asarray(self.rows, dtype=float)
+                products = self.matrix @ numpy.asarray(vector, dtype=float)
+                return [(k, float(s)) for k, s in zip(self.kept, products)]
+            except ImportError:  # pragma: no cover
+                return [(k, cosine(vector, row)) for k, row in zip(self.kept, self.rows)]
+        accumulated = defaultdict(float)
+        for term, value in vector.items():
+            for kept_index, kept_value in self.postings.get(term, ()):
+                accumulated[kept_index] += value * kept_value
+        return list(accumulated.items())
+
+    def add(self, index, vector) -> None:
+        self.kept.append(index)
+        if self.dense:
+            self.rows.append(vector)
+            self.matrix = None
+        else:
+            for term, value in vector.items():
+                self.postings[term].append((index, value))
+
+
+def suppress_duplicates(
+    vectors, threshold: float, texts: list[str] | None = None
+) -> tuple[list[int], dict, dict]:
+    """Keep the first of each duplicate run in the given order.
+
+    Returns ``(kept, suppressed, related)``. ``suppressed`` maps a dropped index
+    to ``{"duplicate_of", "score", "kind"}`` where ``kind`` is ``"exact"`` for
+    identical normalised text or ``"near"`` for a pair at or above
+    ``threshold`` that also passes :func:`same_meaning_guard`. ``related`` maps
+    an index that reached the threshold but failed the guard to
+    ``{"related_to", "score", "kept_because"}``; such an item is kept.
+
+    Without ``texts`` there is no exact lane and no guard: the threshold alone
+    decides, which is appropriate only for callers that nominate rather than
+    delete. An item is compared only with already kept items, so a→b and b→c
+    cannot drop c through b when a and c are distinct.
     """
     if not vectors:
-        return [], {}
+        return [], {}, {}
     dense = not isinstance(vectors[0], dict)
-    scores = _dense_scores(vectors) if dense else _sparse_scores(vectors)
-    kept, suppressed = [], {}
-    for index in range(len(vectors)):
-        row = scores[index]
-        best, best_score = None, 0.0
-        for earlier in kept:
-            score = row[earlier] if dense else row.get(earlier, 0.0)
-            if score > best_score:
-                best, best_score = earlier, score
-        if best is not None and best_score >= threshold:
-            suppressed[index] = {"duplicate_of": best, "score": round(best_score, 6)}
-        else:
-            kept.append(index)
-    return kept, suppressed
+    index = _KeptIndex(dense)
+    kept, suppressed, related = [], {}, {}
+    identity: dict[str, int] = {}
+    for position, vector in enumerate(vectors):
+        if texts is not None:
+            key = normalised(texts[position])
+            if key in identity:
+                suppressed[position] = {
+                    "duplicate_of": identity[key], "score": 1.0, "kind": "exact",
+                }
+                continue
+        candidates = [(k, s) for k, s in index.scores(position, vector) if s >= threshold]
+        candidates.sort(key=lambda item: (-item[1], item[0]))
+        decision = None
+        for other, score in candidates:
+            reason = (
+                None if texts is None else same_meaning_guard(texts[position], texts[other])
+            )
+            if reason is None:
+                decision = {"duplicate_of": other, "score": round(score, 6), "kind": "near"}
+                break
+            if position not in related:
+                related[position] = {
+                    "related_to": other, "score": round(score, 6), "kept_because": reason,
+                }
+        if decision is not None:
+            suppressed[position] = decision
+            continue
+        kept.append(position)
+        index.add(position, vector)
+        if texts is not None:
+            identity[normalised(texts[position])] = position
+    return kept, suppressed, related
 
 
 def query_scores(query: str, vectors, method: str, texts=None, provider=None):

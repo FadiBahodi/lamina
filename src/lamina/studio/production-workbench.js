@@ -245,9 +245,14 @@
       const m=receipt.metrics || {};
       const deck=make("section","pb-deck");
       deck.append(make("h4","","Deck"));
-      deck.append(make("p","",`${m.cards ?? (receipt.cards||[]).length} cards · ${m.suppressed_duplicates ?? 0} near-duplicates removed · ${m.audited_windows ?? 0} window${m.audited_windows===1?"":"s"} audited · ${m.audit_findings ?? 0} audit finding${m.audit_findings===1?"":"s"}`));
+      deck.append(make("p","",`${m.cards ?? (receipt.cards||[]).length} cards · ${m.suppressed_duplicates ?? 0} duplicates removed · ${m.audited_windows ?? 0} window${m.audited_windows===1?"":"s"} audited · ${m.audit_findings ?? 0} audit finding${m.audit_findings===1?"":"s"}`));
+      const sweep=receipt.coverage?.sweep;
+      if(sweep)deck.append(make("p","pb-explain",`${sweep.windows_read} of ${sweep.windows} source windows read.${receipt.status==="ready"?" Every window was read and the sampled audit found nothing open.":" The deck is complete for the windows that were read; download it, and treat the rest as not covered."}`));
       const unresolved=Array.isArray(receipt.unresolved_reads)?receipt.unresolved_reads:[];
       if(unresolved.length)deck.append(make("p","pb-script-note",`${unresolved.length} source window${unresolved.length===1?"":"s"} could not be read; the deck covers the rest.`));
+      const related=run.plan?.planning?.dedup?.related || {};
+      const relatedCount=Object.keys(related).length;
+      if(relatedCount)deck.append(make("p","pb-explain",`${relatedCount} card${relatedCount===1?"":"s"} look${relatedCount===1?"s":""} similar to another card but differ${relatedCount===1?"s":""} in a number, negation, abbreviation or word order, so both were kept.`));
       const findings=receipt.audit_findings || {};
       const rows=Object.entries(findings).flatMap(([windowId,list])=>(Array.isArray(list)?list:[]).map(f=>({windowId,...f})));
       if(rows.length){const audit=make("details","pb-review");audit.append(make("summary","",`Audit findings · ${rows.length}`));rows.forEach(f=>{const item=make("div","pb-private-check");item.append(make("strong","",f.kind==="omission"?"Not yet a card":"Unsupported card"),make("p","",f.issue||""));(Array.isArray(f.evidence)?f.evidence:[]).forEach(ev=>{const cited=make("p","pb-citation");cited.append(make("span","",ev.quote||""));if(ev.unit_id)cited.append(make("small","",sourceLabel(ev.unit_id)));item.append(cited);});audit.append(item);});deck.append(audit);}
@@ -315,7 +320,10 @@
       const raw=make("details");raw.append(make("summary","","Technical details"),make("pre","",JSON.stringify(findings,null,2)));review.append(raw);
       if(receipt.format==="assessment" && examinerDetails)examinerDetails.append(review);else output.append(review);
     }
-    if (sections.length && state.local && state.runId && !example) {
+    if (receipt.format==="cards" && state.local && state.runId && !example) {
+      output.append(make("p","pb-explain","Cards are written directly by readers, so there is no section to revise. To change the deck, change the brief or the sources and start a new project."));
+    }
+    if (sections.length && receipt.format!=="cards" && state.local && state.runId && !example) {
       const revision=make("div","pb-revision"); revision.append(make("h4","","Change one section")); revision.append(make("p","","Describe the change. Lamina starts a new run and reuses unaffected work when it can."));
       const select=make("select"); select.setAttribute("aria-label","Section to revise"); sections.forEach((section,index)=>{const option=make("option","",section.title || `Section ${index+1}`); option.value=section.id || String(index); select.append(option);});
       const note=make("textarea"); note.rows=3; note.placeholder="What should change in this section?"; note.setAttribute("aria-label","Requested section change");

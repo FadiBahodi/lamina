@@ -4,7 +4,7 @@ This page lists the repository's benchmark commands, their fixtures and the reco
 
 ## Sweep versus planned on your material
 
-`benchmarks/sweep_vs_planned.py` runs the card sweep and a planned route on the same files with a live adapter and a cold cache per run. It records time to first useful output, time to completion, completion status, call counts, reported token usage and output density (cards or ideas per page). It spends real model calls:
+`benchmarks/sweep_vs_planned.py` runs the card sweep and a planned route on the same files with a live adapter and a cold cache per run. The two arms make different products (a card deck; a guide, document or podcast script), so it compares two workflow experiences on one source and cannot show that one arm produced the same required result faster; `compare_execution.py` below is the matched-plan comparison. It records time to the first output a person could use (the deck written to disk; the first section leaving review), time to completion, completion status, call counts, reported token usage and output density (cards or ideas per page). Run order alternates between runs and every workspace and output is kept unless `--discard-workspaces` is given. It spends real model calls:
 
 ```sh
 python benchmarks/sweep_vs_planned.py --adapter @models.json --files chapter.pdf --runs 3 --output benchmarks/results/sweep-vs-planned.json

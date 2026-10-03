@@ -17,7 +17,8 @@ from lamina.production_contract import REVISION
 from lamina.workload_profiles import WorkloadProfile
 
 
-def observation(stage="production_read", limit=12, replicate=1, passed=True):
+def observation(stage="production_read", limit=12, replicate=1, passed=True, carried=None):
+    carried = limit if carried is None else carried
     score = {
         "fraction": 1.0 if passed else 0,
         "counterfacts": 0,
@@ -42,7 +43,9 @@ def observation(stage="production_read", limit=12, replicate=1, passed=True):
         "stage_budgets": {
             stage: {"configuration_identity": "test", "workload": {"max_items": limit}}
         },
-        "calls": [{"stage": stage, "status": "completed"}],
+        "calls": [
+            {"stage": stage, "status": "completed", "measurement": {"workload_items": carried}}
+        ],
     }
 
 
@@ -81,6 +84,25 @@ def test_promotion_requires_every_replicate_and_preserves_tested_limit(tmp_path)
     assert profile["basis"] == "observed"
     assert len(profile["evidence"]["report_sha256"]) == 64
     trials.pop(1)
+    path.write_text(json.dumps(report(trials)))
+    assert promote_profiles(path) == {}
+
+
+def test_promotion_is_bounded_by_the_load_the_requests_actually_carried(tmp_path):
+    """Ceilings of 12 and 24 both pass, but no read ever carried more than six
+    items, so the profile says six: a knob that never bound is not a measurement."""
+    path = tmp_path / "report.json"
+    trials = [
+        observation(replicate=1, carried=6),
+        observation(replicate=2, carried=5),
+        observation(limit=24, replicate=1, carried=6),
+        observation(limit=24, replicate=2, carried=6),
+    ]
+    path.write_text(json.dumps(report(trials)))
+    assert promote_profiles(path)["production_read"]["max_items"] == 6
+    # A trial with no recorded measurement cannot be promoted at all.
+    for trial in trials:
+        trial["calls"] = [{"stage": "production_read", "status": "completed"}]
     path.write_text(json.dumps(report(trials)))
     assert promote_profiles(path) == {}
 

@@ -6,7 +6,8 @@ __pycache__/
 build/
 dist/
 demo/
-site/
+/site/
+site-output/
 studio-site/
 .DS_Store
 .env

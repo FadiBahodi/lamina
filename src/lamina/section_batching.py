@@ -5,20 +5,23 @@ request budget. It never changes section ownership or lets one section cite
 another section's private evidence. Invalid rows fall back to individual calls.
 """
 
+from .execution import DeferredBatch, ExpandedTasks, TaskResult
 from .call_runtime import make_envelope, request_budget
 from .production_contract import REVISION, ProductionError, ProductionValidationError
 from .store import digest
 
 
-def call_sections(jobs, *, workspace, provider, tracker, stage, max_bytes, single):
-    """Return one value/exception per job, retaining good siblings on failure.
+def call_sections(
+    jobs, *, workspace, provider, tracker, stage, max_bytes, single, finish=None
+):
+    """Return settled rows and deferred children for the caller's shared pool.
 
     A job contains the exact single-section envelope and its local validator.
     The grouped transport has its own cache record; each accepted row is also
     committed through the ordinary fenced single-section cache contract.
     """
     identity = f"{REVISION}:{getattr(provider, 'identity_for', lambda _: provider.identity)(stage)}"
-    results, missing = {}, []
+    results, missing, children = {}, [], []
     for n, job in enumerate(jobs):
         cached = workspace.cached_result(stage, job["envelope"], identity=identity)
         if cached is not None:
@@ -30,18 +33,34 @@ def call_sections(jobs, *, workspace, provider, tracker, stage, max_bytes, singl
         else:
             missing.append((n, job))
 
-    def individual(rows):
-        for n, job in rows:
-            try:
-                results[n] = single(job)
-            except Exception as exc:
-                results[n] = exc
+    def defer(rows):
+        indices = [n for n, _ in rows]
+        subset = [job for _, job in rows]
+        children.append(
+            DeferredBatch(
+                indices,
+                lambda: call_sections(
+                    subset,
+                    workspace=workspace,
+                    provider=provider,
+                    tracker=tracker,
+                    stage=stage,
+                    max_bytes=max_bytes,
+                    single=single,
+                    finish=finish,
+                ),
+            )
+        )
 
     def execute(rows):
         if not rows:
             return
         if len(rows) == 1:
-            individual(rows)
+            n, job = rows[0]
+            try:
+                results[n] = single(job)
+            except Exception as exc:
+                results[n] = exc
             return
         instruction = (
             "Execute each section task independently using only its own input. "
@@ -74,8 +93,8 @@ def call_sections(jobs, *, workspace, provider, tracker, stage, max_bytes, singl
         # Combining unassessed work remains forbidden even when it fits context.
         if budget.workload is None or not budget.fits(envelope):
             middle = len(rows) // 2
-            execute(rows[:middle])
-            execute(rows[middle:])
+            defer(rows[:middle])
+            defer(rows[middle:])
             return
         by_id = {job["id"]: job for _, job in rows}
 
@@ -122,7 +141,8 @@ def call_sections(jobs, *, workspace, provider, tracker, stage, max_bytes, singl
             if getattr(exc, "code", None) == "output_truncated" or isinstance(
                 exc, ProductionValidationError
             ):
-                individual(rows)
+                for row in rows:
+                    defer([row])
             else:
                 for n, _ in rows:
                     results[n] = exc
@@ -143,7 +163,22 @@ def call_sections(jobs, *, workspace, provider, tracker, stage, max_bytes, singl
                 )
             except Exception as exc:
                 results[n] = exc
-        individual(retry)
+        for row in retry:
+            defer([row])
 
-    execute(missing)
-    return [results[n] for n in range(len(jobs))]
+    if results and missing:
+        defer(missing)
+    else:
+        execute(missing)
+    settled = []
+    for n, value in sorted(results.items()):
+        try:
+            value = finish(jobs[n], value) if finish else value
+        except Exception as exc:
+            value = exc
+        settled.append(
+            TaskResult(n, error=value)
+            if isinstance(value, Exception)
+            else TaskResult(n, value=value)
+        )
+    return ExpandedTasks([*settled, *children])

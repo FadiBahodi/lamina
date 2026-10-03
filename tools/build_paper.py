@@ -30,7 +30,7 @@ def main() -> None:
     )
     target = output / "lamina-technical-paper.pdf"
     (output / "lamina.pdf").replace(target)
-    asset = ROOT / "src/lamina/studio/assets/lamina-technical-paper.pdf"
+    asset = ROOT / "src/lamina/site/assets/lamina-technical-paper.pdf"
     asset.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(target, asset)
     print(target)

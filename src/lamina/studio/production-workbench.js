@@ -95,7 +95,7 @@
   const setMessage = (value, bad = false) => { mode.textContent = value; mode.classList.toggle("error", bad); };
   window.addEventListener("lamina:setup", event => {
     const setup=event.detail;
-    if(!setup || typeof setup.brief!=="string" || !["guide","assessment","podcast-script"].includes(setup.options?.format))return;
+    if(!setup || typeof setup.brief!=="string" || !["guide","assessment","podcast-script","cards"].includes(setup.options?.format))return;
     goal.value=setup.brief; format.value=setup.options.format;
     for(const [key,input] of Object.entries(workerInputs)){
       const value=setup.options[key];input.value=Number.isInteger(value)&&value>=1&&value<=128?String(value):"";
@@ -248,6 +248,23 @@
       });output.append(practice);
     }
     if(receipt.format==="podcast-script" && !run.outputs?.audio)output.append(make("p","pb-script-note","Podcast script. Add a speech adapter to generate audio."));
+    if(receipt.format==="cards"){
+      const m=receipt.metrics || {};
+      const deck=make("section","pb-deck");
+      deck.append(make("h4","","Deck"));
+      deck.append(make("p","",`${m.cards ?? (receipt.cards||[]).length} cards · ${m.suppressed_duplicates ?? 0} near-duplicates removed · ${m.audited_windows ?? 0} window${m.audited_windows===1?"":"s"} audited · ${m.audit_findings ?? 0} audit finding${m.audit_findings===1?"":"s"}`));
+      const unresolved=Array.isArray(receipt.unresolved_reads)?receipt.unresolved_reads:[];
+      if(unresolved.length)deck.append(make("p","pb-script-note",`${unresolved.length} source window${unresolved.length===1?"":"s"} could not be read; the deck covers the rest.`));
+      const findings=receipt.audit_findings || {};
+      const rows=Object.entries(findings).flatMap(([windowId,list])=>(Array.isArray(list)?list:[]).map(f=>({windowId,...f})));
+      if(rows.length){const audit=make("details","pb-review");audit.append(make("summary","",`Audit findings · ${rows.length}`));rows.forEach(f=>{const item=make("div","pb-private-check");item.append(make("strong","",f.kind==="omission"?"Not yet a card":"Unsupported card"),make("p","",f.issue||""));(Array.isArray(f.evidence)?f.evidence:[]).forEach(ev=>{const cited=make("p","pb-citation");cited.append(make("span","",ev.quote||""));if(ev.unit_id)cited.append(make("small","",sourceLabel(ev.unit_id)));item.append(cited);});audit.append(item);});deck.append(audit);}
+      output.append(deck);
+    }
+    if(Array.isArray(run.outputs?.episodes) && run.outputs.episodes.length>1){
+      const episodes=make("div","pb-output-links");episodes.append(make("strong","","Episodes"));
+      run.outputs.episodes.forEach((path,index)=>{const link=outputLink(path,`Episode ${index+1}`);if(link)episodes.append(link);});
+      output.append(episodes);
+    }
     let examinerDetails=null;
     if (receipt.assessment_checks){output.append(make("p","pb-assessment-status",`Blind assessment check: ${receipt.assessment_checks.status || "unknown"} · ${receipt.assessment_checks.metrics?.flagged_sections ?? "?"} flagged section${receipt.assessment_checks.metrics?.flagged_sections===1?"":"s"}.`));}
     if (receipt.examiner_markdown || receipt.assessment_checks || isAssessment) {
@@ -280,11 +297,11 @@
       audioBlock.append(make("p","",delivery?.status==="review"?"Review this audio and its transcript before using it.":"The transcript records the adapter's synthesis input; verify the spoken audio by listening."));
       output.append(audioBlock);
     }
-    const linkLabels={reader:"Read formatted document",document:"Download text",pdf:"Download PDF",plan:"Inspect plan",report:"Inspect production report",candidate:"Open candidate sheet",examiner:"Open examiner sheet",examiner_pdf:"Download examiner PDF",audio:"Download audio WAV",transcript:"Download synthesis transcript",manifest:"Inspect audio report"};
-    Object.entries(run.outputs || {}).forEach(([kind,path])=>{ const link=outputLink(path,linkLabels[kind] || `Open ${kind.replaceAll("_"," ")}`);if(!link)return;if(receipt.format==="assessment" && ["examiner","examiner_pdf","report","plan"].includes(kind) && examinerDetails)examinerDetails.append(link);else links.append(link); });
+    const linkLabels={reader:"Read formatted document",document:"Download text",pdf:"Download PDF",plan:"Inspect plan",report:"Inspect production report",candidate:"Open candidate sheet",examiner:"Open examiner sheet",examiner_pdf:"Download examiner PDF",audio:"Download audio WAV",transcript:"Download synthesis transcript",manifest:"Inspect audio report",cards_tsv:"Download Anki deck (TSV)",cards_json:"Download cards (JSON)"};
+    Object.entries(run.outputs || {}).forEach(([kind,path])=>{ if(Array.isArray(path))return; const link=outputLink(path,linkLabels[kind] || `Open ${kind.replaceAll("_"," ")}`);if(!link)return;if(receipt.format==="assessment" && ["examiner","examiner_pdf","report","plan"].includes(kind) && examinerDetails)examinerDetails.append(link);else links.append(link); });
     if (links.childNodes.length) output.append(links);
     const findings=receipt.findings || receipt.initial_findings;
-    if (findings) { const review=make("details","pb-review"); review.append(make("summary","",receipt.format==="assessment"?"Private review findings":"Review findings")); const pre=make("pre","",JSON.stringify(findings,null,2)); review.append(pre); if(receipt.format==="assessment" && examinerDetails)examinerDetails.append(review);else output.append(review); }
+    if (findings && Object.keys(findings).length) { const review=make("details","pb-review"); review.append(make("summary","",receipt.format==="assessment"?"Private review findings":"Review findings")); const pre=make("pre","",JSON.stringify(findings,null,2)); review.append(pre); if(receipt.format==="assessment" && examinerDetails)examinerDetails.append(review);else output.append(review); }
     if (sections.length && state.local && state.runId && !example) {
       const revision=make("div","pb-revision"); revision.append(make("h4","","Change one section")); revision.append(make("p","","Describe the change. Lamina starts a new run and reuses unaffected work when it can."));
       const select=make("select"); select.setAttribute("aria-label","Section to revise"); sections.forEach((section,index)=>{const option=make("option","",section.title || `Section ${index+1}`); option.value=section.id || String(index); select.append(option);});

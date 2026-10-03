@@ -312,3 +312,41 @@ def test_stream_upload_and_bounded_section_previews(tmp_path, monkeypatch):
         )
     finally:
         _stop(server, thread)
+
+
+def test_cards_project_serves_the_deck_and_reports_the_sweep(tmp_path, monkeypatch):
+    server, thread = _server(tmp_path / "studio", monkeypatch, FixtureAdapter())
+    try:
+        ids = _upload_four(server)
+        code, raw = _call(
+            server,
+            "/api/projects",
+            {
+                "brief": "Flashcards about lease safety.",
+                "source_ids": ids,
+                "options": {"format": "cards", "audit_rate": 1.0},
+            },
+        )
+        assert code in {200, 201, 202}, raw
+        rid = json.loads(raw)["id"]
+        result = _finished(server, rid)
+        assert result["status"] == "ready", result.get("error")
+        receipt = result["receipt"]
+        assert receipt["format"] == "cards"
+        assert receipt["metrics"]["cards"] >= 1
+        assert receipt["metrics"]["audited_windows"] >= 1
+        assert result["outputs"]["cards_tsv"].endswith("/cards.tsv")
+        code, raw = _call(server, result["outputs"]["cards_tsv"])
+        assert code == 200
+        assert raw.decode().count("\t") >= 2
+        assert result["plan"]["workflow_decision"]["selected"] == "sweep"
+    finally:
+        _stop(server, thread)
+
+
+def test_output_links_keep_episode_lists_as_lists():
+    from lamina.project_api import _output_links
+
+    links = _output_links("a" * 32, {"document": "document.md", "episodes": ["episode-01.html", "episode-02.html"]})
+    assert links["document"] == "/outputs/" + "a" * 32 + "/document.md"
+    assert links["episodes"] == ["/outputs/" + "a" * 32 + "/episode-01.html", "/outputs/" + "a" * 32 + "/episode-02.html"]

@@ -13,7 +13,7 @@ from lamina.production_example import FixtureAdapter
 from lamina.studio_server import StudioServer
 
 
-def _static(path, with_pdf=False):
+def _static(path):
     path.mkdir(parents=True, exist_ok=True)
     (path / "index.html").write_text("studio", encoding="utf-8")
     return path

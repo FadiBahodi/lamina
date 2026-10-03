@@ -1,7 +1,7 @@
 """Measure the deterministic method fixture; never report model performance.
 
 From the repository root:
-    .venv/bin/python benchmarks/run_method_example.py
+    python benchmarks/run_method_example.py
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from lamina.method_example import method_demo
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = ROOT / "docs/experiments/current-runtime.json"
+DEFAULT_OUTPUT = ROOT / "benchmarks/results/method-runtime.json"
 NODES = ("reliability-read", "deployment-read", "incident-guide")
 STEPS = ("Initial guide", "Deployment note changed", "Operator caution selected")
 EXPECTED = (
@@ -108,7 +108,7 @@ def main() -> int:
         "schema_version": "1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "experiment": "deterministic_offline_method_fixture",
-        "reproduce": ".venv/bin/python benchmarks/run_method_example.py",
+        "reproduce": "python benchmarks/run_method_example.py",
         "python_version": platform.python_version(),
         "repetitions": args.repeats,
         "workspace_policy": "fresh temporary local workspace for each three-run sequence",

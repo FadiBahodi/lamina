@@ -1,4 +1,4 @@
-# Live model evaluation, September 2026
+# Live model evaluation, September 2026 (v0.11, production protocols 7–10)
 
 The first live experiments used Gemini 2.5 Flash on pediatric orthopedics excerpts. They exercised PDF import, source reading, planning, writing, review and repair. They found failures in request construction, source markers and the evaluator that the scripted tests had missed.
 
@@ -46,7 +46,7 @@ A preceding 4,000-token probe failed after 29.81 seconds when requested neighbor
 
 These runs measure actual provider work and explain several reliability fixes. They do not locate a quality-versus-load threshold. The clinical checks cover selected distinctions; human evaluation of the complete artifacts remains outstanding. No workload profile was promoted from the initial trials.
 
-Use [calibration](calibration.md) to test a representative corpus with declared checks. Keep source controls, failures and posthoc rescoring distinct in the record. [Engineering decisions](engineering-decisions.md) connects the design to historical workloads and the alternatives considered.
+Use [calibration](calibration.md) to test a representative corpus with declared checks. Keep source controls, failures and posthoc rescoring distinct in the record. [System origins](system-origins.md#what-the-earlier-workloads-measured) records the historical workloads, and [architecture](architecture.md#9-alternatives-considered) lists the alternatives considered.
 
 ## Protocol 9 confirmation
 

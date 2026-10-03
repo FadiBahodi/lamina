@@ -66,9 +66,17 @@ Usage belongs to the current calling thread. The bundled HTTP adapters retain re
 
 Each stage can select its own configured adapter, request capacity and workload policy. Direct and supplied-assignment workflows skip the source-planning stages they do not need.
 
-Reader inputs provide ordered source spans. Prose spans follow conservative sentence boundaries; tables, lists and code blocks remain intact. Offsets count Unicode characters. Readers return `evidence_refs: [{span_id, end_span_id?, phrase?}]`; a range must be contiguous within one owned unit, and an optional phrase must resolve uniquely in that range using the quotation normalizer. Code materializes the original quotation. Existing `{unit_id, quote}` evidence remains supported. Writers receive compact span aliases and return `body_marked`, placing markers such as `[s3]` or `[s3-s5]` after supported statements. Lamina resolves the markers into source quotations and claim records, then removes them from the finished text. Assessment prompts and marking text are processed separately.
-
 An extraction-row correction supplies `repair.invalid_ideas: [{index, idea, error}]`. The response supplies only `replacements: [{index, idea}]` for those indices. The validator retains accepted rows, merges replacements and checks the complete result under the same attempt allowance.
+
+## Source spans and citations
+
+Each reader input contains the unchanged source text of every unit once and an ordered `spans` index for it. Every index entry has an `id` (`{unit_id}:s{n}`), `start` and `end`; offsets count Unicode characters in that unit's text. Separating whitespace belongs to the preceding span, so a contiguous range reproduces the source exactly. Prose spans follow conservative sentence boundaries inside paragraphs; tables, lists and code blocks are single spans. [Parsing](parsing.md#source-references) gives the boundary rules. Halo context arrives with its real span IDs, so a citation of a halo span resolves against the complete neighboring unit.
+
+Readers return `evidence_refs: [{span_id, end_span_id?, phrase?}]`. A range must be contiguous and in source order within one unit visible to that read. An optional `phrase` narrows the evidence to an exact substring that occurs once in that range under the quotation normalizer. Code rebuilds the span index from stored text and materializes the original quotation; it never uses a model-supplied offset. Unknown IDs, reversed ranges and ranges crossing unit boundaries fail validation. Existing `{unit_id, quote}` evidence remains supported, with conservative normalization of formatting differences. Reader workload `max_items` counts owned spans; the token allowance includes all rendered context and instructions.
+
+Writers receive compact span aliases and return `body_marked`, placing markers such as `[s3]` or `[s3-s5]` after supported statements. Lamina resolves each marker against only the spans supplied to that section, reconstructs source quotations and claim records, then removes the markers from the finished text. A Markdown backslash escapes a literal marker (`\[s3]`). Assessment prompts and marking text are processed separately.
+
+These addresses establish where cited text occurs. They do not identify semantic facts, prove support for an interpretation or measure extraction recall.
 
 ## Workload limits
 
@@ -99,9 +107,9 @@ Replace placeholders with positive JSON integers. These values are operator choi
 
 Item counts describe objects supplied to the task; a source unit or sentence can contain many propositions. Use token limits as well when object sizes vary. Unowned context contributes to the token measurement.
 
-Multi-item planning, writing and review require a declared workload policy. Planned workflows check required route, write and review policies before reading sources. An unprofiled reader groups up to eight adjacent prose blocks within a section, while preserving whole PDF pages and slide groups; an explicitly assigned single structure can run without a policy only when no additional source units, form exemplars or retained observations enter its context. Its semantic quality remains unmeasured. The engine never silently substitutes the model context limit for a missing workload policy.
+Multi-item planning, writing and review require a declared workload policy. Planned workflows check required route, write and review policies before reading sources. An unprofiled reader groups up to eight contiguous units within one heading section, while keeping whole PDF pages and slide groups; an explicitly assigned single structure can run without a policy only when no additional source units, form exemplars or retained observations enter its context. Its semantic quality remains unmeasured. The engine never silently substitutes the model context limit for a missing workload policy.
 
-`basis="configured"` is the default. Evaluate selected loads on the actual model, task, domain and output requirements before treating them as supported operating limits. The [quality evaluation protocol](quality-evaluation.md) describes experiments and their scope.
+`basis="configured"` is the default. Evaluate selected loads on the actual model, task, domain and output requirements before treating them as supported operating limits. [Calibration](calibration.md) describes the experiments and their scope.
 
 A named-stage policy can declare `basis="observed"` with an `evidence` object containing `provider_identity`, `protocol_revision`, `report_path` and `report_sha256`. The provider identity must match `configuration_identity`, or `StageProvider.configuration_identity_for(stage)`; the revision must match the request protocol revision. `report_path` locates a readable configured-provider observation report; `report_sha256` verifies its contents. The report must contain a completed trial with a completed call, matching stage-budget and provider-configuration records, and the same protocol revision. Relative report paths resolve against the model configuration file. The runtime checks that provenance and configuration binding; it cannot infer that the observed load is appropriate for new material. The `*` fallback supports configured policies only.
 
@@ -133,42 +141,20 @@ Keep requests stateless, especially assessment solves. Reusing a process or HTTP
 
 Cache identity includes command arguments, readable script hashes, model configuration and explicit environment overrides. Use `version` when behavior changes outside those inputs. `StageProvider` forwards the selected adapter's identity, budget and usage, and closes each owned adapter once.
 
-## References
-
-HTTPX documents [connection pooling](https://www.python-httpx.org/advanced/clients/), [resource limits](https://www.python-httpx.org/advanced/resource-limits/) and [HTTP/2](https://www.python-httpx.org/http2/). Output schemas follow [JSON Schema](https://json-schema.org/understanding-json-schema/).
-
-
 ## Grouped requests and evidence comparison
 
-`sections_per_request > 1` allows writing/review envelopes with `input.section_tasks`.
-Each task has a `section_id`, its independent `input`, and `expected_shape`. Return
-`{"sections":[{"section_id":"exact ID","result":{...}}]}`. Source aliases are
-local to each task. No section may borrow another task's evidence. Valid rows
-receive individual cache entries; invalid/missing rows retry individually. Hard
-capacity and workload checks apply to the full grouped envelope. Grouping is
-opt-in and needs matched quality evaluation on the intended product.
+`sections_per_request > 1` allows writing and review envelopes with `input.section_tasks`. Each task has a `section_id`, its independent `input` and `expected_shape`. Return `{"sections":[{"section_id":"exact ID","result":{...}}]}`. Source aliases are local to each task, and no section may borrow another task's evidence. Valid rows receive individual cache entries; invalid or missing rows retry individually. Hard capacity and workload checks apply to the full grouped envelope. Grouping is opt-in and needs matched quality evaluation on the intended product.
 
-`compare_relations=true` enables `production_compare`. Its workload is the
-number of ideas jointly compared. The response distinguishes repetition,
-complement, different conditions, contradiction, supersession, unrelated and
-unresolved evidence. Specific `followup_queries` may add missing evidence for
-up to two further comparisons. A Python provider may implement
-`nominate_relations(ideas, units, limit)` to add groups of 2–32 idea IDs from
-entity resolution, dense retrieval or caller knowledge. No dense model is
-installed or trained automatically. Unresolved groups keep the project in review.
+`compare_relations=true` enables `production_compare`. Its workload is the number of ideas jointly compared. The response distinguishes repetition, complement, different conditions, contradiction, supersession, unrelated and unresolved evidence. Specific `followup_queries` may add missing evidence for up to two further comparisons. A Python provider may implement `nominate_relations(ideas, units, limit)` to add groups of 2–32 idea IDs from entity resolution, dense retrieval or caller knowledge. No dense model is installed or trained automatically. Unresolved groups keep the project in review.
 
-The native Gemini adapter accepts concurrency from 1 to 128. Its default remains
-4; the engine's worker count and provider's actual allowance are separate.
-Counting has a separate admission lane from generation. Counts remain exact;
-no byte-to-token approximation is used. Transport metrics distinguish admission
-waits from network time. Request receipts retain preparation time and reported
-thinking/reasoning/total tokens without inferring unreported usage.
+## Native Gemini adapter
+
+[`examples/adapter/gemini_provider.py`](../examples/adapter/gemini_provider.py) calls Gemini's `countTokens` and `generateContent` methods directly. It accepts `max_concurrency` from 1 to 128 and defaults to 16, matching the engine's default `workers`; the engine's worker count and the provider's actual allowance remain separate settings. Token counting has an admission lane separate from generation. Counts stay exact, with no byte-to-token approximation. Transport metrics distinguish admission waits from network time. Request receipts retain preparation time and reported thinking, reasoning and total tokens without inferring unreported usage. [Calibration](calibration.md#calibrate-with-geminis-native-tokenizer) shows the provider in a workload experiment.
 
 ## Speech resources
 
-Command/JSON-lines profile rows optionally accept `audio_resource` (a stable
-resource name) and `audio_concurrency` (1–128). Profiles sharing one actual
-resource must use the same name and capacity. For example, use a named remote
-speech quota with concurrency 4; separate local devices can have separate names.
-Without a resource name, speech retains the conservative per-user local-device
-lock. Capacity is enforced across local processes, not across remote hosts.
+Command and JSON-lines profile rows optionally accept `audio_resource` (a stable resource name) and `audio_concurrency` (1–128). Profiles sharing one actual resource must use the same name and capacity: for example, a named remote speech quota with concurrency 4, while separate local devices use separate names. Without a resource name, speech keeps the conservative per-user local-device lock. Capacity is enforced across local processes on one machine, not across remote hosts. [Production](production.md#export-documents-assessments-and-podcast-scripts) describes how sections are synthesized during writing and assembled per episode.
+
+## References
+
+HTTPX documents [connection pooling](https://www.python-httpx.org/advanced/clients/), [resource limits](https://www.python-httpx.org/advanced/resource-limits/) and [HTTP/2](https://www.python-httpx.org/http2/). Output schemas follow [JSON Schema](https://json-schema.org/understanding-json-schema/).

@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import argparse
 from contextlib import ExitStack
-import functools
-import http.server
 import json
 import shlex
 import sys
 from pathlib import Path
 
 from . import __version__
-from .export import export_bundle
 from .ingest import ingest_paths
 from .retrieval import search
 from .store import Workspace
@@ -93,27 +90,6 @@ def parser() -> argparse.ArgumentParser:
         "inspect", help="Inspect source and durable-job counts"
     )
     inspect.add_argument("--workspace", type=Path, default=Path(".lamina"))
-    build = commands.add_parser(
-        "build", help="Generate and review with your configured JSON command adapter"
-    )
-    build.add_argument("--workspace", type=Path, default=Path(".lamina"))
-    build.add_argument(
-        "--adapter",
-        required=True,
-        help="Executable and arguments; invoked without a shell",
-    )
-    build.add_argument("--output", type=Path, default=Path("site"))
-    build.add_argument("--workers", type=int, default=4)
-    build.add_argument("--timeout", type=float, default=120)
-    build.add_argument(
-        "--adapter-version",
-        help="Cache identity for your model/config revision (or LAMINA_ADAPTER_VERSION)",
-    )
-    build.add_argument(
-        "--pdf",
-        action="store_true",
-        help="Include a print-ready study book (requires the pdf extra)",
-    )
     produce = commands.add_parser(
         "produce",
         help="Plan and produce a source-linked document, script or assessment",
@@ -247,23 +223,6 @@ def parser() -> argparse.ArgumentParser:
         help="any (default) renders a podcast script even while it is in review and names its provisional sections in the audio manifest; ready withholds audio until every check passes",
     )
     produce.add_argument("--output", type=Path, default=Path("output/project"))
-    run = commands.add_parser(
-        "run", help="Run a validated teaching procedure with a configured adapter"
-    )
-    run.add_argument(
-        "--procedure", required=True, type=Path, help="Data-only procedure JSON v1"
-    )
-    run.add_argument("--workspace", type=Path, default=Path(".lamina"))
-    run.add_argument(
-        "--adapter",
-        required=True,
-        help="Executable and arguments; invoked without a shell",
-    )
-    run.add_argument(
-        "--adapter-version", help="Cache identity for your model/config revision"
-    )
-    run.add_argument("--timeout", type=float, default=120)
-    run.add_argument("--output", type=Path, default=Path("site"))
     method = commands.add_parser(
         "method",
         help="Inspect and execute a reusable method with explicit dependencies",
@@ -301,9 +260,7 @@ def parser() -> argparse.ArgumentParser:
     method_experience.add_argument("--limit", type=int, default=20)
     method_experience.add_argument("--workspace", type=Path, default=Path(".lamina"))
     studio = commands.add_parser(
-        "app",
-        aliases=["studio"],
-        help="Open the local Lamina app with an optional startup adapter",
+        "app", help="Open the local Lamina app with an optional startup adapter"
     )
     studio.add_argument("--workspace", type=Path, default=Path(".lamina"))
     studio.add_argument("--port", type=int, default=8048)
@@ -317,32 +274,10 @@ def parser() -> argparse.ArgumentParser:
     studio.add_argument("--audio-adapter", help="Startup-only optional speech adapter")
     studio.add_argument("--audio-adapter-version")
     demo = commands.add_parser(
-        "demo", help="Run the original curated fixture, offline, with no credentials"
+        "demo", help="Run the production engine on a bundled fixture, offline"
     )
     demo.add_argument("--output", type=Path, default=Path("demo"))
     demo.add_argument("--workspace", type=Path, default=Path(".lamina-demo"))
-    demo.add_argument("--workers", type=int, default=4)
-    demo.add_argument(
-        "--pdf",
-        action="store_true",
-        help="Include a print-ready study book (requires the pdf extra)",
-    )
-    export = commands.add_parser(
-        "export", help="Render an existing bundle to another artifact"
-    )
-    export.add_argument("bundle", type=Path)
-    export.add_argument("--format", choices=["html", "pdf", "markdown"], required=True)
-    export.add_argument("--output", type=Path, required=True)
-    validate = commands.add_parser(
-        "validate", help="Recheck a saved bundle's source and coverage invariants"
-    )
-    validate.add_argument("bundle", type=Path)
-    serve = commands.add_parser(
-        "serve", help="Serve an exported site on your local machine"
-    )
-    serve.add_argument("directory", type=Path)
-    serve.add_argument("--port", type=int, default=8000)
-    serve.add_argument("--host", default="127.0.0.1", help="Default: loopback only")
     return cli
 
 
@@ -412,40 +347,21 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
         elif args.command == "inspect":
             result = Workspace(args.workspace).stats()
-        elif args.command in {"build", "demo"}:
-            from .pipeline import build
-            from .providers import DemoProvider
-            from .studio_server import make_provider
+        elif args.command == "demo":
+            from .production_example import production_demo
+            from .production_export import export_production
 
-            workspace = Workspace(args.workspace)
-            if args.command == "demo":
-                fixture = Path(__file__).with_name("demo")
-                ingest_paths([fixture], workspace)
-                provider = DemoProvider()
-            else:
-                provider = own(
-                    make_provider(
-                        args.adapter, timeout=args.timeout, version=args.adapter_version
-                    )
-                )
-            bundle = build(workspace, provider, workers=args.workers)
-            from .print_export import export_markdown, export_pdf
-            from .validation import validate_bundle
-
-            validate_bundle(bundle)
-            args.output.mkdir(parents=True, exist_ok=True)
-            export_markdown(bundle, args.output / "study-guide.md")
-            bundle["downloads"] = {"markdown": "study-guide.md"}
-            if args.pdf:
-                export_pdf(bundle, args.output / "study-guide.pdf")
-                bundle["downloads"]["pdf"] = "study-guide.pdf"
-            export_bundle(bundle, args.output)
+            example = production_demo(args.workspace)
+            receipt = example["runs"][0]["receipt"]
+            links = export_production(receipt, example["plan"], args.output)
             result = {
                 "output": str(args.output),
-                "title": bundle["title"],
-                "lessons": len(bundle["lessons"]),
-                "workspace": workspace.stats(),
-                "next": f"lamina serve {shlex.quote(str(args.output))}",
+                "title": receipt.get("title"),
+                "status": receipt["status"],
+                "sections": len(receipt["sections"]),
+                "outputs": links,
+                "workspace": str(args.workspace),
+                "next": "lamina app --workspace " + shlex.quote(str(args.workspace)),
             }
         elif args.command == "produce":
             from .production import plan_production, run_production
@@ -552,26 +468,6 @@ def main(argv: list[str] | None = None) -> int:
                 "files": links,
                 "metrics": receipt["metrics"],
             }
-        elif args.command == "run":
-            from .procedures import validate_procedure
-            from .studio_server import make_provider, run_procedure
-
-            procedure = validate_procedure(
-                json.loads(args.procedure.read_text(encoding="utf-8"))
-            )
-            provider = own(
-                make_provider(
-                    args.adapter, version=args.adapter_version, timeout=args.timeout
-                )
-            )
-            workspace = Workspace(args.workspace)
-            result = run_procedure(workspace, provider, procedure, args.output)
-            result = {
-                "output": str(args.output),
-                "procedure": procedure["id"],
-                **result,
-                "workspace": workspace.stats(),
-            }
         elif args.command == "method":
             from .methods import validate_method
             from .method_runtime import run_method, record_observation, list_experience
@@ -626,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = list_experience(
                     Workspace(args.workspace), args.family, limit=args.limit
                 )
-        elif args.command in {"app", "studio"}:
+        elif args.command == "app":
             from .studio_server import StudioServer
 
             server = StudioServer(
@@ -640,49 +536,6 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(
                 f"Lamina at http://127.0.0.1:{server.server_port} · Ctrl-C to stop",
-                flush=True,
-            )
-            try:
-                server.serve_forever()
-            except KeyboardInterrupt:
-                pass
-            finally:
-                server.server_close()
-            return 0
-        elif args.command == "export":
-            from .validation import validate_bundle
-
-            bundle = json.loads(args.bundle.read_text(encoding="utf-8"))
-            validate_bundle(bundle)
-            if args.format == "html":
-                export_bundle(bundle, args.output)
-            else:
-                from .print_export import export_markdown, export_pdf
-
-                (export_pdf if args.format == "pdf" else export_markdown)(
-                    bundle, args.output
-                )
-            result = {"output": str(args.output), "format": args.format}
-        elif args.command == "validate":
-            from .validation import validate_bundle
-
-            bundle = json.loads(args.bundle.read_text(encoding="utf-8"))
-            validate_bundle(bundle)
-            result = {
-                "valid": True,
-                "title": bundle["title"],
-                "lessons": len(bundle["lessons"]),
-            }
-        elif args.command == "serve":
-            if not (args.directory / "index.html").is_file():
-                raise ValueError("Directory must contain an exported index.html")
-            handler = functools.partial(
-                http.server.SimpleHTTPRequestHandler,
-                directory=str(args.directory.resolve()),
-            )
-            server = http.server.ThreadingHTTPServer((args.host, args.port), handler)
-            print(
-                f"Lamina at http://{args.host}:{server.server_port} · Ctrl-C to stop",
                 flush=True,
             )
             try:

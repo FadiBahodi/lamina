@@ -3,20 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0d1117" />
+    <meta name="theme-color" content="#f8f9f5" />
     <meta
       name="description"
-      content="An open-source Python framework for turning documents into reference guides, podcasts and practice exams. Parallel model calls, source citations and reusable work."
+      content="Lamina turns source files into flashcards, reference guides, podcasts and practice exams with parallel model calls and exact source citations."
     />
     <title>Lamina — Local projects</title>
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="method-workbench.css" />
     <link rel="stylesheet" href="production-workbench.css" />
-    <link rel="stylesheet" href="product.css" />
-    <script src="app.js" defer></script>
-    <script src="method-workbench.js" defer></script>
     <script src="production-workbench.js" defer></script>
+    <script src="method-workbench.js" defer></script>
     <script src="workflow-guide.js" defer></script>
   </head>
   <body>
@@ -26,9 +24,7 @@
         ><img src="assets/mark.svg" alt="" width="32" height="32" /><span>LAMINA</span></a
       >
       <nav class="nav" aria-label="Primary">
-        <button type="button" class="nav-link is-active" data-view="workflows" aria-current="page">Projects</button>
-        <button type="button" class="nav-link" data-view="studio">Document builder</button>
-        <button type="button" class="nav-link" data-view="procedures">Procedures</button>
+        <a class="nav-link is-active" href="#main" aria-current="page">Projects</a>
         <a class="nav-link" href="https://github.com/FadiBahodi/lamina/blob/main/docs/README.md">Documentation</a>
       </nav>
       <a
@@ -40,210 +36,12 @@
     </header>
 
     <main id="main">
-      <section class="view is-active" id="view-workflows" aria-labelledby="workflows-title">
+      <section class="view" id="view-workflows" aria-labelledby="workflows-title">
         <div class="project-heading"><div><span class="section-index">PROJECTS</span><h2 id="workflows-title">Create a project</h2><p>Describe what you want to make and add your files. Projects use the model connection configured when you start the local app.</p></div><span class="project-mode" id="project-mode">Checking local app…</span></div>
         <details class="advanced-workflow"><summary>Start from a project setup</summary><div id="workflow-explorer"><p class="loading">Loading project setups…</p></div></details>
         <div id="production-workbench"><p class="loading">Loading project form…</p></div>
-        <details class="advanced-workflow"><summary>Advanced tools</summary><p>Define your own jobs and dependencies, or use the fixed-format document builder.</p><div id="method-workbench"><p class="loading">Loading method editor…</p></div><div class="workbench-secondary"><button type="button" class="text-button" data-view="studio">Fixed-format document builder</button><button type="button" class="text-button" data-view="procedures">Document settings</button></div></details>
+        <details class="advanced-workflow"><summary>Advanced tools</summary><p>Define your own jobs and dependencies as a method, run it, and keep observations for later runs.</p><div id="method-workbench"><p class="loading">Loading method editor…</p></div></details>
       </section>
-
-      <section
-        class="view"
-        id="view-studio"
-        aria-labelledby="studio-title"
-        hidden
-      >
-        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Projects</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="procedures">Document settings</button></nav>
-        <div class="section-heading">
-          <div>
-            <span class="section-index">BUILD / LOCAL PRODUCTION</span>
-            <h2 id="studio-title">Build from your documents.</h2>
-          </div>
-          <p>
-            This builder uses a fixed document format. To have a model organize the sections, use Projects.
-          </p>
-        </div>
-        <div class="section-heading production-heading">
-          <div>
-            <span class="section-index"
-              >PROJECT SETUP</span
-            >
-            <h2>Run configuration</h2>
-          </div>
-          <p>
-            <span class="mode-pill" id="mode-pill">Checking local mode…</span>
-            <span id="mode-description">Checking the local server and model connection.</span>
-          </p>
-        </div>
-        <div class="desk-grid">
-          <div class="desk-main">
-            <section class="desk-block" aria-labelledby="sources-title">
-              <div class="block-heading">
-                <span class="step-number">01</span>
-                <div>
-                  <h3 id="sources-title">Sources</h3>
-                  <p>
-                    Choose the documents you want to use for this run.
-                  </p>
-                </div>
-              </div>
-              <label class="dropzone" id="dropzone" for="source-input"
-                ><span class="drop-icon" aria-hidden="true">＋</span
-                ><strong>Add source files</strong
-                ><span id="source-hint">Choose or drop .md and .txt files</span
-                ><input
-                  id="source-input"
-                  type="file"
-                  accept=".md,.txt,text/plain,text/markdown"
-                  multiple
-              /></label>
-              <div class="source-list" id="source-list" aria-live="polite">
-                <p class="empty-small">
-                  No local files selected. Add files above to begin.
-                </p>
-              </div>
-              <div class="source-actions">
-                <button
-                  class="button button-secondary"
-                  type="button"
-                  id="submit-sources"
-                  disabled
-                >
-                  Store sources locally</button
-                ><span class="inline-note" id="sources-note"
-                  >Uploads require the local server.</span
-                >
-              </div>
-            </section>
-            <section class="desk-block" aria-labelledby="procedure-title">
-              <div class="block-heading">
-                <span class="step-number">02</span>
-                <div>
-                  <h3 id="procedure-title">Procedure</h3>
-                  <p>Portable instructions and output selection.</p>
-                </div>
-              </div>
-              <div
-                class="procedure-choices"
-                id="procedure-choices"
-                role="radiogroup"
-                aria-label="Choose a procedure"
-              ></div>
-              <div class="selected-procedure" id="selected-procedure"></div>
-              <div class="source-actions">
-                <button
-                  class="button button-secondary"
-                  type="button"
-                  id="download-selected"
-                >
-                  Download procedure JSON
-                  <span aria-hidden="true">↓</span></button
-                ><button
-                  class="text-button"
-                  type="button"
-                  data-view="procedures"
-                >
-                  Inspect &amp; import procedures
-                  <span aria-hidden="true">↗</span>
-                </button>
-              </div>
-            </section>
-            <section class="desk-block run-block" aria-labelledby="run-title">
-              <div class="block-heading">
-                <span class="step-number">03</span>
-                <div>
-                  <h3 id="run-title">Production run</h3>
-                  <p>
-                    The local server reports actual job state and export links.
-                  </p>
-                </div>
-              </div>
-              <div class="run-track" aria-label="Workflow stages">
-                <span>Read sources</span><i aria-hidden="true"></i
-                ><span>Extract ideas</span><i aria-hidden="true"></i
-                ><span>Compose</span><i aria-hidden="true"></i
-                ><span>Review &amp; export</span>
-              </div>
-              <div class="run-controls">
-                <button
-                  class="button button-primary"
-                  type="button"
-                  id="run-button"
-                >
-                  Checking model connection…
-                </button>
-                <p id="run-guidance">
-                  Connect a model and store your sources to start a run.
-                </p>
-              </div>
-              <div
-                id="run-status"
-                class="run-status"
-                aria-live="polite"
-                hidden
-              ></div>
-            </section>
-          </div>
-          <aside class="desk-aside" aria-labelledby="output-title">
-            <div class="aside-top">
-              <span class="section-index">OUTPUT PREVIEW</span>
-              <h3 id="output-title">Output preview</h3>
-              <p id="output-description"></p>
-            </div>
-            <div id="output-preview" class="output-preview" aria-live="polite">
-              <p>Your completed run will appear here.</p>
-            </div>
-            <div id="output-list" class="output-list"></div>
-            <div class="aside-foot">
-              <span class="small-label">SOURCE REFERENCES</span>
-              <p>
-                Each output retains its source passages and section assignments.
-              </p>
-            </div>
-          </aside>
-        </div>
-      </section>
-
-      <section
-        class="view"
-        id="view-procedures"
-        aria-labelledby="procedures-title"
-        hidden
-      >
-        <nav class="workbench-nav" aria-label="Workbench"><button type="button" data-view="workflows">Projects</button><button type="button" data-view="studio">Document builder</button><button type="button" data-view="procedures">Document settings</button></nav>
-        <div class="section-heading">
-          <div>
-            <span class="section-index"
-              >PROCEDURES / PORTABLE CONFIGURATION</span
-            >
-            <h2 id="procedures-title">Configure a document workflow.</h2>
-          </div>
-          <p>
-            Import, edit, validate, and export declarative procedures. Browser
-            edits stay local until you start a run.
-          </p>
-        </div>
-        <div class="procedure-page">
-          <div>
-            <div id="procedure-library" class="procedure-library"></div>
-            <label class="import-box" for="procedure-input"
-              ><span class="small-label">PORTABLE CONTRACT / JSON</span
-              ><strong>Import a procedure</strong
-              ><span>Validated on import. Stored in this browser.</span
-              ><input
-                id="procedure-input"
-                type="file"
-                accept="application/json,.json"
-            /></label>
-            <p class="inline-note" id="import-note" aria-live="polite"></p>
-          </div>
-          <article
-            class="procedure-inspector"
-            id="procedure-inspector"
-          ></article>
-        </div>
-      </section>
-
     </main>
     <footer class="footer">
       <div class="footer-brand">
@@ -255,9 +53,9 @@
           rel="noopener noreferrer"
           >Source on GitHub</a
         ><a
-          href="https://github.com/FadiBahodi/lamina#install-and-run"
+          href="https://github.com/FadiBahodi/lamina#install"
           rel="noopener noreferrer"
-          >Run locally</a
+          >Install</a
         >
       </div>
       <p>

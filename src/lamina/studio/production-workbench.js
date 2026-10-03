@@ -32,7 +32,7 @@
   const capacityIntro = make("p", "pb-explain", "Choose how many requests can run at once. Each section is reviewed after it is written.");
   const capacityFields = make("div", "pb-capacity-fields");
   const workerInputs = {};
-  [["reader_workers", "Reading", 8], ["writer_workers", "Writing", 8], ["review_workers", "Review", 8]].forEach(([key, label, value]) => {
+  [["reader_workers", "Reading", 16], ["writer_workers", "Writing", 16], ["review_workers", "Review", 16]].forEach(([key, label, value]) => {
     const field = make("label", "pb-worker"); field.append(make("span", "", `${label} at once`));
     const input = make("input"); input.type = "number"; input.min = "1"; input.max = "128"; input.step = "1"; input.value = ""; input.placeholder = "Use total limit"; input.setAttribute("aria-label", `${label} workers at once`);
     field.append(input); capacityFields.append(field); workerInputs[key] = input;
@@ -44,7 +44,7 @@
   const workflow = make("select"); workflow.setAttribute("aria-label", "Workflow");
   [["auto","Automatic"],["direct","Write directly from sources"],["planned","Read, outline and write"],["sweep","Read straight to flashcards"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
   workflowLabel.append(workflow); contextFields.append(workflowLabel);
-  const totalWorkers = numericField("Maximum concurrent requests", 8, 1, 128);
+  const totalWorkers = numericField("Maximum concurrent requests", 16, 1, 128);
   const totalWorkerField = totalWorkers.parentElement; totalWorkerField.remove();
   const readingLabel = make("label", "pb-worker"); readingLabel.append(make("span", "", "Source reading"));
   const reading = make("select"); reading.setAttribute("aria-label", "Source reading");
@@ -96,7 +96,7 @@
     coreWords.value=setup.options.core_words??"";haloUnits.value=setup.options.halo_units??0;
     maxRequest.value=setup.options.max_input_bytes??"";reading.value=setup.options.reading??"task";
     workflow.value=setup.options.workflow??"auto";maxAttempts.value=setup.options.max_attempts??2;
-    totalWorkers.value=setup.options.workers??8;
+    totalWorkers.value=setup.options.workers??16;
     updateFormatNote();updateRetrievalChoice();retrievalTargets.checked=Boolean(setup.options.retrieval_targets)&&!retrievalChoice.hidden;
     let notice=form.querySelector('.setup-loaded');if(!notice){notice=make('p','setup-loaded');notice.setAttribute('role','status');form.prepend(notice);}
     notice.textContent=`${setup.name} setup loaded. Adjust the brief, then choose your sources.`;
@@ -380,8 +380,5 @@
   async function initialize(){
     try{await refreshSources();}catch{state.local=false;state.adapter=false;start.disabled=true;fileInput.disabled=true;recent.hidden=true;renderSources();setMessage("Cannot reach the local app. Start Lamina and open the address it prints.");const badge=document.getElementById("project-mode");if(badge)badge.textContent="Local server unavailable";}
   }
-  window.addEventListener("lamina:view", event => {
-    if (event.detail === "workflows") refreshSources().catch(() => setMessage("Cannot refresh local sources. Reload the app to reconnect.", true));
-  });
   initialize();
 })();

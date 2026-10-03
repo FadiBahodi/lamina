@@ -1,19 +1,36 @@
 # Documentation
 
-Install Lamina and configure a model using the [repository README](../README.md). Then use the local app, CLI or Python API with your own source files.
+Install Lamina and configure a model using the [repository README](../README.md). The guides below cover the local app, the CLI and the Python API.
 
-| Need | Guide |
+| Task | Guide |
 | --- | --- |
-| Generate, export or revise an artifact | [Production](production.md) |
-| Connect a model and set request limits | [Adapters](adapters.md) |
-| Understand parsing, source boundaries and OCR | [Parsing](parsing.md) |
-| Choose the work and context for a particular product | [Workflow design](workflow-design.md) |
-| Follow scheduling, caching and recovery in code | [Architecture](architecture.md) |
-| Define a custom graph of jobs | [Methods](methods.md) |
-| Check what is implemented | [Capability status](architecture-status.md) |
+| Generate, export or revise cards, guides, podcast scripts and assessments | [Production](production.md) |
+| Connect a model, set request and workload limits, configure speech | [Adapters](adapters.md) |
+| Import Markdown, text, PDF and PowerPoint files, with optional OCR | [Parsing](parsing.md) |
+| Run a custom graph of jobs and reuse selected observations | [Methods](methods.md) |
+| Choose the work and context for a reference, podcast or practice exam | [Workflow design](workflow-design.md) |
+| Measure workload limits and fact preservation on your model and material | [Calibration](calibration.md) |
 
-For deeper technical detail, see [ownership and context](design.md), [evidence and batching](evidence-execution.md), and [latency and resource limits](flow-geometry.md). [Calibration](calibration.md) and [quality evaluation](quality-evaluation.md) describe how to assess a model on your material; [live-model results](live-model-evaluation.md) and [benchmarks](benchmarks.md) retain measured outcomes and their limits.
+## Design
 
-[Request grouping comparison](matched-execution.md) reports planned, grouped and direct runs on the same sources.
+| Document | Contents |
+| --- | --- |
+| [Architecture](architecture.md) | Source structure, reading and evidence, organization, ownership, evidence comparison, checks, execution, reuse, alternatives considered and the code map |
+| [Flow geometry](flow-geometry.md) | Dependency chains, completion-time bounds, halo and batching tradeoffs, context amplification, repair cost and failure accumulation |
+| [Capability status](architecture-status.md) | Implemented behavior and remaining limits by area |
 
-[System origins](system-origins.md) records the earlier reference, audio and exam systems. [Engineering decisions](engineering-decisions.md) preserves alternatives considered. Older [procedure APIs](procedures.md) and the [technical paper](paper/lamina.tex) remain available; use the current guides above for runtime behavior.
+## Evaluation and results
+
+| Document | Contents |
+| --- | --- |
+| [Measurement](measurement.md) | Rules, evaluation layers and the protocol for quality-matched comparisons with other approaches |
+| [Benchmarks](benchmarks.md) | Fixture commands and recorded results for grouping, the workflow matrix, scheduling and the method runtime |
+| [Live model evaluation](live-model-evaluation.md) | Gemini runs from September 2026, their failures and the fixes they prompted |
+
+## History and paper
+
+| Document | Contents |
+| --- | --- |
+| [System origins](system-origins.md) | The reference, audio, exam and staged-case systems Lamina grew from, with their recorded workloads and timings |
+| [Technical paper](paper/README.md) | PDF, LaTeX source and build instructions |
+| [Release notes, v0.12.0](releases/v0.12.0.md) | Card sweep, streaming planner, boundary halo and podcast episodes |

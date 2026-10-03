@@ -1,6 +1,19 @@
 # Where a production run spends its time
 
-A run takes longer when it repeats work, waits for a prerequisite, or queues for a busy resource. Adding workers helps only the work that can proceed independently. This note describes the current routes, then uses small calculations to explain their tradeoffs. The calculations are models with stated assumptions; they are not Lamina performance measurements.
+A run takes longer when it repeats work, waits for a prerequisite, or queues for a busy resource. Adding workers helps only the work that can proceed independently. This note describes the current routes, then uses small calculations to explain their tradeoffs. None of the calculations is a Lamina performance measurement. Each is either derived from its definitions, and so holds whenever the definitions apply, or depends on an assumption that a run may violate:
+
+| Calculation | Basis |
+| --- | --- |
+| Completion-time lower bound `max(D, max_r W_r/c_r)` | Derived from the definitions of service work, capacity and dependency chain |
+| Simplified bound `max(W/P, d)·t` | Assumes identical call durations and one worker pool |
+| Section chains versus stage barriers | Derived for fixed durations and unlimited capacity; finite pools need measurement |
+| Planned-route chain of `5 + L` calls | Derived from the route's dependencies, assuming no repair, extension or subdivision |
+| Halo multiplier `H` and context amplification `A` | Definitions; the halo example assumes equal unit sizes |
+| Probability that some window needs a follow-up | Assumes independent, identical per-window probabilities |
+| Batch-size table | Assumed toy timings and unchanged quality |
+| Prefix-cache saving `M·P·h·(c_u − c_c)` | Derived cost expression; `h` and prices are assumed inputs |
+| Repair cost `R(o)` | Accounting definition over declared dependencies |
+| Run success `(1 − q)^n` | Assumes independent, identical failures |
 
 ## Follow the dependencies
 
@@ -38,7 +51,17 @@ For identical calls of duration `t`, one pool of `P` workers, `W` total calls an
 T \geq \max(W/P,d)\,t.
 ```
 
-Real calls differ in length and compete for provider admission, network connections and output capacity. Retries and human review add more work. Use measured service durations for the first formula whenever possible.
+The first bound is derived: no schedule finishes before its longest chain, and no resource delivers more than `c_r` units of service per unit time. The second assumes every call takes the same time `t`. Real calls differ in length and compete for provider admission, network connections and output capacity. Retries and human review add more work. Use measured service durations for the first formula whenever possible. Jobs that need several resources at once need further scheduling analysis.
+
+Independent section chains let a section's review start when its own draft is ready; a stage barrier makes every review wait for the slowest draft. For fixed nonnegative durations `τ[i,s]` of section `i` in stage `s`:
+
+```math
+\max_i \sum_s \tau_{i,s} \leq \sum_s \max_i \tau_{i,s}.
+```
+
+The inequality is derived (each section's total is at most the sum of the stage maxima), but it describes unlimited capacity. With a finite shared pool, changing priority changes which work gets a worker, and provider rate limits, service-time variation, retries and cancellation also affect the schedule. The [scheduling fixture](benchmarks.md#scheduling-fixtures) compares both policies under the same capacity, work and failures and includes a constructed case where barriers finish first.
+
+Ordering ready work by estimated size would borrow from longest-processing-time-first scheduling, whose classical bound assumes known processing times on identical workers. Request bytes estimate only one component of a model call; output generation, reasoning and provider queues can dominate. The classical bound does not transfer to byte counts, so size-based priority needs a matched comparison. Removing a call can save both its own work and the time spent waiting for it, provided the output still meets the same acceptance conditions.
 
 For a planned route with `L` grouping levels, the simplest chain is reading, `L` groups, outline, assignment, writing and review: `5 + L` calls. Context extensions, subdivision and repair lengthen some paths. Streaming allows different branches to overlap; it cannot start a group before the material it needs exists. A two-call card route and a longer document route also produce different objects. Comparing them fairly requires a common requested result and a quality assessment.
 
@@ -52,7 +75,7 @@ A source boundary can split a list or hide the condition that qualifies a rule. 
 H = \frac{c+2h}{c}.
 ```
 
-For example, 18 core units and two neighbors on each side give `H ≈ 1.22`; two core pages with one neighboring page on each side give `H = 2`. Real structures vary in length, so bytes or tokens give a better measurement than page count.
+For example, 18 core units and two neighbors on each side give `H ≈ 1.22`; two core pages with one neighboring page on each side give `H = 2`. The formula assumes equally sized units. Real structures vary in length, so bytes or tokens give a better measurement than page count, and the reader-stage source exposure defined below is the measured form of `H`.
 
 Lamina's default halo uses sentence spans. Six spans on each side at an assumed 25 tokens per sentence would add about 300 tokens. The actual halo shrinks to fit the reader's request allowance. A reader can ask to complete a neighboring unit when this partial view is insufficient.
 
@@ -65,6 +88,16 @@ Under the narrow assumption that each of `N_r` windows independently needs one e
 ```
 
 For `p = 0.10` and `N_r = 80`, that is about 99.98%. This explains why a rare per-window dependency can occur in most large runs. It does not establish its duration or prove that a larger halo resolves it.
+
+## Context amplification
+
+Context amplification measures how much input a run sends for each token of accepted source text:
+
+```math
+A = \frac{\sum_j \text{input tokens in request } j}{\text{tokens of distinct accepted source text}}.
+```
+
+`A` is an accounting definition. Repeated instructions, summaries, halos, shared context and retries all enter the numerator. Counting only source text in the numerator gives source exposure; for readers with equal units and a whole-unit halo it equals `H`. Report `A` by stage and overall, beside the largest request, source regions never sent in usable form, and accepted output quality. Some repetition prevents boundary errors, so a lower `A` is better only when quality holds; a higher `A` may spend time and money without improving the result.
 
 ## Batch size changes waiting as well as cost
 
@@ -95,7 +128,15 @@ If several tasks use overlapping evidence sets `E_i`, the potential source savin
 
 Those savings require a transport that serializes each shared passage once and records which tasks may use it. Lamina's grouped section requests retain separate task inputs, so this evidence-union saving is not currently guaranteed. Local source aliases protect references; they cannot prove that one task's text had no effect on another task's reasoning.
 
-The recorded grouping fixture reduced serialized request bytes by 21.9%, with slightly higher local elapsed time in a test without network latency. That measures the fixture's request packing. It does not establish a live-model speedup.
+Repeated prefixes are a separate saving. Let `M` eligible calls each share a prefix of `P` tokens, with cache-hit fraction `h`, uncached token price `c_u` and cached token price `c_c`. The possible input-cost reduction is:
+
+```math
+M\,P\,h\,(c_u-c_c).
+```
+
+The expression is derived; `h` and both prices are assumptions until the provider reports them. The logical input still contains the prefix. Its size, exact encoding, provider behavior and observed cache hits determine whether savings occur, and output cost and live latency need separate measurement.
+
+The [recorded grouping fixture](benchmarks.md#request-grouping-comparison) reduced serialized request bytes by 21.9%, with slightly higher local elapsed time in a test without network latency. That measures the fixture's request packing. It does not establish a live-model speedup.
 
 ## Release results when their own work is complete
 
@@ -107,9 +148,21 @@ Source recovery has a related distinction. Looking through already extracted ide
 
 See [architecture status](architecture-status.md) for the implemented behavior and [production](production.md) for its options. Neither mechanism chooses a new workflow automatically.
 
+## Repair cost and convergence
+
+An observation `o` (a review finding, a source edit, a reported defect) invalidates a set of jobs `I(o)`: the jobs whose request identities change, plus the descendants of any job whose result changes. Its repair cost is:
+
+```math
+R(o) = \sum_{j \in I(o)} s_j,
+```
+
+where `s_j` is the service cost of job `j`, reported beside reviewer time and the number of delivered artifacts replaced, each in its own units. This is an accounting definition. `I(o)` comes from declared dependencies and request identities, so an undeclared semantic dependency escapes it. A local defect should incur a local cost, while a defect that changes the global route should still reopen the decisions that depend on it. The [measurement protocol](measurement.md) seeds both kinds.
+
+A smaller finding count does not establish improvement. One removed finding may conceal a more severe new error, and successive reviewers may word the same defect differently. Bounded repair limits cost; a stopping rule should keep unresolved findings and report why it stopped. A quality claim needs the final artifact and an independent acceptance check.
+
 ## Treat failure rates as workload-specific
 
-Under an independent, identical failure model, a run that requires all `n` calls to succeed with residual failure probability `q` has success probability `(1-q)^n`. Production failures are often correlated: an unsuitable schema, one provider outage or a repeated bad planning assumption can affect many calls. A few complete-run failures cannot establish a universal per-call rate.
+Under an independent, identical failure model, a run that requires all `n` calls to succeed with residual failure probability `q` has success probability `(1-q)^n`; the arithmetic matches the follow-up example above. If a call first fails with probability `f` and a retry recovers it with conditional probability `r`, then `q = f(1-r)` under the same model. Both probabilities need measurement on the chosen model and corpus, and an assumed rate must never be reported as a measured engine failure rate. Production failures are often correlated: an unsuitable schema, one provider outage or a repeated bad planning assumption can affect many calls. A few complete-run failures cannot establish a universal per-call rate. Accepting only valid fragments changes the success criterion: unresolved material still needs a recorded disposition, and a successful process exit cannot stand in for complete coverage.
 
 Current Lamina records unresolved reads and continues by default; `reading_failures="abort"` changes that policy. Planned output retains the reading gaps for review. The sweep can be marked ready while listing unresolved windows, because that status records completion of its enabled checks. Inspect those gaps before treating a deck as complete.
 

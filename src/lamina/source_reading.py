@@ -305,8 +305,22 @@ class ReaderReplyValidator:
 
 
 def read_sources(
-    workspace, provider, task, options, sources, units, tracker, legacy_windows=None
+    workspace,
+    provider,
+    task,
+    options,
+    sources,
+    units,
+    tracker,
+    legacy_windows=None,
+    on_batch=None,
 ):
+    """Read every window; return ``(windows, ideas, unresolved)``.
+
+    ``on_batch(ideas, key)`` is called from a worker thread as each window's
+    ideas become final, with ``key`` the window's source position, so a planner
+    can start grouping while other reads are still running.
+    """
     stage = "production_read"
     if options.get("format") == "cards":
         from .sweep import CARD_INSTRUCTION
@@ -319,6 +333,7 @@ def read_sources(
     instruction = task_instruction + REFERENCE_INSTRUCTION + CONTEXT_INSTRUCTION
     budget = request_budget(provider, stage, options)
     source_map = {s["id"]: s for s in sources}
+    source_order = {s["id"]: n for n, s in enumerate(sources)}
     by_source, positions = {}, {}
     for unit in units:
         local = by_source.setdefault(unit["source_id"], [])
@@ -655,6 +670,9 @@ def read_sources(
                 )
             ).__dict__,
         }
+        if on_batch is not None:
+            first = current["core"][0]
+            on_batch(result, (source_order.get(first["source_id"], 0), positions[first["id"]]))
         return [saved], result
 
     dispatched = []

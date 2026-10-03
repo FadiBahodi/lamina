@@ -38,43 +38,43 @@
     "name": "Reference guides",
     "title": "Several sources, one place to find an answer.",
     "description": "Combine chapters, slides and notes into a guide organized around the questions people need answered. Useful for clinical differentials, technical handbooks and operating procedures.",
-    "brief": "Build a reference for practitioners using the supplied sources. Organize it around presenting problems or operational questions. For each question, preserve the complete answer group, conditions, exceptions and discriminating features. Merge equivalent questions; keep variants when they change the answer or the decision. Explain conflicts using source authority. Use tables when comparison helps. Include source citations and record deliberate omissions.",
+    "brief": "Create a practical reference guide from these sources. Organize it around the questions the reader needs to answer. Explain the complete answer, including conditions, exceptions and findings that distinguish similar cases. Combine questions only when they ask the same thing. Explain disagreements between sources and identify which source applies. Use comparison tables where helpful, cite supporting passages and state what you left out.",
     "options": {
       "format": "guide",
       "retrieval_targets": true,
       "workflow": "planned",
       "reading": "task"
     },
-    "inputs": "Add the reference texts. Assign authority, supplement and historical roles in Projects; add a layout example as a form exemplar.",
+    "inputs": "Add chapters, slides or notes. Mark each file as a factual source, supporting context, an older version or a style example.",
     "stages": [
       [
-        "Read source regions",
-        "Readers extract ideas and supporting passages. Slide text, tables and notes stay together. Readers can request missing source context."
+        "Read the sources",
+        "Collect ideas and supporting passages. Keep slide text, tables and speaker notes together."
       ],
       [
-        "Build an answer catalog",
-        "Group equivalent questions, give each idea an owner, and preserve the conditions within each answer group."
+        "Organize the questions",
+        "Combine questions that ask the same thing. Keep separate cases when their conditions change the answer."
       ],
       [
-        "Write by question",
-        "Writers receive the shared contents plan, their assigned answers and supporting evidence. Chapters can proceed together."
+        "Write the guide",
+        "Write each section using the outline and its supporting sources."
       ],
       [
-        "Check and export",
-        "Review each section, repair flagged passages, and export HTML, Markdown and PDF."
+        "Review and export",
+        "Check sections against the sources, revise flagged passages, and save HTML, Markdown or PDF."
       ]
     ],
-    "decision": "Grouping answers before writing gives each section a defined scope and gives reviewers a complete answer group to check.",
-    "context": "Shared contents plan + assigned answer groups + source quotations + selected prerequisite evidence.",
+    "decision": "Organizing the questions first gives each section a clear purpose and makes missing answers easier to spot.",
+    "context": "Writers receive the outline, their assigned material and the supporting passages they need.",
     "delivery": "HTML, PDF and Markdown, with source citations.",
     "revision": "Request a change to one section. Its writer and reviewer run again; unchanged requests reuse saved results. Replan when the sources or goal change."
   },
   {
     "id": "audio",
     "name": "Podcasts",
-    "title": "Plan the lesson before dividing the script.",
-    "description": "Turn dense material into a script that explains concepts in a sensible order, uses examples and asks recall questions. Connect a speech adapter to produce the audio.",
-    "brief": "Write an educational podcast script for a practitioner learning this material during a commute. Choose a coherent route through the supplied sources and divide it at natural changes in the argument. Preserve useful answer lists, exact quantities, mechanisms and exceptions. Explain unfamiliar terms in context, include brief recall questions and revisit important distinctions in a different scenario. Each section should build on the shared plan and assigned evidence. Return a script with speaker labels and clear transitions.",
+    "title": "Turn your sources into an audio lesson.",
+    "description": "Create a script with a clear sequence, explanations, examples and recall questions. Connect a speech service to create audio.",
+    "brief": "Write an educational podcast script for a practitioner listening during a commute. Arrange the material in a clear order with natural section breaks. Explain unfamiliar terms, mechanisms, quantities and exceptions. Use examples and brief recall questions. Keep terminology consistent, label speakers and write clear transitions between sections.",
     "options": {
       "format": "podcast-script",
       "retrieval_targets": false,
@@ -82,63 +82,63 @@
       "reading": "task",
       "episode_minutes": 20
     },
-    "inputs": "Add teaching material and select its source roles. Set the audience and listening context in the brief. Configure a speech adapter when starting the local app to produce audio.",
+    "inputs": "Add your sources and describe who will listen and what they should learn. Connect a speech service in the local app if you want audio.",
     "stages": [
       [
-        "Read in parallel",
-        "Readers collect explanations, conditions and examples from their assigned source regions."
+        "Read the sources",
+        "Collect explanations, conditions and examples."
       ],
       [
-        "Choose the teaching route and the episodes",
-        "One plan sets the order, numbers the sections into episodes of about twenty minutes, and gives each section a spoken-word target and the evidence it needs from earlier ideas."
+        "Plan the lesson",
+        "Choose the order, divide the sections into episodes of about twenty minutes, and give each section a spoken-word target and what it needs from earlier sections."
       ],
       [
-        "Write the sections",
-        "Writers share the route and receive their own evidence packets. Review and repair finish the script."
+        "Write and review",
+        "Draft the sections, check them against the sources and revise any problems."
       ],
       [
-        "Render the audio",
-        "Each section is synthesized the moment it is reviewed. Episodes are assembled as separate WAV files, with the full programme beside them."
+        "Create the audio",
+        "Each section is converted to audio as soon as it is reviewed. Episodes are delivered as separate audio files, with the full programme beside them."
       ]
     ],
-    "decision": "Writers receive earlier planned ideas and their evidence. They can work at the same time because they share the intended route. A task that requires the actual preceding prose needs a dependency on that completed result.",
-    "context": "Teaching route + assigned material + earlier planned ideas and selected quotations.",
-    "delivery": "Podcast script per episode; one WAV per episode and the full programme, with a speech adapter.",
-    "revision": "Revise the affected script section and review it, then render the revised script. The speech adapter caches identical requests."
+    "decision": "A shared outline keeps the sections on topic. Exact callbacks to an earlier section’s wording require a custom workflow that waits for that section.",
+    "context": "Writers receive the lesson outline, their assigned material and relevant earlier ideas.",
+    "delivery": "Podcast script, with optional WAV audio.",
+    "revision": "Revise and check the affected section. Regenerate its audio while reusing unchanged recordings."
   },
   {
     "id": "assessment",
     "name": "Practice exams",
-    "title": "Write the questions and test what the candidate can infer.",
+    "title": "Create questions with a separate answer key.",
     "description": "Build cases and short-answer questions with separate candidate sheets and marking guides. A model attempts each question without seeing the key, then another call checks the answer.",
-    "brief": "Create a staged short-answer assessment for practitioners from the supplied teaching sources. Choose a coherent situation with consequential decisions. Each stage should reveal only the information needed at that point. State the requested response and any answer limit clearly. Write creditable answer items, mark allocations and acceptable alternatives in the examiner material. Include questions that require applying the evidence, interpreting new findings and revising an earlier decision. Preserve conditions and numerical criteria from the sources.",
+    "brief": "Create a short-answer practice exam for practitioners using these sources. Build cases around meaningful decisions, revealing new information in stages. State what each question asks and any answer limit. Keep expected answers, marks, explanations and acceptable alternatives in a separate answer key. Include questions that ask candidates to apply knowledge, interpret findings and reconsider an earlier decision. Preserve source conditions and numerical criteria.",
     "options": {
       "format": "assessment",
       "retrieval_targets": true,
       "workflow": "planned",
       "reading": "task"
     },
-    "inputs": "Add teaching sources as authorities or supplements. Use example questions as form exemplars. Keep evaluation questions in the held-out assessment role.",
+    "inputs": "Add factual sources and supporting material. Mark example questions as style examples. Questions reserved for testing are excluded from generation.",
     "stages": [
       [
-        "Choose learning targets",
-        "Extract evidence and group the decisions or answer sets the assessment should test."
+        "Choose what to test",
+        "Identify the knowledge and decisions the questions should test."
       ],
       [
-        "Plan and write the case",
-        "A common route coordinates the sections. Writers produce candidate prompts and examiner material."
+        "Write the questions and key",
+        "Create clear prompts, expected answers and marking guidance."
       ],
       [
-        "Solve with candidate information",
-        "Each solve receives the current prompt and explicitly required earlier candidate prompts. The marking guide goes to a separate judge."
+        "Try the questions",
+        "A model answers using only the information available to the candidate. A separate review checks the answer against the key."
       ],
       [
-        "Export both views",
-        "Save candidate and examiner files separately, with answerability findings in the examiner report."
+        "Export the exam",
+        "Save the question sheet and answer key separately. Include any unresolved issues in the review."
       ]
     ],
-    "decision": "The solver has to attempt the question using the information supplied to the candidate. The judge can then locate ambiguity, missing data or a mismatch between the prompt and the marking guide.",
-    "context": "Writers: plan and evidence. Solver: current prompt and declared earlier candidate context. Judge: candidate response, marking guide and cited evidence.",
+    "decision": "Trying each question without the key helps reveal ambiguity, missing information and answers that do not match the marking guide.",
+    "context": "Writers see the outline and sources. The test solver sees only the question and any required earlier prompts. A separate reviewer checks its answer against the key.",
     "delivery": "Candidate and examiner files, plus review findings.",
     "revision": "Edit the affected section and run the assessment checks again. Questions that depend on revised earlier information receive a new candidate context."
   }

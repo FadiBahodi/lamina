@@ -16,6 +16,12 @@ The September 24 [model evaluation](live-model-evaluation.md) records actual Gem
 
 ## Workflow and scheduling fixtures
 
+The [matched request comparison](matched-execution.md) runs planned, grouped and
+direct execution on the same task. Its October 3 fixture completed all 30 runs;
+grouping reduced writing/review calls from twelve to two and request bytes by
+21.9%. It measured local overhead, not live model speed. The same runner supports
+a live comparison when model credentials are configured.
+
 The current [mixed-document evaluation](optimization-evidence.md) imports five PDFs and three PowerPoint decks, then exercises direct, planned and supplied-assignment workflows through writing, review, repair and source revision. Its [raw result](../benchmarks/results/workflow-matrix.json) records each stage. Responses and delays in this fixture are scripted. Live runs are reported separately above.
 
 The [quality evaluation](quality-evaluation.md) separately checks known facts through extraction, assignment and finished prose. Its [scripted silent-omission result](../benchmarks/results/quality-silent-omission.json) demonstrates a failure that successful execution does not catch: every source unit is cited and the engine returns `ready`, but a negation disappears and only five of six canaries survive. The oracle catches this at both tested background loads. This checks detection of the injected defect.

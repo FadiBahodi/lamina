@@ -1,5 +1,15 @@
 # Systems benchmarks
 
+## Sweep versus planned on your material
+
+`benchmarks/sweep_vs_planned.py` runs both routes on the same files with a live adapter, cold cache per run, and records time to first useful output, time to completion, completion status, call counts, reported token usage and output density (cards or ideas per page). It is the comparison [flow geometry](flow-geometry.md) asks for and it spends real model calls:
+
+```sh
+python benchmarks/sweep_vs_planned.py --adapter @models.json --files chapter.pdf --runs 3 --output benchmarks/results/sweep-vs-planned.json
+```
+
+Add `--canaries distinctions.txt` (one planted distinction per line) for a lexical survival count per arm; coverage still needs a human judge.
+
 ## Live model runs
 
 The September 24 [model evaluation](live-model-evaluation.md) records actual Gemini calls on clinical source material, including failed trials, token usage and the changes those failures prompted. The [calibration guide](calibration.md) explains how to run the same pipeline on your own material.

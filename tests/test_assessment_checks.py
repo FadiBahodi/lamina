@@ -85,7 +85,21 @@ def test_blind_boundary_parallel_calls_and_cache(tmp_path):
     ws, plan, receipt = assessment(tmp_path)
     for section in receipt["sections"]:
         section["marking_body"] += " MARKING SECRET: never send to blind solve."
-    provider = CheckProvider(delay=0.02)
+    class SynchronizedProvider(CheckProvider):
+        def __init__(self):
+            super().__init__()
+            self.arrivals = {
+                stage: threading.Barrier(4, timeout=5)
+                for stage in ("assessment_blind_solve", "assessment_judge")
+            }
+
+        def call(self, stage, payload):
+            # Hold each stage until its four requests enter the provider.
+            # Sleeping for 20 ms made overlap depend on CI disk/thread timing.
+            self.arrivals[stage].wait()
+            return super().call(stage, payload)
+
+    provider = SynchronizedProvider()
     events = []
     result = check_assessment(
         ws, provider, plan, receipt, workers=4, progress=events.append

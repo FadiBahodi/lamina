@@ -127,6 +127,10 @@ def compact_cards(ideas, units):
             "id": idea["id"],
             "title": idea["title"],
             "explanation": idea.get("explanation", ""),
+            "evidence_relations": [
+                {k: relation[k] for k in ("kind", "statement", "member_idea_ids")}
+                for relation in idea.get("evidence_relations", [])
+            ],
             "source_ids": list(
                 dict.fromkeys(
                     source_by_unit.get(uid, "") for uid in idea.get("unit_ids", [])

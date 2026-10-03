@@ -49,6 +49,11 @@
   const reading = make("select"); reading.setAttribute("aria-label", "Source reading");
   [["task","Read for this project"],["reusable","Save a reusable source inventory"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
   readingLabel.append(reading);contextFields.append(readingLabel);
+  const sectionsPerRequest = numericField("Maximum short sections per request", 1, 1, 32);
+  const compareLabel=make("label","pb-retrieval-choice");
+  const compareRelations=make("input");compareRelations.type="checkbox";
+  compareLabel.append(compareRelations,make("span","","Compare related passages across sources"));
+  contextFields.append(compareLabel);
   const maxAttempts = numericField("Attempts per model request", 2, 1, 5);
   const coreWords = numericField("Optional fixed reading target (words)", null, 100, 2000);
   coreWords.placeholder="Follow the adapter’s reading settings";
@@ -112,6 +117,7 @@
     if(halo && !coreWords.value.trim())throw Error("Extra neighboring passages require an explicit fixed reading target.");
     return {
       format:format.value, workflow:workflow.value, reading:reading.value,
+      sections_per_request:safeNumber(sectionsPerRequest,"Sections per request"), compare_relations:compareRelations.checked,
       workers:safeNumber(totalWorkers,"Total calls"), max_attempts:safeNumber(maxAttempts,"Attempts"),
       ...Object.fromEntries(Object.entries(workerInputs).filter(([,input])=>input.value.trim()!=="").map(([key,input])=>[key,safeNumber(input,key)])),
       ...(coreWords.value.trim()?{core_words:safeNumber(coreWords,"Fixed reading target")}:{}),
@@ -166,16 +172,18 @@
     const files=Array.from(fileInput.files || []); if (!files.length) return;
     uploadStatus.textContent="Reading files…"; fileInput.disabled=true;
     try {
-      const payload=[];
+      let stored=0;
       for (const file of files) {
         if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.(txt|md|pdf|pptx)$/i.test(file.name)) throw Error(`${file.name}: unsupported file name or type.`);
-        const binary=/\.(pdf|pptx)$/i.test(file.name);
-        if (file.size > (binary?5000000:2000000)) throw Error(`${file.name}: file is too large for this local upload.`);
-        payload.push(binary ? {name:file.name,base64:await readBinary(file),role:"teaching"} : {name:file.name,text:await file.text(),role:"teaching"});
+        if (file.size > 256*1024*1024) throw Error(`${file.name}: the file exceeds 256 MiB.`);
+        uploadStatus.textContent=`Uploading and parsing ${file.name}… (${stored}/${files.length} stored)`;
+        const response=await fetch(route("api/source-upload"),{method:"POST",headers:{"Content-Type":"application/octet-stream","X-Lamina-Filename":file.name,"X-Lamina-Role":"teaching"},body:file});
+        const answer=await response.json();if(!response.ok)throw Error(answer.error || `HTTP ${response.status}`);
+        for (const source of answer.sources || []) state.selected.add(source.id);
+        stored+=answer.count || 1;
+        await refreshSources();
       }
-      const answer=await post("api/sources", {files:payload});
-      for (const source of answer.sources || []) state.selected.add(source.id);
-      await refreshSources(); uploadStatus.textContent=`Stored ${answer.count || payload.length} source${(answer.count || payload.length) === 1 ? "" : "s"} locally.`;
+      uploadStatus.textContent=`Stored ${stored} source${stored===1?"":"s"} locally.`;
     } catch (err) { uploadStatus.textContent=`Could not add sources: ${err.message}`; }
     finally { fileInput.disabled=!state.local; fileInput.value=""; }
   });
@@ -314,7 +322,26 @@
     if(run.error) output.replaceChildren(make("p","pb-error",run.error)); else renderReceipt(run,example || Boolean(run.example));
     if(wasHidden || example) activity.scrollIntoView({behavior:"smooth",block:"start"});
   }
-  async function poll(id) {clearTimeout(state.poll);try{let run=await getJSON(`api/progress/${encodeURIComponent(id)}`);if(!["queued","running"].includes(run.status))run=await getJSON(`api/runs/${encodeURIComponent(id)}`);renderRun(run);if(["queued","running"].includes(run.status))state.poll=setTimeout(()=>poll(id),1800);else{start.disabled=!state.adapter;setMessage(run.status==="ready"?"Project complete. Open the result and its source evidence below.":run.status==="review"?"Review requested. Inspect the findings below.":`Project ${run.status}.`,run.status==="failed");}}catch(err){start.disabled=false;setMessage(`Could not read project progress: ${err.message}`,true);}}
+  let previewRun="", previewCursor=0;
+  const previews=new Map();
+  async function loadPreviews(run){
+    if(previewRun!==run.id){previewRun=run.id;previewCursor=0;previews.clear();}
+    if((run.section_update_count||0)>previewCursor){
+      const page=await getJSON(`api/section-updates/${encodeURIComponent(run.id)}/${previewCursor}`);
+      for(const item of page.updates||[])previews.set(item.id,item);
+      previewCursor=page.cursor;
+    }
+    if(!previews.size)return;
+    output.replaceChildren(make("h3","","Developing result"),make("p","pb-explain","These sections have completed their local checks. The final project may revise them."));
+    for(const item of [...previews.values()].sort((a,b)=>a.position-b.position)){
+      const card=make("article","pb-section-preview");card.append(make("h4","",item.title),make("small","",item.status==="review"?"Needs review":"Provisional"));
+      appendMarkdown(card,item.body);
+      if(item.truncated)card.append(make("p","","Preview shortened. Full text will be available in the completed project."));
+      if(item.evidence?.length){const evidence=make("details");evidence.append(make("summary","","Source evidence"));for(const e of item.evidence)evidence.append(make("p","",`${e.unit_id}: ${e.quote}`));card.append(evidence);}
+      output.append(card);
+    }
+  }
+  async function poll(id) {clearTimeout(state.poll);try{let run=await getJSON(`api/progress/${encodeURIComponent(id)}`);if(!["queued","running"].includes(run.status))run=await getJSON(`api/runs/${encodeURIComponent(id)}`);renderRun(run);if(["queued","running"].includes(run.status))await loadPreviews(run);if(["queued","running"].includes(run.status))state.poll=setTimeout(()=>poll(id),1800);else{start.disabled=!state.adapter;setMessage(run.status==="ready"?"Project complete. Open the result and its source evidence below.":run.status==="review"?"Review requested. Inspect the findings below.":`Project ${run.status}.`,run.status==="failed");}}catch(err){start.disabled=false;setMessage(`Could not read project progress: ${err.message}`,true);}}
   start.addEventListener("click",async()=>{
     if(!state.local || !state.adapter){setMessage("Open the local app with a configured adapter to run a project.",true);return;}
     const brief=goal.value.trim();if(!brief){setMessage("Describe the result you want first.",true);goal.focus();return;}

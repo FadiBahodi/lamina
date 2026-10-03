@@ -169,6 +169,17 @@ def start_project(server, body, *, parent=None, section_notes=None):
     def progress(event):
         nonlocal last_progress_save
         with server.run_lock:
+            event = dict(event)
+            update = event.pop("section_update", None)
+            if update is not None:
+                sequence = status.get("section_update_count", 0) + 1
+                folder = server.output_root / rid / "section-updates"
+                folder.mkdir(exist_ok=True)
+                (folder / f"{sequence}.json").write_text(
+                    json.dumps({"sequence": sequence, **update}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                status["section_update_count"] = sequence
             status["events"].append({"at": time.time(), **event})
             if len(status["events"]) > 10000:
                 status["events"] = status["events"][-10000:]

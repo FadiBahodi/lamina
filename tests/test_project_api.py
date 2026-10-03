@@ -270,3 +270,45 @@ def test_assessment_candidate_download_separate_from_examiner(tmp_path, monkeypa
         )
     finally:
         _stop(server, thread)
+
+
+def test_stream_upload_and_bounded_section_previews(tmp_path, monkeypatch):
+    server, thread = _server(tmp_path / "streaming", monkeypatch, FixtureAdapter())
+    try:
+        data = ("# Large native text\n\n" + "A source statement. " * 270000).encode()
+        req = Request(
+            f"http://127.0.0.1:{server.server_port}/api/source-upload",
+            data=data,
+            headers={
+                "Content-Type": "application/octet-stream",
+                "X-Lamina-Filename": "large.txt",
+            },
+        )
+        with urlopen(req, timeout=20) as response:
+            uploaded = json.load(response)
+            assert response.status == 201
+        assert uploaded["count"] == 1
+        assert server.workspace.units("teaching", [uploaded["sources"][0]["id"]])[0][
+            "text"
+        ].endswith("A source statement.")
+        ids = _upload_four(server)
+        run = _start(server, ids)
+        assert run["status"] == "ready"
+        progress = json.loads(_call(server, f"/api/progress/{run['id']}")[1])
+        assert progress["section_update_count"] > 0
+        assert "receipt" not in progress and "plan" not in progress
+        assert all("section_update" not in event for event in progress["events"])
+        page = json.loads(_call(server, f"/api/section-updates/{run['id']}/0")[1])
+        assert 1 <= len(page["updates"]) <= 10
+        assert all(
+            row["body"] and row["status"] in {"provisional", "review"}
+            for row in page["updates"]
+        )
+        assert (
+            json.loads(
+                _call(server, f"/api/section-updates/{run['id']}/{page['cursor']}")[1]
+            )["updates"]
+            == []
+        )
+    finally:
+        _stop(server, thread)

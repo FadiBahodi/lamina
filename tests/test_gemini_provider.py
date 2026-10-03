@@ -209,3 +209,19 @@ def test_missing_key_and_invalid_thinking_limit_are_bounded(monkeypatch):
         GeminiProvider().count_tokens(stage_request())
     with pytest.raises(ValueError, match="thinking_tokens"):
         GeminiProvider(output_tokens=1024, thinking_tokens=1024)
+
+
+def test_counting_does_not_wait_for_generation_capacity(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only")
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda *a, **k: Reply({"totalTokens": 123})
+    )
+    assert GeminiProvider(max_concurrency=50).max_concurrency == 50
+    provider = GeminiProvider(max_concurrency=1)
+    with provider._slots, ThreadPoolExecutor(max_workers=1) as pool:
+        count = pool.submit(provider.count_tokens, stage_request())
+        assert count.result(timeout=2) == 123
+    assert provider.transport_metrics()["count_requests"] == 1
+    assert provider.transport_metrics()["generation_requests"] == 0

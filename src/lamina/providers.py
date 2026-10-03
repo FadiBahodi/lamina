@@ -599,11 +599,22 @@ def configured_provider(path):
         if not isinstance(row, dict):
             raise ValueError("invalid adapter configuration")
         transport = row.get("transport", "command")
+        fields |= {"audio_resource", "audio_concurrency"}
         if transport == "jsonl":
             fields |= {"max_pending", "max_response_bytes"}
         if transport not in {"command", "jsonl"} or set(row) - fields:
             raise ValueError("invalid adapter configuration")
         row = dict(row)
+        audio_resource = row.pop("audio_resource", None)
+        audio_concurrency = row.pop("audio_concurrency", 1)
+        if audio_resource is not None and (
+            not isinstance(audio_resource, str) or not audio_resource.strip()
+        ):
+            raise ValueError("audio_resource must be a nonempty resource name")
+        if type(audio_concurrency) is not int or not 1 <= audio_concurrency <= 128:
+            raise ValueError("audio_concurrency must be from 1 through 128")
+        if audio_concurrency > 1 and not audio_resource:
+            raise ValueError("parallel speech needs an explicit audio_resource")
         if row.get("workload") == "starter":
             from .calibration import starter_workloads
 
@@ -623,19 +634,26 @@ def configured_provider(path):
                             Path(path).resolve().parent / location
                         )
         factory = PersistentCommandProvider if transport == "jsonl" else CommandProvider
-        return factory(
+        provider = factory(
             **{key: value for key, value in row.items() if key != "transport"}
         )
+        provider.audio_resource = audio_resource
+        provider.audio_concurrency = audio_concurrency
+        return provider
 
     stages = data.get("stages", {})
     if not isinstance(stages, dict) or any(not isinstance(k, str) for k in stages):
         raise ValueError("stages must map stage names to adapter configurations")
-    provider = StageProvider(make(data["default"]), {k: make(v) for k, v in stages.items()})
+    provider = StageProvider(
+        make(data["default"]), {k: make(v) for k, v in stages.items()}
+    )
     if "qc_report" in data:
         if not isinstance(data["qc_report"], str):
             provider.close()
             raise ValueError("qc_report must be a report path")
-        provider.qc_report = str((Path(path).resolve().parent / data["qc_report"]).resolve())
+        provider.qc_report = str(
+            (Path(path).resolve().parent / data["qc_report"]).resolve()
+        )
     return provider
 
 

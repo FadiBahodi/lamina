@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import copy
 import re
-from .context_budget import pack_units, OversizedUnit
-from .execution import bounded_collect
+from .context_budget import iter_packed_units, OversizedUnit
+from .execution import bounded_collect, ExpandedTasks
 from .production_contract import (
     REVISION,
     _BASE,
@@ -22,14 +22,17 @@ from .source_spans import source_spans
 TASK_INSTRUCTION = (
     "Read the owned source structures completely. Select distinct useful ideas for the brief. "
     "Preserve qualifications, numbers, exceptions, disagreements and uncertainty. Each idea "
-    "needs source references from owned core units. Neighboring material only explains context. "
+    "must originate in and cite owned core units. Also cite every visible neighboring passage "
+    "used to establish its meaning, conditions or exceptions; these are support, not ownership. "
     "Respect source policies: historical claims remain historical; supplements do not silently override authority. "
 )
 COMPILE_INSTRUCTION = (
     "Compile a reusable inventory of the source's substantive claims, relationships and procedures. "
     "Preserve conditions, exceptions, quantities, uncertainty, conflicts, table associations and sequences. "
     "Keep claims from the source distinct from your interpretation. Each idea needs source references from "
-    "owned core units. Do not select for a particular audience or future output format. "
+    "owned core units and every visible context passage needed to support its interpretation. "
+    "Context may support a core claim but must not originate a new idea. "
+    "Do not select for a particular audience or future output format. "
     "This inventory remains an interpretation; the original source will accompany later writing. "
 )
 CONTEXT_INSTRUCTION = (
@@ -107,7 +110,7 @@ def reader_input(window, source, task, options):
         "before": local(before),
         "after": local(after),
         "reading": options["reading"],
-        "ownership": "Only core units may originate ideas. Adjacent units provide context.",
+        "ownership": "Only core units may originate ideas. Cite supporting adjacent context separately from ownership; every idea needs a core anchor.",
     }
     if options["reading"] == "task":
         data.update(brief=task, format=options["format"])
@@ -325,19 +328,19 @@ def read_sources(
     if legacy_windows is not None:
         windows = legacy_windows
     elif getattr(budget, "workload", None) is not None:
-        windows = [window(batch.units) for batch in pack_units(units, request, budget)]
+        windows = (
+            window(batch.units) for batch in iter_packed_units(units, request, budget)
+        )
     else:
         # With no evaluated workload profile, keep native page/slide structures
         # intact and batch a few contiguous prose blocks within one source
         # section. The complete request budget can still split prose batches.
         groups = _reader_groups(units)
-        windows = []
-        for group in groups:
-            # Reuse the packer's exact budget/oversize diagnostics, while the
-            # grouping above prevents filling capacity with unrelated blocks.
-            windows.extend(
-                window(batch.units) for batch in pack_units(group, request, budget)
-            )
+        windows = (
+            window(batch.units)
+            for group in groups
+            for batch in iter_packed_units(group, request, budget)
+        )
     by_source, positions = {}, {}
     for unit in units:
         local = by_source.setdefault(unit["source_id"], [])
@@ -369,6 +372,10 @@ def read_sources(
                 }
                 for unit in current["core"]
             ]
+            context = [
+                {**unit, "id": aliases[unit["id"]] if aliases else unit["id"]}
+                for unit in current["before"] + current["after"]
+            ]
 
             def check(raw):
                 if isinstance(raw, dict) and "context_request" in raw:
@@ -383,7 +390,7 @@ def read_sources(
                             "context_request needs before/after and a specific reason"
                         )
                     return {"context_request": row}
-                return validated(_read_check, raw, owned, data["window_id"])
+                return validated(_read_check, raw, owned, data["window_id"], context)
 
             validator = ReaderReplyValidator(check)
             work_items = sum(len(u["spans"]) for u in data["core"])
@@ -495,11 +502,9 @@ def read_sources(
                         after=current["after"],
                     ),
                 ]
-                parts = [read(child) for child in children]
-                return (
-                    [w for part in parts for w in part[0]],
-                    [i for part in parts for i in part[1]],
-                )
+                # Return children to the shared pool. A worker never waits for
+                # another worker or starts a nested pool to finish a split.
+                return ExpandedTasks(children)
         if aliases:
             reverse = {alias: uid for uid, alias in aliases.items()}
             result = [
@@ -507,6 +512,9 @@ def read_sources(
                     **idea,
                     "id": f"{current['id']}:idea_{n}",
                     "unit_ids": [reverse[uid] for uid in idea["unit_ids"]],
+                    "support_unit_ids": [
+                        reverse[uid] for uid in idea["support_unit_ids"]
+                    ],
                     "evidence": [
                         {**e, "unit_id": reverse[e["unit_id"]]}
                         for e in idea["evidence"]
@@ -527,8 +535,18 @@ def read_sources(
         }
         return [saved], result
 
+    dispatched = []
+
+    def prepared():
+        for item in windows:
+            dispatched.append(item)
+            yield item
+
     results = bounded_collect(
-        read, windows, min(options["workers"], options["reader_workers"])
+        read,
+        prepared(),
+        min(options["workers"], options["reader_workers"]),
+        expand=True,
     )
     successful = [row.value for row in results if row.ok]
     failures = [row for row in results if not row.ok]
@@ -542,7 +560,8 @@ def read_sources(
             "ideas": [idea for part in successful for idea in part[1]],
             "failed_windows": [
                 {
-                    "id": windows[row.index]["id"],
+                    "id": dispatched[row.index[0]]["id"],
+                    "split_path": list(row.index[1:]),
                     "error": str(row.error),
                     "partial": getattr(row.error, "partial_results", None),
                 }

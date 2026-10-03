@@ -189,3 +189,31 @@ def test_distinct_uncached_scripts_share_one_local_adapter_lane(tmp_path):
             future.result()
     assert len(provider.requests) == 2
     assert provider.peak == 1
+
+
+def test_segment_cache_rebuilds_only_changed_speech_and_retains_order(tmp_path):
+    provider, ws = AudioProvider(), Workspace(tmp_path / "ws")
+    full = {
+        **receipt(),
+        "sections": [
+            {"id": "one", "title": "First", "body": "First speech."},
+            {"id": "two", "title": "Second", "body": "Second speech."},
+            {"id": "three", "title": "Third", "body": "Third speech."},
+        ],
+    }
+    out = tmp_path / "out"
+    render_audio(ws, provider, full, out)
+    assert len(provider.requests) == 3
+    data = json.loads((out / "audio.json").read_text())
+    assert [row["section_id"] for row in data["segments"]] == ["one", "two", "three"]
+    assert data["audio"]["duration_seconds"] == pytest.approx(0.3)
+    full["sections"][1]["body"] = "Corrected second speech."
+    render_audio(ws, provider, full, out)
+    assert len(provider.requests) == 4
+    assert provider.requests[-1]["input"]["script"] == "Corrected second speech."
+    assert (
+        json.loads((out / "audio.json").read_text())["segments"][0]["execution"][
+            "cache"
+        ]
+        == "hit"
+    )

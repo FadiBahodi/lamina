@@ -915,8 +915,17 @@ def run_production(
     plan: dict,
     options: dict | None = None,
     progress: Callable[[dict], None] | None = None,
+    *,
+    audio_provider=None,
+    audio_output=None,
 ) -> dict:
-    """Write sections in parallel, review them, repair only flagged sections once."""
+    """Write sections in parallel, review them, repair only flagged sections once.
+
+    With ``audio_provider`` and ``audio_output`` on a podcast script, each
+    section is synthesized on a speech lane the moment it leaves review, so
+    delivery assembles cached segments instead of starting speech after the
+    last section finishes.
+    """
     started = time.monotonic()
     if (
         not isinstance(plan, dict)
@@ -1217,11 +1226,13 @@ def run_production(
         ]
 
     first_useful_ms = None
+    speech = _SpeechLane(workspace, audio_provider, audio_output, opts, progress)
 
     def section_available(section, draft, findings):
         nonlocal first_useful_ms
         if first_useful_ms is None:
             first_useful_ms = round((time.monotonic() - started) * 1000, 3)
+        speech.submit(section, draft)
         if progress:
             assessment = opts["format"] == "assessment"
             progress(
@@ -1268,7 +1279,9 @@ def run_production(
         )
     except Exception as exc:
         exc.metrics = tracker.metrics()
+        speech.close()
         raise
+    speech_report = speech.close()
 
     output_route = plan["route"]
     if opts["workflow"] == "direct" and opts["format"] != "assessment":
@@ -1367,6 +1380,7 @@ def run_production(
             "initial_flagged_sections": len(initial_findings),
             "remaining_flagged_sections": len(remaining),
             "output_bytes": len(markdown.encode("utf-8")),
+            **({"speech_prefetch": speech_report} if speech_report else {}),
             "retrieval_targets": (
                 len(plan["retrieval_targets"]["targets"])
                 if plan.get("retrieval_targets")
@@ -1452,6 +1466,82 @@ def run_production(
         ),
     )
     return receipt
+
+
+class _SpeechLane:
+    """Synthesize podcast sections while other sections are still being written.
+
+    Each finished section becomes the same cached segment that delivery will
+    assemble, so the speech work overlaps writing instead of following it. The
+    lane is bounded by the speech adapter's declared concurrency; a failed
+    prefetch is recorded and retried by delivery, never fatal here.
+    """
+
+    def __init__(self, workspace, audio_provider, audio_output, opts, progress):
+        from concurrent.futures import ThreadPoolExecutor
+
+        self.active = (
+            audio_provider is not None
+            and audio_output is not None
+            and opts["format"] == "podcast-script"
+        )
+        if not self.active:
+            return
+        from pathlib import Path
+        from .audio_delivery import _speech_provider
+
+        self.workspace, self.provider = workspace, audio_provider
+        self.output, self.progress = Path(audio_output), progress
+        speech = _speech_provider(audio_provider)
+        self.workers = (
+            getattr(speech, "audio_concurrency", 1)
+            if getattr(speech, "audio_resource", None)
+            else 1
+        )
+        self.pool = ThreadPoolExecutor(max_workers=self.workers)
+        self.futures = {}
+
+    def submit(self, section, draft):
+        if not self.active:
+            return
+        from .audio_delivery import render_audio
+
+        body, title = draft.get("body"), draft.get("title")
+        if not isinstance(body, str) or not body.strip() or not title:
+            return
+        folder = self.output / "segments" / digest(section["id"])[:24]
+        receipt = {
+            "format": "podcast-script",
+            "status": "ready",
+            "title": title,
+            "markdown": body,
+        }
+
+        def report(event):
+            if self.progress:
+                self.progress({**event, "item": section["id"], "lane": "speech_prefetch"})
+
+        self.futures[section["id"]] = self.pool.submit(
+            render_audio, self.workspace, self.provider, receipt, folder, report
+        )
+
+    def close(self):
+        if not self.active:
+            return None
+        rendered, failed = [], []
+        for sid, future in self.futures.items():
+            try:
+                future.result()
+                rendered.append(sid)
+            except Exception as exc:
+                failed.append({"section_id": sid, "error": str(exc)})
+        self.pool.shutdown(wait=True)
+        return {
+            "speech_workers": self.workers,
+            "rendered_sections": rendered,
+            "failed_sections": failed,
+            "scope": "Segments synthesized during writing; delivery assembles them from cache.",
+        }
 
 
 def _run_sweep(plan, opts, provider, started):

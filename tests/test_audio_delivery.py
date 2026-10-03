@@ -277,3 +277,62 @@ def test_delivery_policy_controls_review_audio(tmp_path, monkeypatch):
     assert links["audio"] == "narration.wav"
     with pytest.raises(ValueError, match="audio_when"):
         deliver_production(ws, dict(base), {}, tmp_path / "c", audio_when="later")
+
+
+def test_podcast_sections_are_synthesized_while_writing_and_delivered_from_cache(
+    tmp_path,
+):
+    from lamina.production import build_production, run_production, plan_production
+    from lamina.production_delivery import deliver_production
+    from test_production import FixtureProvider, workspace as production_workspace
+
+    speech = AudioProvider()
+    speech.audio_resource = "fixture-tts"
+    speech.audio_concurrency = 2
+    order = []
+
+    class Recorder(FixtureProvider):
+        def call(self, stage, payload):
+            if stage == "production_write":
+                order.append(("write", payload["input"]["section"]["id"]))
+            return super().call(stage, payload)
+
+    ws = production_workspace(tmp_path / "ws")
+    options = {"format": "podcast-script", "workflow": "planned"}
+    plan = plan_production(ws, Recorder(), "A short podcast on lease safety", ["s1", "s2"], options)
+    out = tmp_path / "out"
+    events = []
+    receipt = run_production(
+        ws,
+        Recorder(),
+        plan,
+        progress=events.append,
+        audio_provider=speech,
+        audio_output=out,
+    )
+    sections = [row["id"] for row in receipt["sections"]]
+    prefetch = receipt["metrics"]["speech_prefetch"]
+    assert prefetch["speech_workers"] == 2
+    assert sorted(prefetch["rendered_sections"]) == sorted(sections)
+    assert prefetch["failed_sections"] == []
+    assert len(speech.requests) == len(sections)
+    # Every section's speech request was submitted before the pipeline finished:
+    # the lane reports through progress while writing is still running.
+    assert any(e.get("lane") == "speech_prefetch" for e in events)
+    # Delivery assembles the same cached segments without new synthesis.
+    links = deliver_production(ws, receipt, plan, out, audio_provider=speech)
+    assert len(speech.requests) == len(sections)
+    assert links["audio"] == "narration.wav"
+    manifest = json.loads((out / "audio.json").read_text())
+    assert [row["section_id"] for row in manifest["segments"]] == sections
+    assert all(row["execution"]["cache"] == "hit" for row in manifest["segments"])
+    assert receipt["audio_delivery"]["status"] in {"ready", "provisional"}
+
+
+def test_speech_lane_is_inert_without_an_adapter_or_for_other_formats(tmp_path):
+    from lamina.production import build_production
+    from test_production import FixtureProvider, workspace as production_workspace
+
+    ws = production_workspace(tmp_path / "ws")
+    receipt = build_production(ws, FixtureProvider(), "A guide", ["s1", "s2"], {"workflow": "planned"})
+    assert "speech_prefetch" not in receipt["metrics"]

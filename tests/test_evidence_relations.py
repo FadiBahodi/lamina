@@ -43,7 +43,31 @@ def test_nomination_is_independent_of_input_order():
     first = CandidateIndex(ideas, units).nominate(20)
     second = CandidateIndex(list(reversed(ideas)), list(reversed(units))).nominate(20)
     assert first == second
-    assert len(first) == 3
+    # Similarity nominates the two related pairs; the pair with no shared
+    # content stays below the threshold and never costs a model call.
+    assert [row["idea_ids"] for row in first] == [["i0", "i1"], ["i1", "i2"]]
+    assert all(row["signals"] == ["similarity:tfidf"] for row in first)
+    assert all(0 < row["score"] < 1 for row in first)
+
+
+def test_nomination_uses_provider_embeddings_when_offered():
+    ideas, units = corpus()
+
+    class Embedding:
+        def embed(self, texts):
+            # i0 and i2 are placed together; i1 is orthogonal to both.
+            return [[1.0, 0.0], [0.0, 1.0], [0.9, 0.1]][: len(texts)]
+
+    index = CandidateIndex(ideas, units, Embedding())
+    assert index.method == "embedding"
+    rows = index.nominate(20)
+    assert [row["idea_ids"] for row in rows] == [["i0", "i2"]]
+    assert rows[0]["signals"] == ["similarity:embedding"]
+    # Structural lanes still nominate ideas that cite the same unit.
+    shared = [dict(idea, evidence=[{"unit_id": "u0", "quote": "Pump Orion stops below 10 kPa."}]) for idea in ideas]
+    lanes = CandidateIndex(shared, units, Embedding()).nominate(20)
+    assert all("support" in row["signals"] for row in lanes)
+    assert len(lanes) == 3
 
 
 def test_comparator_reopens_third_source_and_carries_all_evidence(tmp_path):

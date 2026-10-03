@@ -146,6 +146,7 @@ def _options(options: dict | None) -> dict:
         "relation_neighbors",
         "reader_context_spans",
         "reading_failures",
+        "relation_threshold",
     }
     if set(options) - allowed:
         raise ProductionError(
@@ -170,6 +171,7 @@ def _options(options: dict | None) -> dict:
         "relation_neighbors": 20,
         "reader_context_spans": 6,
         "reading_failures": "continue",
+        "relation_threshold": None,
         "max_request_bytes": 1_500_000,
         "retrieval_targets": False,
     }
@@ -185,6 +187,11 @@ def _options(options: dict | None) -> dict:
         raise ProductionError("reading must be task or reusable")
     if result["reading_failures"] not in ("abort", "continue"):
         raise ProductionError("reading_failures must be abort or continue")
+    if result["relation_threshold"] is not None and (
+        type(result["relation_threshold"]) not in (int, float)
+        or not 0 < result["relation_threshold"] <= 1
+    ):
+        raise ProductionError("relation_threshold must be a number in (0, 1]")
     if result["halo_units"] and result["core_words"] is None:
         raise ProductionError(
             "legacy halo_units requires explicit core_words; budgeted reading requests missing context when needed"

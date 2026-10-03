@@ -1,4 +1,4 @@
-/* Lamina: a browser client for the local production API and a read-only public showcase. */
+/* Lamina: local fixed-format document builder and procedure editor. */
 (() => {
   "use strict";
 
@@ -67,22 +67,15 @@
     },
   ];
   const state = {
-    view: "overview",
-    mode: "hosted",
+    view: "workflows",
+    mode: "disconnected",
     adapter: false,
     serverSources: [],
     files: [],
     procedures: DEFAULTS,
     selected: DEFAULTS[0].id,
-    bundle: null,
-    samp: null,
     run: null,
     poll: null,
-    example: "engineering",
-    sampStep: 0,
-    sampAnswers: {},
-    sampMarks: {},
-    sampExaminer: false,
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -103,9 +96,6 @@
   function trim(s, n = 320) {
     s = String(s || "").trim();
     return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
-  }
-  function text(v) {
-    return typeof v === "string" ? v : "";
   }
   function currentProcedure() {
     return (
@@ -144,11 +134,11 @@
   }
 
   function showView(view) {
-    if (view === "method") view = "overview";
+    if (!["workflows", "studio", "procedures"].includes(view)) view = "workflows";
     state.view = view;
-    document.body.classList.toggle("subview", view !== "overview");
+    document.body.classList.add("subview");
     $$(".nav-link").forEach((b) => {
-      const yes = b.dataset.view === view || (b.dataset.view === "workflows" && ["studio", "procedures"].includes(view));
+      const yes = b.dataset.view === view;
       b.classList.toggle("is-active", yes);
       if (yes) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
@@ -158,8 +148,16 @@
       p.hidden = !yes;
       p.classList.toggle("is-active", yes);
     });
-    if (view === "examples") showExample(state.example);
     if (view === "procedures") renderInspector();
+    if (view === "studio") {
+      getJSON("api/status").then(status => {
+        state.mode = status.mode;
+        state.adapter = Boolean(status.adapter_configured);
+        state.serverSources = Array.isArray(status.sources) ? status.sources : [];
+        updateMode();
+      }).catch(() => { state.mode = "disconnected"; updateMode(); });
+    }
+    window.dispatchEvent(new CustomEvent("lamina:view", {detail:view}));
     const title = $(`#view-${view} h1, #view-${view} h2`);
     if (title) {
       title.setAttribute("tabindex", "-1");
@@ -167,16 +165,6 @@
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
-  function showExample(which) {
-    state.example = which;
-    $$(".example-switch button").forEach((b) =>
-      b.setAttribute("aria-selected", String(b.id === `example-${which}-tab`)),
-    );
-    $$(".example-panel").forEach(
-      (p) => (p.hidden = p.id !== `example-${which}`),
-    );
-  }
-
   function validateProcedure(value) {
     const exact = [
       "schema_version",
@@ -331,98 +319,23 @@
     renderOutputPreview();
   }
   function renderOutputPreview() {
-    const box = clear($("#output-preview")),
-      b = state.bundle,
-      s = state.samp,
-      kind = currentProcedure().outputs[0];
-    box.appendChild(node("span", "small-label", "ACTUAL OUTPUT EXCERPT"));
-    if (kind === "samp" && s?.problems?.length) {
-      const problem = s.problems[0];
-      add(
-        box,
-        node("h4", "", problem.title || "Progressive assessment"),
-        node("p", "", trim(problem.stem, 200)),
-        node(
-          "div",
-          "preview-meta",
-          `${problem.steps?.length || 0} staged prompts · marking guide with source evidence`,
-        ),
-      );
+    const box = clear($("#output-preview"));
+    const run = state.run;
+    if (!run) {
+      box.appendChild(node("p", "", "Your completed run and export links will appear here."));
       return;
     }
-    const lesson = b?.lessons?.[0];
-    if (!lesson) {
-      box.appendChild(node("p", "", "Loading the example…"));
-      return;
+    box.appendChild(node("p", "", `Run ${run.id || ""} · ${run.status || "unknown"}`));
+    if (run.status === "ready" && run.outputs) {
+      Object.entries(run.outputs).forEach(([name, path]) => {
+        const href = linkFor(path);
+        if (!href) return;
+        const a = node("a", "", name.replaceAll("_", " "));
+        a.href = href;
+        box.appendChild(a);
+        box.appendChild(node("br"));
+      });
     }
-    if (kind === "oral-case" && lesson.scenario) {
-      const v = lesson.scenario;
-      add(
-        box,
-        node("h4", "", v.title || "Oral scenario"),
-        node("p", "", trim(v.candidate_brief, 230)),
-        node(
-          "div",
-          "preview-meta",
-          `${v.findings?.length || 0} examiner findings · second event · debrief`,
-        ),
-      );
-      return;
-    }
-    if (kind === "audio-script") {
-      const line = lesson.audio_script?.find((x) => x.kind === "speech");
-      add(
-        box,
-        node("h4", "", "Podcast script"),
-        node("p", "", trim(line?.text, 230)),
-        node(
-          "div",
-          "preview-meta",
-          "Written script with explanations and recall pauses",
-        ),
-      );
-      return;
-    }
-    add(
-      box,
-      node("h4", "", lesson.title || "Study lesson"),
-      node("p", "", trim(lesson.summary, 230)),
-    );
-    const ev = lesson.sections?.[0]?.evidence?.[0];
-    if (ev?.quote) add(box, node("blockquote", "", `“${trim(ev.quote, 120)}”`));
-    box.appendChild(
-      node(
-        "div",
-        "preview-meta",
-        `${lesson.questions?.length || 0} practice questions · exact source trail`,
-      ),
-    );
-  }
-  function renderCollection() {
-    const b = state.bundle;
-    if (!b) return;
-    const block = $("#example-collection"),
-      head = $(".collection-head", block);
-    $("strong", head).textContent =
-      b.title || "Original engineering collection";
-    head.querySelector("div>span:last-child").textContent =
-      `${b.sources?.length || 0} original source notes · ${b.counters?.extracted_concepts || 0} extracted ideas · ${b.lessons?.length || 0} lessons`;
-    const files = clear($("#collection-files"));
-    [...(b.sources || [])]
-      .sort((a, z) =>
-        (a.filename || a.title || "").localeCompare(
-          z.filename || z.title || "",
-        ),
-      )
-      .forEach((s, i) =>
-        files.appendChild(
-          node(
-            "span",
-            "",
-            `${String(i + 1).padStart(2, "0")} · ${s.filename || s.title}`,
-          ),
-        ),
-      );
   }
   function persistProcedures() {
     try {
@@ -555,13 +468,13 @@
       pill = $("#mode-pill");
     pill.textContent = local
       ? "Local build available"
-      : "Recorded example";
+      : "Local server unavailable";
     pill.classList.toggle("local", local);
     $("#mode-description").textContent = local
       ? state.adapter
         ? "Adapter ready. You can run this workflow with local sources."
         : "Connect a command adapter to run this workflow."
-      : "You can inspect the recorded outputs here. Run Lamina locally to use your own sources.";
+      : "The local server could not be reached. Start lamina app and reload this page.";
     $("#submit-sources").disabled = !local || !state.files.length;
     $("#sources-note").textContent = local
       ? state.files.length
@@ -580,16 +493,16 @@
     const b = $("#run-button"),
       g = $("#run-guidance");
     if (state.mode !== "local") {
-      b.textContent = "Explore the example ↗";
-      b.disabled = false;
-      g.textContent = "Open the recorded output, or run the local app with your files.";
+      b.textContent = "Local server unavailable";
+      b.disabled = true;
+      g.textContent = "Start lamina app and reload this page to run a project.";
       return;
     }
     if (!state.adapter) {
       b.textContent = "Configure adapter to run";
       b.disabled = true;
       g.textContent =
-        'Start the local server with lamina app --adapter "your-command". Credentials and adapter code stay off this page.';
+        'Start the local server with lamina app --adapter @models.json. See Documentation for model setup.';
       return;
     }
     if (!state.serverSources.length) {
@@ -617,7 +530,7 @@
         node(
           "p",
           "empty-small",
-          "No local files selected. Browse the original example below to see the complete workflow.",
+          "No local files selected. Add files above to begin.",
         ),
       );
       updateMode();
@@ -778,6 +691,7 @@
       });
       box.appendChild(rows);
     }
+    renderOutputPreview();
     updateRunControl();
   }
   async function pollRun(id) {
@@ -798,10 +712,7 @@
     }
   }
   async function startRun() {
-    if (state.mode !== "local") {
-      showView("examples");
-      return;
-    }
+    if (state.mode !== "local") return;
     if (!state.adapter || !state.serverSources.length) return;
     const b = $("#run-button");
     b.disabled = true;
@@ -824,454 +735,10 @@
     }
   }
 
-  function citation(e, bundle) {
-    if (!e || typeof e.quote !== "string") return null;
-    const unit = bundle.units?.find((u) => u.id === e.unit_id);
-    if (!unit || !unit.text.includes(e.quote)) return null;
-    const source = bundle.sources?.find((s) => s.id === unit.source_id);
-    return {
-      quote: e.quote,
-      source: source?.filename || unit.heading || "Source",
-      heading: unit.heading || "",
-      locator: unit.locator || "",
-    };
-  }
-  function quoteBlock(c) {
-    if (!c) return node("p", "empty-small", "Exact source quote unavailable.");
-    return add(
-      node("blockquote", "quote"),
-      node("span", "", `“${c.quote}”`),
-      node("cite", "", `${c.source} · ${c.locator}`),
-    );
-  }
-  function renderEngineering() {
-    const b = state.bundle,
-      root = clear($("#example-engineering"));
-    if (!b) {
-      root.appendChild(
-        node(
-          "p",
-          "error-note",
-          "The engineering example bundle is not available from this build.",
-        ),
-      );
-      return;
-    }
-    const lesson = b.lessons?.[0],
-      unit = b.units?.[0],
-      source = b.sources?.find((s) => s.id === unit?.source_id),
-      head = node("div", "example-head");
-    const intro = add(
-      node("div"),
-      node("span", "section-index", "ENGINEERING GUIDE"),
-      node("h3", "", b.title || "Resilient workflow engineering"),
-      node(
-        "p",
-        "",
-        "An engineering guide with source references, practice questions and a podcast script.",
-      ),
-    );
-    const figure = node("figure", "example-image"),
-      img = node("img");
-    img.src = new URL("assets/lease-timeline.svg", ROOT);
-    img.alt =
-      "Illustration of lease expiry, overlapping workers, and owner-token validation before a safe commit.";
-    add(
-      figure,
-      img,
-      node("figcaption", "", "Illustration · lease expiry vs safe commit"),
-    );
-    add(head, intro, figure);
-    root.appendChild(head);
-    const grid = node("div", "example-grid"),
-      sourceCard = node("article", "example-card"),
-      studyCard = node("article", "example-card");
-    add(
-      sourceCard,
-      node("span", "small-label", "SOURCE EXCERPT"),
-      node("h4", "", source?.filename || "Source unit"),
-      node(
-        "p",
-        "",
-        `${unit?.heading || "Source text"} · ${unit?.locator || ""}`,
-      ),
-    );
-    const paper = node("div", "source-paper");
-    add(
-      paper,
-      node("h5", "", unit?.heading || "Source excerpt"),
-      node("p", "", trim(unit?.text, 550)),
-    );
-    sourceCard.appendChild(paper);
-    const link = node("a", "example-link", "Read the source passages →");
-    link.href = new URL("workbench/#sources", ROOT);
-    sourceCard.appendChild(link);
-    add(
-      studyCard,
-      node("span", "small-label", "GUIDE SECTION"),
-      node("h4", "", lesson?.title || "Lesson"),
-      node("p", "", lesson?.summary || ""),
-    );
-    const evidence = lesson?.sections?.[0]?.evidence?.[0];
-    if (evidence) studyCard.appendChild(quoteBlock(citation(evidence, b)));
-    const question = lesson?.questions?.[0];
-    if (question) {
-      const q = node("div", "question-preview");
-      add(
-        q,
-        node("strong", "", `${question.kind || "Recall"} practice`),
-        node("p", "", question.prompt || ""),
-      );
-      const d = node("details");
-      add(
-        d,
-        node("summary", "", "Show answer and source"),
-        node("p", "", question.answer || ""),
-      );
-      const qc = citation(question.evidence?.[0], b);
-      if (qc) d.appendChild(quoteBlock(qc));
-      q.appendChild(d);
-      studyCard.appendChild(q);
-    }
-    const reader = node("a", "example-link", "Open the study reader →");
-    reader.href = new URL("workbench/", ROOT);
-    studyCard.appendChild(reader);
-    add(grid, sourceCard, studyCard);
-    root.appendChild(grid);
-    const merge = b.concepts?.find(
-      (c) => Array.isArray(c.member_ids) && c.member_ids.length > 1,
-    );
-    if (merge) {
-      const card = node("article", "example-card");
-      card.style.marginTop = "18px";
-      add(
-        card,
-        node("span", "small-label", "COMBINING RELATED MATERIAL"),
-        node("h4", "", "Two source statements, one teachable idea."),
-        node(
-          "p",
-          "",
-          "The combined explanation keeps both source quotations.",
-        ),
-      );
-      const flow = node("div", "merge-flow");
-      merge.member_ids.slice(0, 2).forEach((id, i) => {
-        const raw = b.raw_concepts?.find((x) => x.id === id),
-          box = node("div", "merge-node");
-        add(
-          box,
-          node("strong", "", raw?.title || `Extracted concept ${i + 1}`),
-          node("small", "", trim(raw?.evidence?.[0]?.quote, 125)),
-        );
-        flow.appendChild(box);
-        if (i === 0) flow.appendChild(node("span", "merge-arrow", "＋"));
-      });
-      card.appendChild(flow);
-      const result = add(
-        node("div", "merge-result"),
-        node("span", "small-label", "CONSOLIDATED IDEA"),
-        node("strong", "", merge.title || ""),
-        node("p", "", merge.explanation || ""),
-      );
-      card.appendChild(result);
-      merge.evidence
-        ?.slice(0, 2)
-        .forEach((e) => card.appendChild(quoteBlock(citation(e, b))));
-      root.appendChild(card);
-    }
-    const plan = b.plan?.lessons;
-    if (Array.isArray(plan) && plan.length) {
-      const card = node("article", "example-card");
-      card.style.marginTop = "18px";
-      add(
-        card,
-        node("span", "small-label", "SECTION ORDER"),
-        node("h4", "", "How the sections build on each other"),
-        node(
-          "p",
-          "",
-          "Each section uses ideas introduced by its prerequisites.",
-        ),
-      );
-      const map = node("div", "dependency-map");
-      plan.forEach((l, i) => {
-        const n = add(
-          node("div", "dependency-node"),
-          node(
-            "b",
-            "",
-            `LESSON ${i + 1} · ${l.concept_ids?.length || 0} CONCEPTS`,
-          ),
-          node("span", "", l.title),
-        );
-        map.appendChild(n);
-        if (i < plan.length - 1)
-          map.appendChild(node("span", "dependency-arrow", "→"));
-      });
-      card.appendChild(map);
-      const counters = b.counters;
-      if (counters)
-        card.appendChild(
-          node(
-            "p",
-            "",
-            `${counters.extracted_concepts} extracted ideas → ${counters.canonical_concepts} consolidated ideas → ${counters.assigned_concepts} assigned. These counts track extracted ideas and their section assignments.`,
-          ),
-        );
-      root.appendChild(card);
-    }
-  }
-  function renderSamp() {
-    const s = state.samp,
-      root = clear($("#example-samp"));
-    if (!s) {
-      root.appendChild(
-        node(
-          "p",
-          "error-note",
-          "The practice exam example is not available from this build.",
-        ),
-      );
-      return;
-    }
-    const problem = s.problems?.[0],
-      steps = problem?.steps || [];
-    if (!problem || !steps.length) return;
-    const head = node("div", "example-head");
-    add(
-      head,
-      add(
-        node("div"),
-        node(
-          "span",
-          "section-index",
-          "SEPARATE OUTPUT / PROGRESSIVE ASSESSMENT",
-        ),
-        node("h3", "", "Practice exam"),
-        node(
-          "p",
-          "",
-          s.scope_note?.replace(/SAMP-style(?: short-answer)?/gi, "progressive short-answer") ||
-            "An original exercise with candidate prompts and examiner marking notes.",
-        ),
-      ),
-      add(node("div", "example-image"), node("img")),
-    );
-    const picture = $("img", head);
-    picture.src = new URL("assets/pipeline.svg", ROOT);
-    picture.alt =
-      "Source units flow through concepts, curriculum, and learning outputs.";
-    root.appendChild(head);
-    const index = Math.max(0, Math.min(state.sampStep, steps.length - 1)),
-      step = steps[index],
-      grid = node("div", "example-grid"),
-      candidate = node("article", "example-card"),
-      examiner = node("article", "example-card");
-    add(
-      candidate,
-      node("span", "small-label", "CANDIDATE VIEW / PROGRESSIVE RELEASE"),
-      node("h4", "", problem.title || "Problem"),
-      node("p", "", problem.stem || ""),
-    );
-    const progress = node("div", "samp-progress");
-    add(progress, node("span", "", `Question ${index + 1} of ${steps.length}`));
-    const dots = node("div");
-    steps.forEach((_, i) => {
-      const dot = node("span", i === index ? "active" : "");
-      dot.setAttribute(
-        "aria-label",
-        `Question ${i + 1}${i === index ? ", current" : ""}`,
-      );
-      dots.appendChild(dot);
-    });
-    progress.appendChild(dots);
-    candidate.appendChild(progress);
-    const prompt = node("div", "samp-step");
-    add(
-      prompt,
-      node(
-        "span",
-        "step-tag",
-        `STEP ${index + 1} · ${step.marks} MARKS · ANSWER LIMIT ${step.answer_limit}`,
-      ),
-    );
-    if (step.new_information)
-      add(
-        prompt,
-        node("div", "samp-reveal", `New information: ${step.new_information}`),
-      );
-    add(prompt, node("p", "samp-prompt", step.prompt || ""));
-    const label = node(
-        "label",
-        "samp-answer-label",
-        `Your answer · up to ${step.answer_limit} point${step.answer_limit === 1 ? "" : "s"}`,
-      ),
-      answer = node("textarea", "samp-answer");
-    answer.rows = 5;
-    answer.value = state.sampAnswers[step.id] || "";
-    answer.setAttribute("aria-label", `Answer to question ${index + 1}`);
-    answer.placeholder = "Write your response here. It stays in this browser.";
-    answer.addEventListener("input", () => {
-      state.sampAnswers[step.id] = answer.value;
-    });
-    add(prompt, label, answer);
-    candidate.appendChild(prompt);
-    const controls = node("div", "samp-controls"),
-      back = node("button", "button button-secondary", "← Previous"),
-      next = node(
-        "button",
-        "button button-primary",
-        index < steps.length - 1
-          ? "Release next information →"
-          : "Return to first question ↺",
-      );
-    back.type = next.type = "button";
-    back.disabled = index === 0;
-    back.addEventListener("click", () => {
-      state.sampStep--;
-      renderSamp();
-    });
-    next.addEventListener("click", () => {
-      state.sampStep = index < steps.length - 1 ? index + 1 : 0;
-      renderSamp();
-    });
-    add(controls, back, next);
-    candidate.appendChild(controls);
-    const toggle = node(
-      "button",
-      "samp-examiner-toggle",
-      state.sampExaminer ? "Hide examiner sheet −" : "Show examiner sheet +",
-    );
-    toggle.type = "button";
-    toggle.setAttribute("aria-expanded", String(state.sampExaminer));
-    toggle.addEventListener("click", () => {
-      state.sampExaminer = !state.sampExaminer;
-      renderSamp();
-    });
-    candidate.appendChild(toggle);
-    add(
-      examiner,
-      node("span", "small-label", "EXAMINER VIEW / CURRENT STEP"),
-      node("h4", "", "Marking & evidence"),
-      node(
-        "p",
-        "",
-        state.sampExaminer
-          ? "Tick the answer points as you review the response. Open a source quotation to check its support."
-          : "The examiner sheet is hidden while the candidate answers. Reveal it when ready to review.",
-      ),
-    );
-    if (state.sampExaminer) {
-      const body = node("div", "samp-step");
-      add(
-        body,
-        node("span", "step-tag", `QUESTION ${index + 1} · ${step.marks} MARKS`),
-      );
-      if (step.decision_change)
-        add(body, node("p", "", `Decision change: ${step.decision_change}`));
-      const list = node("div", "samp-mark-list");
-      step.answer_points?.forEach((point) => {
-        const row = node("label", "samp-mark-row"),
-          box = node("input");
-        box.type = "checkbox";
-        box.checked = Boolean(state.sampMarks[point.id]);
-        box.addEventListener("change", () => {
-          state.sampMarks[point.id] = box.checked;
-        });
-        const copy = node("span");
-        add(
-          copy,
-          node(
-            "strong",
-            "",
-            `${point.answer} · ${point.marks} mark${point.marks === 1 ? "" : "s"}`,
-          ),
-        );
-        point.evidence?.forEach((ev) => {
-          const c = citation(ev, s);
-          if (c)
-            copy.appendChild(
-              node(
-                "small",
-                "",
-                `“${c.quote}” · ${c.source} · ${c.heading} · ${c.locator}`,
-              ),
-            );
-        });
-        add(row, box, copy);
-        list.appendChild(row);
-      });
-      body.appendChild(list);
-      if (step.critical_errors?.length) {
-        add(body, node("strong", "critical-label", "Critical errors"));
-        step.critical_errors.forEach((item) => {
-          add(body, node("p", "", item.text));
-          item.evidence?.forEach((ev) => {
-            const c = citation(ev, s);
-            if (c)
-              body.appendChild(
-                node(
-                  "p",
-                  "empty-small",
-                  `Evidence: “${c.quote}” · ${c.source} · ${c.heading} · ${c.locator}`,
-                ),
-              );
-          });
-        });
-      }
-      examiner.appendChild(body);
-    } else
-      examiner.appendChild(
-        node(
-          "div",
-          "samp-locked",
-          "Private marking view · choose “Show examiner sheet” after attempting the question.",
-        ),
-      );
-    add(grid, candidate, examiner);
-    root.appendChild(grid);
-    const note = node(
-      "p",
-      "inline-note",
-      "Answers and marking notes stay in this browser. This practice example uses an informal checklist.",
-    );
-    note.style.marginTop = "14px";
-    root.appendChild(note);
-    const link = node(
-      "a",
-      "example-link",
-      "Inspect the complete exercise data →",
-    );
-    link.href = new URL("examples/samp/samp.json", ROOT);
-    root.appendChild(link);
-  }
   async function initialize() {
     $$("[data-view]").forEach((b) =>
       b.addEventListener("click", () => showView(b.dataset.view)),
     );
-    $$("[data-paper-section]").forEach((b) => b.addEventListener("click", () => { showView("overview"); document.getElementById(b.dataset.paperSection)?.scrollIntoView({behavior:"smooth"}); }));
-    $$("[data-example]").forEach((b) =>
-      b.addEventListener("click", () => {
-        showExample(b.dataset.example);
-        showView("examples");
-      }),
-    );
-    $("#example-engineering-tab").addEventListener("click", () =>
-      showExample("engineering"),
-    );
-    $("#example-samp-tab").addEventListener("click", () => showExample("samp"));
-    $("#example-engineering-tab").addEventListener("keydown", (e) => {
-      if (e.key === "ArrowRight") {
-        $("#example-samp-tab").focus();
-        showExample("samp");
-      }
-    });
-    $("#example-samp-tab").addEventListener("keydown", (e) => {
-      if (e.key === "ArrowLeft") {
-        $("#example-engineering-tab").focus();
-        showExample("engineering");
-      }
-    });
     $("#source-input").addEventListener("change", (e) => {
       readFiles(e.target.files);
       e.target.value = "";
@@ -1320,8 +787,6 @@
       getJSON("api/status"),
       getJSON("api/procedures"),
       getJSON("procedures.json"),
-      getJSON("workbench/bundle.json"),
-      getJSON("examples/samp/samp.json"),
     ]);
     if (loaded[0].status === "fulfilled" && loaded[0].value?.mode === "local") {
       const status = loaded[0].value;
@@ -1364,19 +829,9 @@
     } catch {}
     if (!state.procedures.some((p) => p.id === state.selected))
       state.selected = state.procedures[0].id;
-    state.bundle = loaded[3].status === "fulfilled" ? loaded[3].value : null;
-    state.samp = loaded[4].status === "fulfilled" ? loaded[4].value : null;
-    if (state.bundle && window.LaminaInspector?.mount)
-      window.LaminaInspector.mount($("#runtime-inspector"), state.bundle);
-    else
-      $("#runtime-inspector").textContent =
-        "Build trace unavailable from this site package.";
     renderProcedures();
-    renderCollection();
     renderOutput();
     renderInspector();
-    renderEngineering();
-    renderSamp();
     updateMode();
   }
   initialize();

@@ -3,7 +3,7 @@
     "id": "cards",
     "name": "Flashcard decks",
     "title": "A textbook section in, an Anki deck out.",
-    "description": "Read every page at once and write cards straight from the source: questions and cloze sentences with the exact passage behind each one. No planner and no writer in the way; near-duplicates are removed locally and a sample of pages is audited against its source.",
+    "description": "Readers make questions and cloze cards directly from source passages. Independent reads run within your worker limit. Local similarity suppresses near-duplicates, and a sample of source windows is checked for omissions and unsupported cards.",
     "brief": "Write flashcards from the supplied sources for an exam candidate. Make one card per distinct testable fact, threshold, exception, mechanism or decision rule; prefer many precise cards over few broad ones. Use cloze sentences for numbers, named entities and lists, and questions for reasoning. Keep every condition that changes an answer inside the card. Cite the source passage for each card.",
     "options": {
       "format": "cards",

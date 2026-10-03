@@ -22,4 +22,5 @@ The [method runtime](methods.md) runs custom dependency graphs. Its nodes return
 The older [procedures](procedures.md) API uses a fixed lesson format and remains available under the app's advanced tools. The [technical paper](paper/lamina.tex) describes the earlier implementation and its measurements; use the guides above for the v0.11 runtime.
 
 - [Calibration](calibration.md): run controls on your model and save workload profiles.
+- [Request grouping comparison](matched-execution.md): compare planned, grouped and direct execution on the same sources.
 - [Engineering decisions](engineering-decisions.md): alternatives considered and the mechanisms carried forward.

@@ -5,30 +5,31 @@
   if (!host) return;
   const make = (tag, cls = "", value) => { const x = document.createElement(tag); if (cls) x.className = cls; if (value !== undefined) x.textContent = String(value); return x; };
   const route = path => new URL(path, document.baseURI);
+  const statusLabel = value => ({queued:"Waiting to start",running:"In progress",ready:"Complete",review:"Needs review",failed:"Failed",interrupted:"Interrupted",passed:"Passed",completed:"Complete"}[value] || "Status unavailable");
   const state = { local: false, adapter: false, audioAdapter: false, sources: [], selected: new Set(), roles: new Map(), observations: [], selectedObservations: new Set(), runId: "", run: null, poll: null, example: null };
   const shell = make("div", "pb-shell");
   const form = make("div", "pb-form");
   const goalBlock = make("section", "pb-block");
   const goalHead = make("div", "pb-block-head"); goalHead.append(make("span", "pb-step", "01"), make("h3", "", "Describe the result"));
-  const goal = make("textarea", "pb-goal"); goal.rows = 5; goal.placeholder = "Example: Make a concise field guide that helps an on-call engineer decide when a retried job may publish its result."; goal.setAttribute("aria-label", "Project goal");
+  const goal = make("textarea", "pb-goal"); goal.rows = 5; goal.placeholder = "Example: Turn these chapters and slides into a practical guide, with key decisions, exceptions and source references."; goal.setAttribute("aria-label", "Project goal");
   const formatLabel = make("label", "pb-field"); formatLabel.append(make("span", "", "Output"));
   const format = make("select"); format.setAttribute("aria-label", "Output format");
   [["document", "Document"], ["guide", "Reference guide"], ["assessment", "Practice exam"], ["podcast-script", "Podcast script"], ["cards", "Flashcards (sweep)"]].forEach(([value, label]) => { const option = make("option", "", label); option.value = value; format.append(option); });
   const formatNote=make("p","pb-format-note");
-  function updateFormatNote(){formatNote.hidden=format.value!=="podcast-script";formatNote.textContent=state.audioAdapter?"Planned in episodes of about 20 minutes; each section is spoken as soon as it is reviewed and the episodes are assembled as WAV files.":"Planned in episodes of about 20 minutes. Start the local app with a speech adapter to add WAV audio per episode.";}
+  function updateFormatNote(){formatNote.hidden=format.value!=="podcast-script";formatNote.textContent=state.audioAdapter?"Planned in episodes of about 20 minutes. Each section is spoken as soon as it is reviewed, and the episodes are assembled as audio through your connected speech service.":"Planned in episodes of about 20 minutes. Connect a speech service to also create audio for each episode.";}
   format.addEventListener("change",updateFormatNote);
   formatLabel.append(format); goalBlock.append(goalHead, goal, formatLabel,formatNote);updateFormatNote();
   const sourceBlock = make("section", "pb-block");
   const sourceHead = make("div", "pb-block-head"); sourceHead.append(make("span", "pb-step", "02"), make("h3", "", "Add your sources"));
-  const sourceNote = make("p", "pb-explain", "Choose source files and how each should be used. Assessment files stay held out from generation.");
+  const sourceNote = make("p", "pb-explain", "Add your files, then choose which provide facts, background or examples of the format you want.");
   const sourceList = make("div", "pb-sources");
   const uploadLabel = make("label", "pb-upload"); uploadLabel.append(make("span", "", "Add .txt, .md, .pdf, or .pptx files"));
   const fileInput = make("input"); fileInput.type = "file"; fileInput.multiple = true; fileInput.accept = ".txt,.md,.pdf,.pptx,text/plain,text/markdown,application/pdf"; uploadLabel.append(fileInput);
   const uploadStatus = make("p", "pb-upload-status"); uploadStatus.setAttribute("role", "status");
   sourceBlock.append(sourceHead, sourceNote, sourceList, uploadLabel, uploadStatus);
   const capacityBlock = make("section", "pb-block");
-  const capacityHead = make("div", "pb-block-head"); capacityHead.append(make("span", "pb-step", "03"), make("h3", "", "Parallel model calls"));
-  const capacityIntro = make("p", "pb-explain", "Choose how many model calls can run at once. Review can begin as soon as a section is written.");
+  const capacityHead = make("div", "pb-block-head"); capacityHead.append(make("span", "pb-step", "03"), make("h3", "", "Processing settings"));
+  const capacityIntro = make("p", "pb-explain", "Choose how many requests can run at once. Each section is reviewed after it is written.");
   const capacityFields = make("div", "pb-capacity-fields");
   const workerInputs = {};
   [["reader_workers", "Reading", 8], ["writer_workers", "Writing", 8], ["review_workers", "Review", 8]].forEach(([key, label, value]) => {
@@ -36,37 +37,37 @@
     const input = make("input"); input.type = "number"; input.min = "1"; input.max = "128"; input.step = "1"; input.value = ""; input.placeholder = "Use total limit"; input.setAttribute("aria-label", `${label} workers at once`);
     field.append(input); capacityFields.append(field); workerInputs[key] = input;
   });
-  const context = make("details", "pb-context-options"); context.append(make("summary", "", "Advanced workflow settings"));
+  const context = make("details", "pb-context-options"); context.append(make("summary", "", "Advanced settings"));
   const contextFields = make("div", "pb-context-fields");
   function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=value===null?"":String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
   const workflowLabel = make("label", "pb-worker"); workflowLabel.append(make("span", "", "Workflow"));
   const workflow = make("select"); workflow.setAttribute("aria-label", "Workflow");
-  [["auto","Automatic"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"],["sweep","Read straight to flashcards"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
+  [["auto","Automatic"],["direct","Write directly from sources"],["planned","Read, outline and write"],["sweep","Read straight to flashcards"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
   workflowLabel.append(workflow); contextFields.append(workflowLabel);
-  const totalWorkers = numericField("Maximum simultaneous model calls", 8, 1, 128);
+  const totalWorkers = numericField("Maximum concurrent requests", 8, 1, 128);
   const totalWorkerField = totalWorkers.parentElement; totalWorkerField.remove();
   const readingLabel = make("label", "pb-worker"); readingLabel.append(make("span", "", "Source reading"));
   const reading = make("select"); reading.setAttribute("aria-label", "Source reading");
-  [["task","Read for this project"],["reusable","Save a reusable source inventory"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
+  [["task","Read for this project"],["reusable","Save extracted notes for other projects"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;reading.append(item);});
   readingLabel.append(reading);contextFields.append(readingLabel);
-  const sectionsPerRequest = numericField("Maximum short sections per request", 1, 1, 32);
+  const sectionsPerRequest = numericField("Sections per request", 1, 1, 32);
   const compareLabel=make("label","pb-retrieval-choice");
   const compareRelations=make("input");compareRelations.type="checkbox";
   compareLabel.append(compareRelations,make("span","","Compare related passages across sources"));
   contextFields.append(compareLabel);
   const maxAttempts = numericField("Attempts per model request", 2, 1, 5);
-  const coreWords = numericField("Optional fixed reading target (words)", null, 100, 2000);
-  coreWords.placeholder="Follow the adapter’s reading settings";
+  const coreWords = numericField("Reading size in words (optional)", null, 100, 2000);
+  coreWords.placeholder="Use default";
   const haloUnits = numericField("Extra neighboring passages", 0, 0, 8);
-  const maxRequest = numericField("Optional request byte ceiling", null, 4096, 2000000);
-  maxRequest.placeholder="Use adapter budget";
+  const maxRequest = numericField("Request size limit in bytes (optional)", null, 4096, 2000000);
+  maxRequest.placeholder="Use default";
   const retrievalChoice=make("label","pb-retrieval-choice");retrievalChoice.hidden=true;
   const retrievalTargets=make("input");retrievalTargets.type="checkbox";
-  const retrievalCopy=make("span");retrievalCopy.append(make("strong","","Merge equivalent questions"),make("small","","Preserve answer groups and distinct contexts."));
+  const retrievalCopy=make("span");retrievalCopy.append(make("strong","","Merge equivalent questions"),make("small","","Keep questions separate when they test different decisions."));
   retrievalChoice.append(retrievalTargets,retrievalCopy);
   function updateRetrievalChoice(){retrievalChoice.hidden=!(["guide","assessment"].includes(format.value));if(retrievalChoice.hidden)retrievalTargets.checked=false;}
   format.addEventListener("change",updateRetrievalChoice);updateRetrievalChoice();
-  context.append(contextFields, capacityFields, make("p", "pb-explain", "The model adapter sets how much material each call handles. Read for this project by default; choose a reusable inventory when you need the same extraction for several outputs. Review that inventory before reuse."),retrievalChoice);
+  context.append(contextFields, capacityFields, make("p", "pb-explain", "Model settings limit how much each request can contain. Saved notes can speed up later projects, but should be checked before reuse."),retrievalChoice);
   capacityBlock.append(capacityHead, capacityIntro, totalWorkerField, context);
   const savedNotes=make("details","pb-saved-notes");savedNotes.hidden=true;
   savedNotes.append(make("summary","","Use saved project notes"),make("p","pb-explain","Choose notes that apply to this project."));
@@ -83,10 +84,10 @@
   const output = make("div", "pb-output");
   activity.append(activityTitle, activityStatus, events, output);
   const replay = make("section", "pb-replay");
-  const replayHeading = make("div"); replayHeading.append(make("strong", "", "Recorded project"), make("p", "", "Explore reading, writing, review and revision using fixed test responses."));
+  const replayHeading = make("div"); replayHeading.append(make("strong", "", "Recorded project"), make("p", "", "See a sample project and a section revision. This example uses saved test responses."));
   const replayActions = make("div", "pb-replay-actions");
   const replayButton = make("button", "pb-secondary", "Initial result"); replayButton.type = "button";
-  const replayRevision = make("button", "pb-secondary", "After section revision"); replayRevision.type = "button";
+  const replayRevision = make("button", "pb-secondary", "Revised result"); replayRevision.type = "button";
   window.addEventListener("lamina:replay", () => replayButton.click());
   replayActions.append(replayButton,replayRevision); replay.append(replayHeading, replayActions);
   const recent = make("details", "pb-recent"); recent.append(make("summary", "", "Recent local projects"));
@@ -111,15 +112,15 @@
   });
   function safeNumber(input, name) { const n = Number(input.value); if (!Number.isInteger(n) || n < Number(input.min) || n > Number(input.max)) throw Error(`${name} must be ${input.min}–${input.max}.`); return n; }
   function options(selected) {
-    if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose an authority, supplement or historical source for factual evidence.");
+    if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose at least one file that provides facts. A style example alone is not enough.");
     if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");
     const halo=safeNumber(haloUnits,"Neighboring passages");
-    if(halo && !coreWords.value.trim())throw Error("Extra neighboring passages require an explicit fixed reading target.");
+    if(halo && !coreWords.value.trim())throw Error("Set a reading size in words before adding neighboring passages.");
     return {
       format:format.value, workflow:workflow.value, reading:reading.value,
       sections_per_request:safeNumber(sectionsPerRequest,"Sections per request"), compare_relations:compareRelations.checked,
       workers:safeNumber(totalWorkers,"Total calls"), max_attempts:safeNumber(maxAttempts,"Attempts"),
-      ...Object.fromEntries(Object.entries(workerInputs).filter(([,input])=>input.value.trim()!=="").map(([key,input])=>[key,safeNumber(input,key)])),
+      ...Object.fromEntries(Object.entries(workerInputs).filter(([,input])=>input.value.trim()!=="").map(([key,input])=>[key,safeNumber(input,({reader_workers:"Reading limit",writer_workers:"Writing limit",review_workers:"Review limit"})[key])])),
       ...(coreWords.value.trim()?{core_words:safeNumber(coreWords,"Fixed reading target")}:{}),
       ...(maxRequest.value.trim()?{max_input_bytes:safeNumber(maxRequest,"Request byte ceiling")}:{}),
       halo_units:halo, retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden,
@@ -135,7 +136,7 @@
       const identity = make("label", "pb-source-identity");
       const checkbox = make("input"); checkbox.type="checkbox"; checkbox.value=source.id; checkbox.checked=state.selected.has(source.id); checkbox.disabled=source.role === "assessment" || !state.local;
       checkbox.addEventListener("change", () => { if (checkbox.checked) state.selected.add(source.id); else state.selected.delete(source.id); });
-      const text = make("span"); text.append(make("strong", "", source.title || source.filename || source.id), make("small", "", `${source.units ?? "?"} passages · ${source.role === "assessment" ? "held out from generation" : "teaching source"}`));
+      const text = make("span"); text.append(make("strong", "", source.title || source.filename || source.id), make("small", "", `${source.units ?? "?"} passages · ${source.role === "assessment" ? "reserved for testing" : "source material"}`));
       identity.append(checkbox,text);row.append(identity);
       if(source.role !== "assessment") {
         const use=make("label","pb-source-use");use.append(make("span","","Use as"));
@@ -149,7 +150,7 @@
   }
   async function getJSON(path) { const response = await fetch(route(path), {cache:"no-store"}); if (!response.ok) throw Error(`HTTP ${response.status}`); return response.json(); }
   async function post(path, data) { const response = await fetch(route(path), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data)}); let value; try { value=await response.json(); } catch { throw Error(`HTTP ${response.status}: no JSON response`); } if (!response.ok) throw Error(value.error || `HTTP ${response.status}`); return value; }
-  async function refreshSources() { const status = await getJSON("api/status"); state.local=status.mode === "local"; state.adapter=Boolean(status.adapter_configured);state.audioAdapter=Boolean(status.audio_adapter_configured);updateFormatNote(); state.sources=Array.isArray(status.sources)?status.sources:[]; renderSources(); start.disabled=!state.adapter; fileInput.disabled=!state.local; installExample.hidden=false; setMessage(state.adapter ? "Ready to run. Selected source text may go to your configured model provider." : "Connect a model adapter to run your own project. The recorded example opens without one."); const badge=document.getElementById("project-mode"); if (badge) badge.textContent=state.adapter?"LOCAL / READY":"LOCAL / ADAPTER NEEDED"; try { const projects=await getJSON("api/projects");renderRecent(projects.projects || []); } catch { recent.hidden=true; } await refreshObservations(); if (status.active_run?.kind === "production" && status.active_run.id) {state.runId=status.active_run.id; poll(status.active_run.id);} }
+  async function refreshSources() { const status = await getJSON("api/status"); state.local=status.mode === "local"; state.adapter=Boolean(status.adapter_configured);state.audioAdapter=Boolean(status.audio_adapter_configured);updateFormatNote(); state.sources=Array.isArray(status.sources)?status.sources:[]; renderSources(); start.disabled=!state.adapter; fileInput.disabled=!state.local; installExample.hidden=false; setMessage(state.adapter ? "Ready. Selected source text will be sent to your connected model." : "Connect a model to create a project. You can open the example without one."); const badge=document.getElementById("project-mode"); if (badge) badge.textContent=state.adapter?"Ready":"Model connection needed"; try { const projects=await getJSON("api/projects");renderRecent(projects.projects || []); } catch { recent.hidden=true; } await refreshObservations(); if (status.active_run?.kind === "production" && status.active_run.id) {state.runId=status.active_run.id; poll(status.active_run.id);} }
   async function refreshObservations(){try{const answer=await getJSON("api/project-observations");state.observations=Array.isArray(answer.observations)?answer.observations:[];renderObservations();}catch{savedNotes.hidden=true;}}
   function renderObservations(){savedNotesList.replaceChildren();savedNotes.hidden=!state.observations.length;state.observations.forEach(item=>{const id=item.observation_id;if(!id)return;const row=make("label","pb-note-choice");const input=make("input");input.type="checkbox";input.checked=state.selectedObservations.has(id);input.addEventListener("change",()=>{if(input.checked)state.selectedObservations.add(id);else state.selectedObservations.delete(id);});const text=make("span");text.append(make("strong","",item.note || "Saved project note"));if(item.applicability)text.append(make("small","",`Use when: ${item.applicability}`));row.append(input,text);savedNotesList.append(row);});}
   function renderRecent(projects) {
@@ -157,7 +158,7 @@
     projects.slice(0,8).forEach(project=>{
       const row=make("div","pb-recent-row");
       const date=Number.isFinite(Number(project.created_at))?new Date(Number(project.created_at)*1000).toLocaleString():"Earlier project";
-      row.append(make("span","",`${date} · ${project.status || "unknown"}`));
+      row.append(make("span","",`${date} · ${statusLabel(project.status)}`));
       const open=make("button","pb-secondary","Open");open.type="button";
       open.addEventListener("click",()=>{state.runId=project.id;poll(project.id);});row.append(open);
       if(["failed","interrupted"].includes(project.status)){
@@ -209,7 +210,7 @@
     output.append(make("h3", "", isAssessment?"Practice exam":receipt.title || "Result"));
     const planned=Array.isArray(run.plan?.route?.sections)?run.plan.route.sections:[];
     if(planned.length && !isAssessment){
-      const plan=make("details","pb-plan");plan.append(make("summary","",`How this was planned · ${planned.length} section${planned.length===1?"":"s"}`));
+      const plan=make("details","pb-plan");plan.append(make("summary","",`Project outline · ${planned.length} section${planned.length===1?"":"s"}`));
       const list=make("div","pb-plan-list");
       planned.forEach(section=>{
         const row=make("div","pb-plan-row");
@@ -243,11 +244,11 @@
       catalog.targets.forEach((target,index)=>{
         const item=make("div","pb-target");item.append(make("strong","",target.title || `Question ${index+1}`),make("p","pb-target-prompt",target.prompt || ""));
         if(target.context)item.append(make("small","",target.context));
-        if(Array.isArray(target.answer_groups) && target.answer_groups.length){const answers=make("details");answers.append(make("summary","","Show answer groups"));target.answer_groups.forEach(group=>{const block=make("div","pb-answer-group");block.append(make("b","",group.label || "Answer group"));(Array.isArray(group.items)?group.items:[]).forEach(answer=>{block.append(make("p","",answer.text || ""));(Array.isArray(answer.evidence)?answer.evidence:[]).forEach(ev=>block.append(make("small","",sourceLabel(ev.unit_id || ev.source_id))));});answers.append(block);});item.append(answers);}
+        if(Array.isArray(target.answer_groups) && target.answer_groups.length){const answers=make("details");answers.append(make("summary","","Show answers"));target.answer_groups.forEach(group=>{const block=make("div","pb-answer-group");block.append(make("b","",group.label || "Answer"));(Array.isArray(group.items)?group.items:[]).forEach(answer=>{block.append(make("p","",answer.text || ""));(Array.isArray(answer.evidence)?answer.evidence:[]).forEach(ev=>block.append(make("small","",sourceLabel(ev.unit_id || ev.source_id))));});answers.append(block);});item.append(answers);}
         practice.append(item);
       });output.append(practice);
     }
-    if(receipt.format==="podcast-script" && !run.outputs?.audio)output.append(make("p","pb-script-note","Podcast script. Add a speech adapter to generate audio."));
+    if(receipt.format==="podcast-script" && !run.outputs?.audio)output.append(make("p","pb-script-note","Script ready. Connect a speech service to create audio."));
     if(receipt.format==="cards"){
       const m=receipt.metrics || {};
       const deck=make("section","pb-deck");
@@ -266,17 +267,17 @@
       output.append(episodes);
     }
     let examinerDetails=null;
-    if (receipt.assessment_checks){output.append(make("p","pb-assessment-status",`Blind assessment check: ${receipt.assessment_checks.status || "unknown"} · ${receipt.assessment_checks.metrics?.flagged_sections ?? "?"} flagged section${receipt.assessment_checks.metrics?.flagged_sections===1?"":"s"}.`));}
+    if (receipt.assessment_checks){output.append(make("p","pb-assessment-status",`Question check: ${statusLabel(receipt.assessment_checks.status)} · ${receipt.assessment_checks.metrics?.flagged_sections ?? "?"} flagged section${receipt.assessment_checks.metrics?.flagged_sections===1?"":"s"}.`));}
     if (receipt.examiner_markdown || receipt.assessment_checks || isAssessment) {
-      const examiner=make("details","pb-review pb-private"); examiner.append(make("summary","","Private examiner answer sheet and checks"));examinerDetails=examiner;
+      const examiner=make("details","pb-review pb-private"); examiner.append(make("summary","","Answer key and review"));examinerDetails=examiner;
       const body=make("div","pb-examiner"); if(receipt.examiner_markdown)appendMarkdown(body,receipt.examiner_markdown);
       const checks=receipt.assessment_checks;
-      if(checks){body.append(make("h4","","Blind assessment checks"),make("p","",`${checks.status || "Unknown status"} · ${checks.metrics?.flagged_sections ?? "?"} flagged section${checks.metrics?.flagged_sections===1?"":"s"}`));
-        (Array.isArray(checks.checks)?checks.checks:[]).forEach(item=>{const check=make("div","pb-private-check");check.append(make("strong","",item.section_id || "Section"));if(item.blind_answer?.answer)check.append(make("p","",`Blind answer: ${item.blind_answer.answer}`));(Array.isArray(item.findings)?item.findings:[]).forEach(finding=>check.append(make("p","",`${finding.kind || "Finding"}: ${finding.issue || "Review needed"}`)));body.append(check);});}
+      if(checks){body.append(make("h4","","Answers attempted without the key"),make("p","",`${statusLabel(checks.status)} · ${checks.metrics?.flagged_sections ?? "?"} flagged section${checks.metrics?.flagged_sections===1?"":"s"}`));
+        (Array.isArray(checks.checks)?checks.checks:[]).forEach(item=>{const check=make("div","pb-private-check");check.append(make("strong","",item.section_id || "Section"));if(item.blind_answer?.answer)check.append(make("p","",`Attempted answer: ${item.blind_answer.answer}`));(Array.isArray(item.findings)?item.findings:[]).forEach(finding=>check.append(make("p","",`${finding.kind || "Finding"}: ${finding.issue || "Review needed"}`)));body.append(check);});}
       examiner.append(body); output.append(examiner);
     }
     if (sections.length) {
-      const refs=make("div","pb-source-refs"); refs.append(make("strong","","Source evidence by section"));
+      const refs=make("div","pb-source-refs"); refs.append(make("strong","","Sources by section"));
       sections.forEach(section=>{
         const evidence=Array.isArray(section.evidence)?section.evidence:[];
         const ids=section.source_ids || section.sources || [];
@@ -291,24 +292,44 @@
     const links=make("div","pb-output-links");
     const audioPath=run.outputs?.audio;
     if(typeof audioPath==="string" && outputLink(audioPath,"Audio file")){
-      const audioBlock=make("div","pb-audio");audioBlock.append(make("strong","","Audio delivery"));
-      const player=make("audio");player.controls=true;player.preload="metadata";player.src=route(audioPath).href;player.setAttribute("aria-label","Produced audio");audioBlock.append(player);
+      const audioBlock=make("div","pb-audio");audioBlock.append(make("strong","","Audio"));
+      const player=make("audio");player.controls=true;player.preload="metadata";player.src=route(audioPath).href;player.setAttribute("aria-label","Project audio");audioBlock.append(player);
       const delivery=receipt.audio_delivery;
-      audioBlock.append(make("p","",delivery?.status==="review"?"Review this audio and its transcript before using it.":"The transcript records the adapter's synthesis input; verify the spoken audio by listening."));
+      audioBlock.append(make("p","",delivery?.status==="review"?"Review this audio and its transcript before using it.":"Listen to check pronunciation and completeness. The transcript shows the text sent to the speech service."));
       output.append(audioBlock);
     }
-    const linkLabels={reader:"Read formatted document",document:"Download text",pdf:"Download PDF",plan:"Inspect plan",report:"Inspect production report",candidate:"Open candidate sheet",examiner:"Open examiner sheet",examiner_pdf:"Download examiner PDF",audio:"Download audio WAV",transcript:"Download synthesis transcript",manifest:"Inspect audio report",cards_tsv:"Download Anki deck (TSV)",cards_json:"Download cards (JSON)"};
+    const linkLabels={reader:"Read formatted document",document:"Download text",pdf:"Download PDF",plan:"Inspect plan",report:"Download run details",candidate:"Open candidate sheet",examiner:"Open examiner sheet",examiner_pdf:"Download examiner PDF",audio:"Download audio WAV",transcript:"Download transcript",manifest:"Download audio details",cards_tsv:"Download Anki deck (TSV)",cards_json:"Download cards (JSON)"};
     Object.entries(run.outputs || {}).forEach(([kind,path])=>{ if(Array.isArray(path))return; const link=outputLink(path,linkLabels[kind] || `Open ${kind.replaceAll("_"," ")}`);if(!link)return;if(receipt.format==="assessment" && ["examiner","examiner_pdf","report","plan"].includes(kind) && examinerDetails)examinerDetails.append(link);else links.append(link); });
     if (links.childNodes.length) output.append(links);
     const findings=receipt.findings || receipt.initial_findings;
-    if (findings && Object.keys(findings).length) { const review=make("details","pb-review"); review.append(make("summary","",receipt.format==="assessment"?"Private review findings":"Review findings")); const pre=make("pre","",JSON.stringify(findings,null,2)); review.append(pre); if(receipt.format==="assessment" && examinerDetails)examinerDetails.append(review);else output.append(review); }
+    if (findings && receipt.format!=="cards") {
+      const review=make("details","pb-review");
+      review.append(make("summary","","Review findings"));
+      let count=0;
+      for(const [id,items] of Object.entries(findings)){
+        if(!Array.isArray(items) || !items.length)continue;
+        const section=sections.find(item=>item.id===id);
+        const block=make("section","pb-finding");
+        block.append(make("h4","",section?.title || "Project review"));
+        for(const item of items){
+          count++;
+          block.append(make("p","",item.issue || "This section needs review."));
+          if(item.repair_instruction)block.append(make("p","",`Suggested change: ${item.repair_instruction}`));
+          for(const ev of item.evidence || [])block.append(make("p","pb-citation",`${sourceLabel(ev.unit_id || ev.source_id)}: ${ev.quote || ""}`));
+        }
+        review.append(block);
+      }
+      if(!count)review.append(make("p","","No unresolved findings from the section checks."));
+      const raw=make("details");raw.append(make("summary","","Technical details"),make("pre","",JSON.stringify(findings,null,2)));review.append(raw);
+      if(receipt.format==="assessment" && examinerDetails)examinerDetails.append(review);else output.append(review);
+    }
     if (sections.length && state.local && state.runId && !example) {
       const revision=make("div","pb-revision"); revision.append(make("h4","","Change one section")); revision.append(make("p","","Describe the change. Lamina starts a new run and reuses unaffected work when it can."));
       const select=make("select"); select.setAttribute("aria-label","Section to revise"); sections.forEach((section,index)=>{const option=make("option","",section.title || `Section ${index+1}`); option.value=section.id || String(index); select.append(option);});
       const note=make("textarea"); note.rows=3; note.placeholder="What should change in this section?"; note.setAttribute("aria-label","Requested section change");
       const button=make("button","pb-secondary","Revise section"); button.type="button";
       const feedback=make("p","pb-revision-feedback"); feedback.setAttribute("role","status");
-      button.addEventListener("click",async()=>{ if(!note.value.trim()){feedback.textContent="Describe the change first.";return;} button.disabled=true; feedback.textContent="Starting a targeted revision…"; try{const answer=await post(`api/projects/${encodeURIComponent(state.runId)}/revise`,{section_notes:{[select.value]:note.value.trim()}}); if(!answer.id) throw Error("Server returned no revision run ID.");state.runId=answer.id; output.replaceChildren();poll(answer.id);}catch(err){feedback.textContent=`Could not revise: ${err.message}`;button.disabled=false;} });
+      button.addEventListener("click",async()=>{ if(!note.value.trim()){feedback.textContent="Describe the change first.";return;} button.disabled=true; feedback.textContent="Revising section…"; try{const answer=await post(`api/projects/${encodeURIComponent(state.runId)}/revise`,{section_notes:{[select.value]:note.value.trim()}}); if(!answer.id) throw Error("Server returned no revision run ID.");state.runId=answer.id; output.replaceChildren();poll(answer.id);}catch(err){feedback.textContent=`Could not revise: ${err.message}`;button.disabled=false;} });
       revision.append(select,note,button,feedback); if(isAssessment && examinerDetails)examinerDetails.append(revision);else output.append(revision);
     }
     if(state.local && state.runId && !example){
@@ -326,16 +347,16 @@
   function exampleSplit(events){const firstWriter=events.find(event=>event.stage==="production_write" && event.status==="started")?.item;const first=events.findIndex(event=>event.stage==="production_write" && event.status==="started" && event.item===firstWriter);return events.findIndex((event,i)=>i>first && event.stage==="production_write" && event.status==="started" && event.item===firstWriter);}
   function renderRun(run, example=false) {
     state.run=run; const wasHidden=activity.hidden; activity.hidden=false; events.replaceChildren();
-    activityStatus.textContent=example || run.example ? "Recorded example · fixed responses" : `Project ${run.id || state.runId || ""} · ${run.status || "unknown"}`;
+    activityStatus.textContent=example || run.example ? "Recorded example · saved test responses" : statusLabel(run.status);
     const allRecords=Array.isArray(run.events)?run.events:[];
     const split=run.example?exampleSplit(allRecords):-1;
     const records=split>=0?allRecords.slice(0,split):allRecords;
-    const labels={production_read:"Reading sources",production_route:"Planning the artifact",production_write:"Writing sections",production_review:"Reviewing sections",production_repair:"Repairing flagged sections"};
+    const labels={production_read:"Reading sources",production_route:"Preparing the outline",production_group:"Organizing ideas",production_assign:"Assigning sources",production_targets:"Organizing questions",production_compare:"Comparing sources",production_consistency:"Checking sections together",production_write:"Writing sections",production_review:"Reviewing sections",production_repair:"Revising sections",assessment_blind_solve:"Trying the questions",assessment_judge:"Checking the answers"};
     const grouped=new Map();
     records.forEach(event=>{const stage=event.stage || event.node || "Work";if(!grouped.has(stage))grouped.set(stage,new Map());grouped.get(stage).set(event.item || "global",event.status || "updated");});
-    grouped.forEach((items,stage)=>{const values=[...items.values()];const done=values.filter(status=>status==="completed").length;const failed=values.filter(status=>status==="failed").length;const active=values.filter(status=>status==="started").length;const row=make("div","pb-event");row.append(make("span","pb-event-stage",labels[stage] || stage.replaceAll("production_","")),make("strong","",`${done}/${items.size} complete`));if(active || failed)row.append(make("p","",`${active ? `${active} active` : ""}${active && failed ? " · " : ""}${failed ? `${failed} failed` : ""}`));events.append(row);});
+    grouped.forEach((items,stage)=>{const values=[...items.values()];const done=values.filter(status=>status==="completed").length;const failed=values.filter(status=>status==="failed").length;const active=values.filter(status=>status==="started").length;const row=make("div","pb-event");row.append(make("span","pb-event-stage",labels[stage] || stage.replaceAll("production_","").replaceAll("_"," ")),make("strong","",`${done}/${items.size} complete`));if(active || failed)row.append(make("p","",`${active ? `${active} active` : ""}${active && failed ? " · " : ""}${failed ? `${failed} failed` : ""}`));events.append(row);});
     if(!events.childNodes.length) events.append(make("p","pb-empty",run.status==="queued"?"Queued. Waiting for the first stage update…":"No stage events were reported for this run."));
-    if(records.length){const detail=make("details","pb-event-details");detail.append(make("summary","",`Inspect ${records.length} stage events`));const log=make("div","pb-event-log");records.forEach(event=>log.append(make("p","",`${labels[event.stage] || event.stage || "Work"} · ${event.item || "whole project"} · ${event.status || "updated"}`)));detail.append(log);events.append(detail);}
+    if(records.length){const detail=make("details","pb-event-details");detail.append(make("summary","",`Show ${records.length} processing updates`));const log=make("div","pb-event-log");records.forEach(event=>log.append(make("p","",`${labels[event.stage] || event.stage || "Work"} · ${event.item || "whole project"} · ${event.status || "updated"}`)));detail.append(log);events.append(detail);}
     if(run.error) output.replaceChildren(make("p","pb-error",run.error)); else renderReceipt(run,example || Boolean(run.example));
     if(wasHidden || example) activity.scrollIntoView({behavior:"smooth",block:"start"});
   }
@@ -349,20 +370,20 @@
       previewCursor=page.cursor;
     }
     if(!previews.size)return;
-    output.replaceChildren(make("h3","","Developing result"),make("p","pb-explain","These sections have completed their local checks. The final project may revise them."));
+    output.replaceChildren(make("h3","","Draft preview"),make("p","pb-explain","Sections appear here as they are written and checked. They may change before the project finishes."));
     for(const item of [...previews.values()].sort((a,b)=>a.position-b.position)){
-      const card=make("article","pb-section-preview");card.append(make("h4","",item.title),make("small","",item.status==="review"?"Needs review":"Provisional"));
+      const card=make("article","pb-section-preview");card.append(make("h4","",item.title),make("small","",item.status==="review"?"Needs review":"Draft"));
       appendMarkdown(card,item.body);
       if(item.truncated)card.append(make("p","","Preview shortened. Full text will be available in the completed project."));
-      if(item.evidence?.length){const evidence=make("details");evidence.append(make("summary","","Source evidence"));for(const e of item.evidence)evidence.append(make("p","",`${e.unit_id}: ${e.quote}`));card.append(evidence);}
+      if(item.evidence?.length){const evidence=make("details");evidence.append(make("summary","","Supporting passages"));for(const e of item.evidence)evidence.append(make("p","",`${e.unit_id}: ${e.quote}`));card.append(evidence);}
       output.append(card);
     }
   }
-  async function poll(id) {clearTimeout(state.poll);try{let run=await getJSON(`api/progress/${encodeURIComponent(id)}`);if(!["queued","running"].includes(run.status))run=await getJSON(`api/runs/${encodeURIComponent(id)}`);renderRun(run);if(["queued","running"].includes(run.status))await loadPreviews(run);if(["queued","running"].includes(run.status))state.poll=setTimeout(()=>poll(id),1800);else{start.disabled=!state.adapter;setMessage(run.status==="ready"?"Project complete. Open the result and its source evidence below.":run.status==="review"?"Review requested. Inspect the findings below.":`Project ${run.status}.`,run.status==="failed");}}catch(err){start.disabled=false;setMessage(`Could not read project progress: ${err.message}`,true);}}
+  async function poll(id) {clearTimeout(state.poll);try{let run=await getJSON(`api/progress/${encodeURIComponent(id)}`);if(!["queued","running"].includes(run.status))run=await getJSON(`api/runs/${encodeURIComponent(id)}`);renderRun(run);if(["queued","running"].includes(run.status))await loadPreviews(run);if(["queued","running"].includes(run.status))state.poll=setTimeout(()=>poll(id),1800);else{start.disabled=!state.adapter;setMessage(run.status==="ready"?"Project complete. Your result and sources are below.":run.status==="review"?"Your draft is ready, with issues to review below.":`Project ${run.status}.`,run.status==="failed");}}catch(err){start.disabled=false;setMessage(`Could not read project progress: ${err.message}`,true);}}
   start.addEventListener("click",async()=>{
-    if(!state.local || !state.adapter){setMessage("Open the local app with a configured adapter to run a project.",true);return;}
+    if(!state.local || !state.adapter){setMessage("Connect a model in the local app to start a project.",true);return;}
     const brief=goal.value.trim();if(!brief){setMessage("Describe the result you want first.",true);goal.focus();return;}
-    const selected=Array.from(state.selected).filter(id=>state.sources.some(s=>s.id===id && s.role==="teaching"));if(!selected.length){setMessage("Choose at least one teaching source.",true);return;}
+    const selected=Array.from(state.selected).filter(id=>state.sources.some(s=>s.id===id && s.role==="teaching"));if(!selected.length){setMessage("Choose at least one source file.",true);return;}
     let chosen;try{chosen=options(selected);}catch(err){setMessage(err.message,true);return;}
     start.disabled=true;setMessage("Starting project…");
     try{const answer=await post("api/projects",{brief,source_ids:selected,options:chosen});if(!answer.id)throw Error("Server returned no project ID.");state.runId=answer.id;poll(answer.id);}catch(err){start.disabled=false;setMessage(`Could not start project: ${err.message}`,true);}
@@ -385,7 +406,7 @@
   installExample.addEventListener("click",async()=>{if(!state.local)return;installExample.disabled=true;setMessage("Opening recorded example…");try{const answer=await post("api/project-example",{});if(!answer.id)throw Error("Server returned no example run ID.");state.runId=answer.id;await refreshSources();poll(answer.id);}catch(err){setMessage(`Could not open the recorded example: ${err.message}`,true);}finally{installExample.disabled=false;}});
   async function initialize(){
     try{state.example=await getJSON("production-example.json");}catch{replayButton.disabled=true;replayRevision.disabled=true;replayHeading.lastChild.textContent="The recorded example is unavailable in this build.";}
-    try{await refreshSources();}catch{state.local=false;state.adapter=false;start.disabled=true;fileInput.disabled=true;recent.hidden=true;renderSources();setMessage("Hosted preview. Download and run Lamina locally to make a project with your sources.");const badge=document.getElementById("project-mode");if(badge)badge.textContent="HOSTED / RECORDED EXAMPLE";}
+    try{await refreshSources();}catch{state.local=false;state.adapter=false;start.disabled=true;fileInput.disabled=true;recent.hidden=true;renderSources();setMessage("Hosted preview. Download and run Lamina locally to make a project with your sources.");const badge=document.getElementById("project-mode");if(badge)badge.textContent="Example only";}
   }
   initialize();
 })();

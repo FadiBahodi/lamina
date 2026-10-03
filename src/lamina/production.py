@@ -239,7 +239,9 @@ def _plan_identity(plan: dict) -> str:
         "route",
     )
     try:
-        return digest({key: plan[key] for key in keys})
+        return digest(
+            {**{key: plan[key] for key in keys}, "duplicates": plan.get("duplicates")}
+        )
     except (KeyError, TypeError, ValueError) as exc:
         raise ProductionError("Invalid production plan structure") from exc
 
@@ -250,6 +252,8 @@ def _read_and_plan(
     from .source_reading import read_sources
 
     # Validate the downstream policy before paying to read a corpus.
+    if opts["compare_relations"]:
+        _require_workload(provider, "production_compare", opts, None)
     for stage in (
         "production_route",
         "production_write",
@@ -263,11 +267,24 @@ def _read_and_plan(
         if opts["core_words"] is not None
         else None
     )
-    windows, ideas = read_sources(
+    windows, ideas, unresolved_reads = read_sources(
         workspace, provider, task, opts, sources, units, tracker, legacy
     )
     if not ideas:
         raise ProductionError("Readers found no anchored ideas in selected sources")
+    relation_report = None
+    if opts["compare_relations"]:
+        from .evidence_relations import compare_relations
+
+        relations, relation_report = compare_relations(
+            workspace, provider, ideas, units, task, opts, tracker
+        )
+        by_idea = {idea["id"]: [] for idea in ideas}
+        for relation in relations:
+            if relation["kind"] != "unrelated":
+                for iid in relation["member_idea_ids"]:
+                    by_idea[iid].append(relation)
+        ideas = [{**idea, "evidence_relations": by_idea[idea["id"]]} for idea in ideas]
     from .planning import plan_bounded, target_bounded, refine_sections
     from .source_reading import request_budget, envelope
     from .retrieval_targets import RetrievalTargetError
@@ -377,6 +394,11 @@ def _read_and_plan(
             "routing": planning_report,
             "targets": target_report,
             "writing_capacity": refinement,
+            "evidence_relations": relation_report,
+            # Windows that stayed unresolved under reading_failures="continue".
+            # Their source units were considered but produced no ideas; the
+            # receipt stays in review until they are read or explicitly waived.
+            "unresolved_reads": unresolved_reads,
         },
     )
 
@@ -407,6 +429,12 @@ def plan_production(
     from .source_reading import envelope, request_budget
 
     decision = {"requested": opts["workflow"], "basis": "caller"}
+    if opts["workflow"] == "sweep":
+        decision = {
+            "requested": options.get("workflow", "auto") if options else "auto",
+            "selected": "sweep",
+            "basis": "cards format reads straight to cards",
+        }
     if opts["workflow"] == "auto":
         direct_options = {**opts, "workflow": "direct"}
         direct_ideas, direct_route = source_route(task, units, direct_options)
@@ -427,7 +455,9 @@ def plan_production(
         )
         selected_workflow = (
             "direct"
-            if not opts["retrieval_targets"] and capacity["fits"]
+            if not opts["retrieval_targets"]
+            and not opts["compare_relations"]
+            and capacity["fits"]
             else "planned"
         )
         opts = {**opts, "workflow": selected_workflow}
@@ -440,7 +470,21 @@ def plan_production(
         }
 
     tracker = _Tracker(progress, max_attempts=opts["max_attempts"])
-    if opts["workflow"] in {"direct", "assigned"}:
+    duplicates = None
+    if opts["workflow"] == "sweep":
+        from .sweep import plan_sweep
+
+        try:
+            swept = plan_sweep(
+                workspace, provider, task, opts, selection, sources, units, tracker
+            )
+        except Exception as exc:
+            exc.metrics = tracker.metrics()
+            raise
+        windows, ideas, route = swept["windows"], swept["ideas"], swept["route"]
+        duplicates, retrieval_catalog = swept["duplicates"], None
+        planning_report = swept["planning"]
+    elif opts["workflow"] in {"direct", "assigned"}:
         ideas, route = source_route(task, units, opts)
         windows, retrieval_catalog, planning_report = (
             [],
@@ -490,6 +534,7 @@ def plan_production(
         "units": units,
         "windows": windows,
         "ideas": ideas,
+        "duplicates": duplicates,
         "retrieval_targets": retrieval_catalog,
         "route": route,
         "metrics": {
@@ -501,9 +546,17 @@ def plan_production(
             "selected_observations": len(selection["observations"]),
             "source_units": len(units),
             "reader_windows": len(windows),
+            "unresolved_reader_windows": len(
+                planning_report.get("unresolved_reads") or []
+            ),
             "workflow": opts["workflow"],
-            "extracted_ideas": len(ideas) if opts["workflow"] == "planned" else 0,
-            "source_references": len(ideas) if opts["workflow"] != "planned" else 0,
+            "extracted_ideas": (
+                len(ideas) if opts["workflow"] in {"planned", "sweep"} else 0
+            ),
+            "source_references": (
+                len(ideas) if opts["workflow"] not in {"planned", "sweep"} else 0
+            ),
+            "suppressed_duplicates": len(duplicates or {}),
             "assigned_ideas": sum(len(s["idea_ids"]) for s in route["sections"]),
             "omitted_ideas": (
                 sum(
@@ -626,6 +679,26 @@ def _section_context(
         for e in row["evidence"]
         if e["unit_id"] not in own_units and e["unit_id"] not in prior_units
     }
+    evidence_relations = list(
+        {
+            row["id"]: row
+            for idea in chosen + prior
+            for row in idea.get("evidence_relations", [])
+        }.values()
+    )
+    for row in evidence_relations:
+        for evidence in row["evidence"]:
+            uid = evidence["unit_id"]
+            if uid not in own_units and uid not in prior_units:
+                shared_units[uid] = units[uid]
+    # Ownership prevents duplicate extraction; it must not limit the evidence
+    # needed to interpret an owned claim. Include exact visible support in the
+    # semantic request (and therefore its cache key), including prior ideas.
+    for idea in chosen + prior:
+        for evidence in idea["evidence"]:
+            uid = evidence["unit_id"]
+            if uid not in own_units and uid not in prior_units:
+                shared_units[uid] = units[uid]
     # Parser-declared companions (e.g. slide text, table and notes) remain
     # context even when an idea cites only one component. Ownership is unchanged.
     structure_keys = list(
@@ -678,6 +751,7 @@ def _section_context(
         "assigned_units": list(own_units.values()),
         "shared_route": route_outline,
         "shared_context": shared_context,
+        "evidence_relations": evidence_relations,
         "earlier_planned_ideas": prior,
         "earlier_evidence_units": list(prior_units.values()),
         "shared_evidence_units": list(shared_units.values()),
@@ -841,8 +915,17 @@ def run_production(
     plan: dict,
     options: dict | None = None,
     progress: Callable[[dict], None] | None = None,
+    *,
+    audio_provider=None,
+    audio_output=None,
 ) -> dict:
-    """Write sections in parallel, review them, repair only flagged sections once."""
+    """Write sections in parallel, review them, repair only flagged sections once.
+
+    With ``audio_provider`` and ``audio_output`` on a podcast script, each
+    section is synthesized on a speech lane the moment it leaves review, so
+    delivery assembles cached segments instead of starting speech after the
+    last section finishes.
+    """
     started = time.monotonic()
     if (
         not isinstance(plan, dict)
@@ -865,7 +948,13 @@ def run_production(
     opts = _options({**plan["options"], **run_options})
     if any(
         opts[key] != plan["options"][key]
-        for key in ("workflow", "assignments", "retrieval_targets")
+        for key in (
+            "workflow",
+            "assignments",
+            "retrieval_targets",
+            "compare_relations",
+            "relation_neighbors",
+        )
     ):
         raise ProductionError("Workflow and assignments require a new plan")
     if opts["format"] != plan["options"]["format"]:
@@ -900,6 +989,8 @@ def run_production(
     ):
         raise ProductionError("Selected source content changed; plan again")
     tracker = _Tracker(progress, max_attempts=opts["max_attempts"])
+    if opts["workflow"] == "sweep":
+        return _run_sweep(plan, opts, provider, started)
     sections = plan["route"]["sections"]
     if set(section_notes) - {s["id"] for s in sections}:
         raise ProductionError("section_notes contains unknown section IDs")
@@ -1030,6 +1121,148 @@ def run_production(
             ),
         )
 
+    def section_many(stage, inputs):
+        from .call_runtime import make_envelope
+        from .context_binding import bind_context, restore_references
+        from .section_batching import call_sections
+
+        jobs = []
+        for item in inputs:
+            if stage == "production_write":
+                section = item
+                instruction, shape, data, units = _write_request(
+                    plan,
+                    section,
+                    contexts[section["id"]],
+                    section_notes.get(section["id"]),
+                )
+            else:
+                section, draft = item
+                context, units = contexts[section["id"]]
+                data = {**context, "draft": draft}
+                instruction = _REVIEW_INSTRUCTION + _FORM[opts["format"]]
+                shape = _SHAPES["production_review"]
+            bound, local_units, reverse = bind_context(data, units)
+            if stage == "production_review":
+                bound = _review_text_context(bound, local_units)
+
+            def check(raw, bound=bound, local_units=local_units):
+                if stage == "production_write":
+                    return validated(
+                        _authored_check,
+                        raw,
+                        bound["section"],
+                        local_units,
+                        opts["format"],
+                    )
+                return validated(_review_check, raw, local_units)
+
+            jobs.append(
+                {
+                    "id": section["id"],
+                    "checker": check,
+                    "reverse": reverse,
+                    "instruction": instruction,
+                    "envelope": make_envelope(
+                        stage,
+                        instruction,
+                        shape,
+                        bound,
+                        workload_items=_section_items(section),
+                    ),
+                }
+            )
+
+        def single(job):
+            envelope = job["envelope"]
+            return tracker.call(
+                workspace,
+                provider,
+                stage,
+                job["id"],
+                job["instruction"],
+                envelope["expected_shape"],
+                envelope["input"],
+                job["checker"],
+                request_limit(opts),
+                workload_items=envelope["workload_items"],
+            )
+
+        values = call_sections(
+            jobs,
+            workspace=workspace,
+            provider=provider,
+            tracker=tracker,
+            stage=stage,
+            max_bytes=request_limit(opts),
+            single=single,
+        )
+        # Match the single-section contract: insufficient review capacity is
+        # visible unfinished verification, not a failed writer or approval.
+        if stage == "production_review":
+            from .context_budget import ContextBudgetError
+
+            values = [
+                {
+                    "findings": [
+                        {
+                            "issue": "Review was not performed: " + str(value),
+                            "repair_instruction": "Use a reviewer with sufficient capacity or revise the section boundaries.",
+                            "evidence": [],
+                            "verification_unperformed": True,
+                        }
+                    ]
+                }
+                if isinstance(value, ProductionError)
+                and isinstance(value.__cause__, ContextBudgetError)
+                else value
+                for value in values
+            ]
+        return [
+            value
+            if isinstance(value, Exception)
+            else restore_references(value, job["reverse"])
+            for value, job in zip(values, jobs)
+        ]
+
+    first_useful_ms = None
+    speech = _SpeechLane(workspace, audio_provider, audio_output, opts, progress)
+
+    def section_available(section, draft, findings):
+        nonlocal first_useful_ms
+        if first_useful_ms is None:
+            first_useful_ms = round((time.monotonic() - started) * 1000, 3)
+        speech.submit(section, draft)
+        if progress:
+            assessment = opts["format"] == "assessment"
+            progress(
+                {
+                    "stage": "production_section",
+                    "item": section["id"],
+                    "status": "completed",
+                    "section_update": {
+                        "id": section["id"],
+                        "title": "Practice question" if assessment else draft["title"],
+                        "position": context_index["positions"][section["id"]],
+                        "status": "review" if findings else "provisional",
+                        "body": draft.get(
+                            "candidate_body" if assessment else "body", ""
+                        )[:12000],
+                        "truncated": len(
+                            draft.get("candidate_body" if assessment else "body", "")
+                        )
+                        > 12000,
+                        "evidence": []
+                        if assessment
+                        else [
+                            {"unit_id": e["unit_id"], "quote": e["quote"][:1000]}
+                            for e in draft.get("evidence", [])[:8]
+                        ],
+                        "scope": "Section checks completed; the complete project may change this result.",
+                    },
+                }
+            )
+
     try:
         authored, initial_findings, remaining = section_pipeline(
             sections,
@@ -1039,10 +1272,16 @@ def run_production(
             writers=opts["writer_workers"],
             reviewers=opts["review_workers"],
             workers=opts["workers"],
+            write_many=lambda rows: section_many("production_write", rows),
+            review_many=lambda rows: section_many("production_review", rows),
+            batch_size=opts["sections_per_request"],
+            on_section=section_available,
         )
     except Exception as exc:
         exc.metrics = tracker.metrics()
+        speech.close()
         raise
+    speech_report = speech.close()
 
     output_route = plan["route"]
     if opts["workflow"] == "direct" and opts["format"] != "assessment":
@@ -1126,13 +1365,22 @@ def run_production(
             include_adjacency=True,
         )
     metrics = tracker.metrics()
+    unresolved_reads = (plan.get("planning") or {}).get("unresolved_reads") or []
     metrics.update(
         {
             "wall_ms": round((time.monotonic() - started) * 1000, 3),
             "sections": len(authored),
+            "first_useful_output_ms": first_useful_ms,
+            "unresolved_reader_windows": len(unresolved_reads),
+            "execution_capacity": {
+                "engine_workers": opts["workers"],
+                "sections_per_request": opts["sections_per_request"],
+                "provider_concurrency": getattr(provider, "max_concurrency", None),
+            },
             "initial_flagged_sections": len(initial_findings),
             "remaining_flagged_sections": len(remaining),
             "output_bytes": len(markdown.encode("utf-8")),
+            **({"speech_prefetch": speech_report} if speech_report else {}),
             "retrieval_targets": (
                 len(plan["retrieval_targets"]["targets"])
                 if plan.get("retrieval_targets")
@@ -1145,9 +1393,15 @@ def run_production(
         "revision": REVISION,
         "status": (
             "review"
-            if remaining or (document_checks and document_checks["status"] == "review")
+            if remaining
+            or unresolved_reads
+            or (document_checks and document_checks["status"] == "review")
+            or (plan.get("planning", {}).get("evidence_relations") or {}).get(
+                "unresolved_groups", 0
+            )
             else "ready"
         ),
+        "unresolved_reads": unresolved_reads,
         "document_checks": document_checks,
         "quality": plan["quality"],
         "format": opts["format"],
@@ -1210,6 +1464,152 @@ def run_production(
             "production_review",
             "production_repair",
         ),
+    )
+    return receipt
+
+
+class _SpeechLane:
+    """Synthesize podcast sections while other sections are still being written.
+
+    Each finished section becomes the same cached segment that delivery will
+    assemble, so the speech work overlaps writing instead of following it. The
+    lane is bounded by the speech adapter's declared concurrency; a failed
+    prefetch is recorded and retried by delivery, never fatal here.
+    """
+
+    def __init__(self, workspace, audio_provider, audio_output, opts, progress):
+        from concurrent.futures import ThreadPoolExecutor
+
+        self.active = (
+            audio_provider is not None
+            and audio_output is not None
+            and opts["format"] == "podcast-script"
+        )
+        if not self.active:
+            return
+        from pathlib import Path
+        from .audio_delivery import _speech_provider
+
+        self.workspace, self.provider = workspace, audio_provider
+        self.output, self.progress = Path(audio_output), progress
+        speech = _speech_provider(audio_provider)
+        self.workers = (
+            getattr(speech, "audio_concurrency", 1)
+            if getattr(speech, "audio_resource", None)
+            else 1
+        )
+        self.pool = ThreadPoolExecutor(max_workers=self.workers)
+        self.futures = {}
+
+    def submit(self, section, draft):
+        if not self.active:
+            return
+        from .audio_delivery import render_audio
+
+        body, title = draft.get("body"), draft.get("title")
+        if not isinstance(body, str) or not body.strip() or not title:
+            return
+        folder = self.output / "segments" / digest(section["id"])[:24]
+        receipt = {
+            "format": "podcast-script",
+            "status": "ready",
+            "title": title,
+            "markdown": body,
+        }
+
+        def report(event):
+            if self.progress:
+                self.progress({**event, "item": section["id"], "lane": "speech_prefetch"})
+
+        self.futures[section["id"]] = self.pool.submit(
+            render_audio, self.workspace, self.provider, receipt, folder, report
+        )
+
+    def close(self):
+        if not self.active:
+            return None
+        rendered, failed = [], []
+        for sid, future in self.futures.items():
+            try:
+                future.result()
+                rendered.append(sid)
+            except Exception as exc:
+                failed.append({"section_id": sid, "error": str(exc)})
+        self.pool.shutdown(wait=True)
+        return {
+            "speech_workers": self.workers,
+            "rendered_sections": rendered,
+            "failed_sections": failed,
+            "scope": "Segments synthesized during writing; delivery assembles them from cache.",
+        }
+
+
+def _run_sweep(plan, opts, provider, started):
+    """Publish the sweep's cards. All paid work happened while planning."""
+    from .sweep import authored_sections, card_rows
+    from .verification import coverage_report
+    from .calibration import quality_status
+
+    authored = authored_sections(plan)
+    route = plan["route"]
+    markdown = _markdown(route, authored, "cards")
+    planning = plan.get("planning") or {}
+    audit = planning.get("audit") or {}
+    findings = {
+        row["window_id"]: row["findings"]
+        for row in audit.get("audited", [])
+        if row.get("findings")
+    }
+    cards = card_rows(plan)
+    metrics = {
+        **plan.get("metrics", {}),
+        "wall_ms": round((time.monotonic() - started) * 1000, 3),
+        "sections": len(authored),
+        "cards": len(cards),
+        "suppressed_duplicates": len(plan.get("duplicates") or {}),
+        "unresolved_reader_windows": len(planning.get("unresolved_reads") or []),
+        "audited_windows": len(audit.get("audited", [])),
+        "audit_findings": sum(len(rows) for rows in findings.values()),
+        "execution_capacity": {
+            "engine_workers": opts["workers"],
+            "provider_concurrency": getattr(provider, "max_concurrency", None),
+        },
+        "output_bytes": len(markdown.encode("utf-8")),
+    }
+    receipt = {
+        "schema_version": "1.0",
+        "revision": REVISION,
+        "status": "ready",
+        "document_checks": None,
+        "quality": plan["quality"],
+        "format": "cards",
+        "title": route["title"],
+        "markdown": markdown,
+        "candidate_markdown": None,
+        "examiner_markdown": None,
+        "sections": authored,
+        "cards": cards,
+        "duplicates": plan.get("duplicates") or {},
+        "audit": audit,
+        "unresolved_reads": planning.get("unresolved_reads") or [],
+        "retrieval_targets": None,
+        "retrieval_markdown": None,
+        "initial_findings": {},
+        "findings": {},
+        "audit_findings": findings,
+        "sources": plan["sources"],
+        "plan_digest": plan["plan_digest"],
+        "metrics": metrics,
+        "scope": (
+            "Cards written directly by readers with exact citations; duplicates suppressed "
+            "by local similarity; a sampled source-centred audit attached its findings. "
+            "Status is ready because every enabled check completed; audit findings and "
+            "unresolved windows are reported, not resolved."
+        ),
+    }
+    receipt["coverage"] = coverage_report(plan, authored)
+    receipt["quality_control"] = quality_status(
+        provider, ("production_read", "sweep_audit")
     )
     return receipt
 

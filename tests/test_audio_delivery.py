@@ -189,3 +189,150 @@ def test_distinct_uncached_scripts_share_one_local_adapter_lane(tmp_path):
             future.result()
     assert len(provider.requests) == 2
     assert provider.peak == 1
+
+
+def test_segment_cache_rebuilds_only_changed_speech_and_retains_order(tmp_path):
+    provider, ws = AudioProvider(), Workspace(tmp_path / "ws")
+    full = {
+        **receipt(),
+        "sections": [
+            {"id": "one", "title": "First", "body": "First speech."},
+            {"id": "two", "title": "Second", "body": "Second speech."},
+            {"id": "three", "title": "Third", "body": "Third speech."},
+        ],
+    }
+    out = tmp_path / "out"
+    render_audio(ws, provider, full, out)
+    assert len(provider.requests) == 3
+    data = json.loads((out / "audio.json").read_text())
+    assert [row["section_id"] for row in data["segments"]] == ["one", "two", "three"]
+    assert data["audio"]["duration_seconds"] == pytest.approx(0.3)
+    full["sections"][1]["body"] = "Corrected second speech."
+    render_audio(ws, provider, full, out)
+    assert len(provider.requests) == 4
+    assert provider.requests[-1]["input"]["script"] == "Corrected second speech."
+    assert (
+        json.loads((out / "audio.json").read_text())["segments"][0]["execution"][
+            "cache"
+        ]
+        == "hit"
+    )
+
+
+def test_review_script_renders_only_when_requested_and_names_provisional_sections(
+    tmp_path,
+):
+    provider, ws = AudioProvider(), Workspace(tmp_path / "ws")
+    in_review = {
+        **receipt(),
+        "status": "review",
+        "sections": [
+            {"id": "one", "title": "First", "body": "First speech."},
+            {"id": "two", "title": "Second", "body": "Second speech."},
+        ],
+        "findings": {"two": [{"issue": "A quantity is unsupported."}]},
+    }
+    with pytest.raises(AudioDeliveryError, match="ready"):
+        render_audio(ws, provider, in_review, tmp_path / "blocked")
+    assert provider.requests == []
+    render_audio(ws, provider, in_review, tmp_path / "out", require_ready=False)
+    assert len(provider.requests) == 2
+    data = json.loads((tmp_path / "out" / "audio.json").read_text())
+    assert data["script_status"] == "review"
+    assert data["provisional_sections"] == ["two"]
+    assert [row["section_id"] for row in data["segments"]] == ["one", "two"]
+    # A failed script never renders, whatever the policy.
+    with pytest.raises(AudioDeliveryError, match="ready"):
+        render_audio(
+            ws, provider, {**in_review, "status": "failed"}, tmp_path / "failed", require_ready=False
+        )
+
+
+def test_delivery_policy_controls_review_audio(tmp_path, monkeypatch):
+    from lamina.production_delivery import deliver_production
+
+    monkeypatch.setattr(
+        "lamina.production_delivery.export_production", lambda *a, **k: {"html": "x"}
+    )
+    provider, ws = AudioProvider(), Workspace(tmp_path / "ws")
+    base = {
+        **receipt(),
+        "status": "review",
+        "sections": [{"id": "one", "title": "First", "body": "First speech."}],
+        "findings": {"one": [{"issue": "Unsupported."}]},
+        "plan_digest": "x",
+    }
+    skipped = dict(base)
+    deliver_production(
+        ws, skipped, {}, tmp_path / "a", audio_provider=provider, audio_when="ready"
+    )
+    assert skipped["audio_delivery"]["status"] == "skipped"
+    assert provider.requests == []
+    # The default renders a script that is still in review.
+    rendered = dict(base)
+    links = deliver_production(ws, rendered, {}, tmp_path / "b", audio_provider=provider)
+    assert rendered["status"] == "review"
+    assert rendered["audio_delivery"]["status"] == "provisional"
+    assert rendered["audio_delivery"]["provisional_sections"] == ["one"]
+    assert links["audio"] == "narration.wav"
+    with pytest.raises(ValueError, match="audio_when"):
+        deliver_production(ws, dict(base), {}, tmp_path / "c", audio_when="later")
+
+
+def test_podcast_sections_are_synthesized_while_writing_and_delivered_from_cache(
+    tmp_path,
+):
+    from lamina.production import build_production, run_production, plan_production
+    from lamina.production_delivery import deliver_production
+    from test_production import FixtureProvider, workspace as production_workspace
+
+    speech = AudioProvider()
+    speech.audio_resource = "fixture-tts"
+    speech.audio_concurrency = 2
+    order = []
+
+    class Recorder(FixtureProvider):
+        def call(self, stage, payload):
+            if stage == "production_write":
+                order.append(("write", payload["input"]["section"]["id"]))
+            return super().call(stage, payload)
+
+    ws = production_workspace(tmp_path / "ws")
+    options = {"format": "podcast-script", "workflow": "planned"}
+    plan = plan_production(ws, Recorder(), "A short podcast on lease safety", ["s1", "s2"], options)
+    out = tmp_path / "out"
+    events = []
+    receipt = run_production(
+        ws,
+        Recorder(),
+        plan,
+        progress=events.append,
+        audio_provider=speech,
+        audio_output=out,
+    )
+    sections = [row["id"] for row in receipt["sections"]]
+    prefetch = receipt["metrics"]["speech_prefetch"]
+    assert prefetch["speech_workers"] == 2
+    assert sorted(prefetch["rendered_sections"]) == sorted(sections)
+    assert prefetch["failed_sections"] == []
+    assert len(speech.requests) == len(sections)
+    # Every section's speech request was submitted before the pipeline finished:
+    # the lane reports through progress while writing is still running.
+    assert any(e.get("lane") == "speech_prefetch" for e in events)
+    # Delivery assembles the same cached segments without new synthesis.
+    links = deliver_production(ws, receipt, plan, out, audio_provider=speech)
+    assert len(speech.requests) == len(sections)
+    assert links["audio"] == "narration.wav"
+    manifest = json.loads((out / "audio.json").read_text())
+    assert [row["section_id"] for row in manifest["segments"]] == sections
+    assert all(row["execution"]["cache"] == "hit" for row in manifest["segments"])
+    assert receipt["audio_delivery"]["status"] in {"ready", "provisional"}
+
+
+def test_speech_lane_is_inert_without_an_adapter_or_for_other_formats(tmp_path):
+    from lamina.production import build_production
+    from test_production import FixtureProvider, workspace as production_workspace
+
+    ws = production_workspace(tmp_path / "ws")
+    receipt = build_production(ws, FixtureProvider(), "A guide", ["s1", "s2"], {"workflow": "planned"})
+    assert "speech_prefetch" not in receipt["metrics"]

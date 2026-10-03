@@ -225,3 +225,24 @@ def test_counting_does_not_wait_for_generation_capacity(monkeypatch):
         assert count.result(timeout=2) == 123
     assert provider.transport_metrics()["count_requests"] == 1
     assert provider.transport_metrics()["generation_requests"] == 0
+
+
+def test_mechanical_stages_default_to_no_thinking_and_the_map_is_in_identity(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "secret-test-key")
+    provider = GeminiProvider()
+    assert provider.thinking_for("production_read") == 1024
+    assert provider.thinking_for("production_review") == 0
+    assert provider.thinking_for("sweep_audit") == 0
+    review = stage_request()
+    review["stage"] = "production_review"
+    body = provider._generation_request(review)
+    assert body["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
+    assert provider._generation_request(stage_request())["generationConfig"]["thinkingConfig"] == {
+        "thinkingBudget": 1024
+    }
+    custom = GeminiProvider(thinking_by_stage={"production_review": 256})
+    assert custom.thinking_for("production_review") == 256
+    assert custom.thinking_for("sweep_audit") == 1024
+    assert custom.configuration_identity != provider.configuration_identity
+    with pytest.raises(ValueError, match="thinking_by_stage"):
+        GeminiProvider(output_tokens=1024, thinking_tokens=512, thinking_by_stage={"production_write": 1024})

@@ -239,7 +239,9 @@ def _plan_identity(plan: dict) -> str:
         "route",
     )
     try:
-        return digest({key: plan[key] for key in keys})
+        return digest(
+            {**{key: plan[key] for key in keys}, "duplicates": plan.get("duplicates")}
+        )
     except (KeyError, TypeError, ValueError) as exc:
         raise ProductionError("Invalid production plan structure") from exc
 
@@ -427,6 +429,12 @@ def plan_production(
     from .source_reading import envelope, request_budget
 
     decision = {"requested": opts["workflow"], "basis": "caller"}
+    if opts["workflow"] == "sweep":
+        decision = {
+            "requested": options.get("workflow", "auto") if options else "auto",
+            "selected": "sweep",
+            "basis": "cards format reads straight to cards",
+        }
     if opts["workflow"] == "auto":
         direct_options = {**opts, "workflow": "direct"}
         direct_ideas, direct_route = source_route(task, units, direct_options)
@@ -462,7 +470,21 @@ def plan_production(
         }
 
     tracker = _Tracker(progress, max_attempts=opts["max_attempts"])
-    if opts["workflow"] in {"direct", "assigned"}:
+    duplicates = None
+    if opts["workflow"] == "sweep":
+        from .sweep import plan_sweep
+
+        try:
+            swept = plan_sweep(
+                workspace, provider, task, opts, selection, sources, units, tracker
+            )
+        except Exception as exc:
+            exc.metrics = tracker.metrics()
+            raise
+        windows, ideas, route = swept["windows"], swept["ideas"], swept["route"]
+        duplicates, retrieval_catalog = swept["duplicates"], None
+        planning_report = swept["planning"]
+    elif opts["workflow"] in {"direct", "assigned"}:
         ideas, route = source_route(task, units, opts)
         windows, retrieval_catalog, planning_report = (
             [],
@@ -512,6 +534,7 @@ def plan_production(
         "units": units,
         "windows": windows,
         "ideas": ideas,
+        "duplicates": duplicates,
         "retrieval_targets": retrieval_catalog,
         "route": route,
         "metrics": {
@@ -527,8 +550,13 @@ def plan_production(
                 planning_report.get("unresolved_reads") or []
             ),
             "workflow": opts["workflow"],
-            "extracted_ideas": len(ideas) if opts["workflow"] == "planned" else 0,
-            "source_references": len(ideas) if opts["workflow"] != "planned" else 0,
+            "extracted_ideas": (
+                len(ideas) if opts["workflow"] in {"planned", "sweep"} else 0
+            ),
+            "source_references": (
+                len(ideas) if opts["workflow"] not in {"planned", "sweep"} else 0
+            ),
+            "suppressed_duplicates": len(duplicates or {}),
             "assigned_ideas": sum(len(s["idea_ids"]) for s in route["sections"]),
             "omitted_ideas": (
                 sum(
@@ -952,6 +980,8 @@ def run_production(
     ):
         raise ProductionError("Selected source content changed; plan again")
     tracker = _Tracker(progress, max_attempts=opts["max_attempts"])
+    if opts["workflow"] == "sweep":
+        return _run_sweep(plan, opts, provider, started)
     sections = plan["route"]["sections"]
     if set(section_notes) - {s["id"] for s in sections}:
         raise ProductionError("section_notes contains unknown section IDs")
@@ -1420,6 +1450,76 @@ def run_production(
             "production_review",
             "production_repair",
         ),
+    )
+    return receipt
+
+
+def _run_sweep(plan, opts, provider, started):
+    """Publish the sweep's cards. All paid work happened while planning."""
+    from .sweep import authored_sections, card_rows
+    from .verification import coverage_report
+    from .calibration import quality_status
+
+    authored = authored_sections(plan)
+    route = plan["route"]
+    markdown = _markdown(route, authored, "cards")
+    planning = plan.get("planning") or {}
+    audit = planning.get("audit") or {}
+    findings = {
+        row["window_id"]: row["findings"]
+        for row in audit.get("audited", [])
+        if row.get("findings")
+    }
+    cards = card_rows(plan)
+    metrics = {
+        **plan.get("metrics", {}),
+        "wall_ms": round((time.monotonic() - started) * 1000, 3),
+        "sections": len(authored),
+        "cards": len(cards),
+        "suppressed_duplicates": len(plan.get("duplicates") or {}),
+        "unresolved_reader_windows": len(planning.get("unresolved_reads") or []),
+        "audited_windows": len(audit.get("audited", [])),
+        "audit_findings": sum(len(rows) for rows in findings.values()),
+        "execution_capacity": {
+            "engine_workers": opts["workers"],
+            "provider_concurrency": getattr(provider, "max_concurrency", None),
+        },
+        "output_bytes": len(markdown.encode("utf-8")),
+    }
+    receipt = {
+        "schema_version": "1.0",
+        "revision": REVISION,
+        "status": "ready",
+        "document_checks": None,
+        "quality": plan["quality"],
+        "format": "cards",
+        "title": route["title"],
+        "markdown": markdown,
+        "candidate_markdown": None,
+        "examiner_markdown": None,
+        "sections": authored,
+        "cards": cards,
+        "duplicates": plan.get("duplicates") or {},
+        "audit": audit,
+        "unresolved_reads": planning.get("unresolved_reads") or [],
+        "retrieval_targets": None,
+        "retrieval_markdown": None,
+        "initial_findings": {},
+        "findings": {},
+        "audit_findings": findings,
+        "sources": plan["sources"],
+        "plan_digest": plan["plan_digest"],
+        "metrics": metrics,
+        "scope": (
+            "Cards written directly by readers with exact citations; duplicates suppressed "
+            "by local similarity; a sampled source-centred audit attached its findings. "
+            "Status is ready because every enabled check completed; audit findings and "
+            "unresolved windows are reported, not resolved."
+        ),
+    }
+    receipt["coverage"] = coverage_report(plan, authored)
+    receipt["quality_control"] = quality_status(
+        provider, ("production_read", "sweep_audit")
     )
     return receipt
 

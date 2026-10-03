@@ -12,7 +12,7 @@ from typing import Any
 class TaskResult:
     """One settled item; errors remain visible without discarding sibling work."""
 
-    index: int
+    index: int | tuple[int, ...]
     value: Any = None
     error: Exception | None = None
 
@@ -21,13 +21,20 @@ class TaskResult:
         return self.error is None
 
 
+@dataclass(frozen=True)
+class ExpandedTasks:
+    """Replace one task with ordered children, using the same capacity pool."""
+
+    children: list
+
+
 def _capacity(value: int, name: str) -> int:
     if type(value) is not int or value < 1:
         raise ValueError(f"{name} must be a positive integer")
     return value
 
 
-def bounded_collect(function, items, workers):
+def bounded_collect(function, items, workers, *, expand=False):
     """Settle every item, retaining ordered results and exceptions.
 
     At most ``workers`` futures are submitted at once. A failed item does not
@@ -36,16 +43,22 @@ def bounded_collect(function, items, workers):
     """
     _capacity(workers, "workers")
     iterator = iter(enumerate(items))
+    children = deque()
     results = {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
         pending = {}
 
         def fill():
             while len(pending) < workers:
-                try:
-                    index, item = next(iterator)
-                except StopIteration:
-                    break
+                if children:
+                    index, item = children.popleft()
+                else:
+                    try:
+                        index, item = next(iterator)
+                        if expand:
+                            index = (index,)
+                    except StopIteration:
+                        break
                 pending[pool.submit(function, item)] = index
 
         fill()
@@ -54,11 +67,20 @@ def bounded_collect(function, items, workers):
             for future in done:
                 index = pending.pop(future)
                 try:
-                    results[index] = TaskResult(index, value=future.result())
+                    value = future.result()
+                    if expand and isinstance(value, ExpandedTasks):
+                        if not value.children:
+                            raise ValueError("expanded tasks must contain children")
+                        children.extend(
+                            (index + (n,), item)
+                            for n, item in enumerate(value.children)
+                        )
+                    else:
+                        results[index] = TaskResult(index, value=value)
                 except Exception as exc:
                     results[index] = TaskResult(index, error=exc)
             fill()
-    return [results[i] for i in range(len(results))]
+    return [results[i] for i in sorted(results)]
 
 
 def bounded_map(function, items, workers):
@@ -104,7 +126,20 @@ class DependencyGraph:
             )
 
 
-def section_pipeline(sections, write, review, repair, *, writers, reviewers, workers):
+def section_pipeline(
+    sections,
+    write,
+    review,
+    repair,
+    *,
+    writers,
+    reviewers,
+    workers,
+    write_many=None,
+    review_many=None,
+    batch_size=1,
+    on_section=None,
+):
     """Schedule write → review → optional repair → recheck per section.
 
     One shared pool and stage ceilings bound running calls. Eligible follow-up
@@ -116,6 +151,7 @@ def section_pipeline(sections, write, review, repair, *, writers, reviewers, wor
         ("workers", workers),
         ("writers", writers),
         ("reviewers", reviewers),
+        ("batch_size", batch_size),
     ):
         _capacity(value, name)
     fresh = iter(enumerate(sections))
@@ -131,6 +167,31 @@ def section_pipeline(sections, write, review, repair, *, writers, reviewers, wor
         lane = "write" if job[1] == "repair" else "review"
         ready[lane].append((sequence, job))
         sequence += 1
+
+    def settle(job, result):
+        index, stage, section, draft, findings = job
+        if isinstance(result, Exception):
+            errors[index] = result
+            return
+        if stage in {"write", "repair"}:
+            enqueue(
+                (
+                    index,
+                    "review" if stage == "write" else "recheck",
+                    section,
+                    result,
+                    None,
+                )
+            )
+        elif stage == "review" and result["findings"]:
+            initial[section["id"]] = result["findings"]
+            enqueue((index, "repair", section, draft, result["findings"]))
+        else:
+            output[index] = draft
+            if result["findings"]:
+                remaining[section["id"]] = result["findings"]
+            if on_section:
+                on_section(section, draft, result["findings"])
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         while pending or any(ready.values()) or not exhausted:
@@ -163,7 +224,39 @@ def section_pipeline(sections, write, review, repair, *, writers, reviewers, wor
                         else (review, (section, draft))
                     )
                 )
-                pending[pool.submit(fn, arg)] = job
+                jobs = [job]
+                batch_fn = (
+                    write_many
+                    if stage == "write"
+                    else review_many
+                    if stage in {"review", "recheck"}
+                    else None
+                )
+                if batch_fn is not None:
+                    while len(jobs) < batch_size:
+                        if stage == "write":
+                            try:
+                                next_index, next_section = next(fresh)
+                                jobs.append(
+                                    (next_index, "write", next_section, None, None)
+                                )
+                            except StopIteration:
+                                exhausted = True
+                                break
+                        elif ready[lane]:
+                            _, next_job = ready[lane].popleft()
+                            jobs.append(next_job)
+                        else:
+                            break
+                if len(jobs) > 1:
+                    args = [j[2] if stage == "write" else (j[2], j[3]) for j in jobs]
+                    pending[pool.submit(batch_fn, args)] = jobs
+                else:
+
+                    def single(fn=fn, arg=arg):
+                        return [fn(arg)]
+
+                    pending[pool.submit(single)] = jobs
                 occupied[lane] += 1
             if not pending:
                 if any(ready.values()):
@@ -171,30 +264,20 @@ def section_pipeline(sections, write, review, repair, *, writers, reviewers, wor
                 continue
             done, _ = wait(pending, return_when=FIRST_COMPLETED)
             for future in done:
-                index, stage, section, draft, findings = pending.pop(future)
+                jobs = pending.pop(future)
+                stage = jobs[0][1]
                 occupied["write" if stage in {"write", "repair"} else "review"] -= 1
                 try:
-                    result = future.result()
-                except Exception as exc:
-                    errors[index] = exc
-                    continue
-                if stage in {"write", "repair"}:
-                    enqueue(
-                        (
-                            index,
-                            "review" if stage == "write" else "recheck",
-                            section,
-                            result,
-                            None,
+                    results = future.result()
+                    if not isinstance(results, list) or len(results) != len(jobs):
+                        raise ValueError(
+                            "batch callback must return one result per section"
                         )
-                    )
-                elif stage == "review" and result["findings"]:
-                    initial[section["id"]] = result["findings"]
-                    enqueue((index, "repair", section, draft, result["findings"]))
-                else:
-                    output[index] = draft
-                    if result["findings"]:
-                        remaining[section["id"]] = result["findings"]
+                except Exception as exc:
+                    results = [exc] * len(jobs)
+                for job, result in zip(jobs, results):
+                    settle(job, result)
+
     if errors:
         error = errors[min(errors)]
         error.partial_results = {

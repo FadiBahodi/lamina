@@ -111,8 +111,8 @@ class GeminiProvider:
             raise ValueError("thinking_tokens exceeds the configured output allowance")
         if type(temperature) not in {int, float} or not 0 <= temperature <= 2:
             raise ValueError("temperature must be between 0 and 2")
-        if type(max_concurrency) is not int or not 1 <= max_concurrency <= 32:
-            raise ValueError("max_concurrency must be between 1 and 32")
+        if type(max_concurrency) is not int or not 1 <= max_concurrency <= 128:
+            raise ValueError("max_concurrency must be between 1 and 128")
 
         self.model = configured_model
         self.timeout = float(timeout)
@@ -123,6 +123,7 @@ class GeminiProvider:
         self.temperature = float(temperature)
         self.max_concurrency = max_concurrency
         self._slots = threading.BoundedSemaphore(max_concurrency)
+        self._count_slots = threading.BoundedSemaphore(max_concurrency)
         self._local = threading.local()
         self._count_cache = {}
         self._count_lock = threading.Lock()
@@ -132,6 +133,8 @@ class GeminiProvider:
             "count_wall_ms": 0.0,
             "generation_requests": 0,
             "generation_wall_ms": 0.0,
+            "count_admission_ms": 0.0,
+            "generation_admission_ms": 0.0,
         }
         self._stage_budgets = {}
         self.workloads = parse_workloads(
@@ -217,11 +220,15 @@ class GeminiProvider:
             method="POST",
         )
         try:
-            with self._slots:
-                prefix = "count" if method == "countTokens" else "generation"
+            prefix = "count" if method == "countTokens" else "generation"
+            waiting = time.monotonic()
+            with self._count_slots if prefix == "count" else self._slots:
                 started = time.monotonic()
                 with self._metrics_lock:
                     self._transport_metrics[prefix + "_requests"] += 1
+                    self._transport_metrics[prefix + "_admission_ms"] += (
+                        started - waiting
+                    ) * 1000
                 try:
                     with urllib.request.urlopen(
                         request, timeout=self.timeout

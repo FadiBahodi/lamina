@@ -51,3 +51,16 @@ The OCR integration test reads an original synthetic scanned sentence and checks
 - [PowerPoint notes](https://python-pptx.readthedocs.io/en/latest/user/notes.html) and [tables](https://python-pptx.readthedocs.io/en/latest/user/table.html)
 - [OCRmyPDF cookbook](https://ocrmypdf.readthedocs.io/en/latest/cookbook.html)
 - [Docling technical report](https://arxiv.org/abs/2408.09869)
+
+
+## Large local-app uploads
+
+The browser sends each selected file to `POST /api/source-upload` as an
+`application/octet-stream` body, with `X-Lamina-Filename` containing a safe
+basename and optional `X-Lamina-Role` (`teaching` by default). Content-Length is
+required; each upload can contain up to 256 MiB. The server writes at most 1 MiB
+at a time to a temporary file before parsing. It accepts no client filesystem
+paths. Files are imported individually, so an earlier successful upload remains
+available if a later file fails. The original JSON/base64 endpoint is retained.
+Binary source hashing streams from disk. Native PDF parsing, optional OCR and
+layout limitations are unchanged; upload capacity is not parsing throughput.

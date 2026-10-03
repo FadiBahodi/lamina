@@ -176,6 +176,10 @@ def pack_units(
     make_request: Callable[[list[dict]], dict],
     budget: RequestBudget,
 ) -> list[PackedBatch]:
+    return list(iter_packed_units(units, make_request, budget))
+
+
+def iter_packed_units(units, make_request, budget):
     """Pack ordered, complete source structures within full request limits.
 
     Headings remain metadata and do not force a new call. Sources do. A declared
@@ -203,7 +207,6 @@ def pack_units(
             bundles.append([unit])
         previous_key = key
 
-    result = []
     start = 0
     while start < len(bundles):
         source_id = bundles[start][0]["source_id"]
@@ -250,6 +253,5 @@ def pack_units(
                 else:
                     hi = middle - 1
             selected, usage = candidate(best)
-            result.append(PackedBatch(selected, usage))
+            yield PackedBatch(selected, usage)
             start = best
-    return result

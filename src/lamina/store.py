@@ -219,6 +219,17 @@ class Workspace:
                 for r in db.execute(sql + " ORDER BY source_id,ordinal", params)
             ]
 
+    def cached_result(self, stage: str, payload: dict, *, identity: str):
+        """Read a completed immutable result; never claim or alter a lease."""
+        key = digest(
+            {"version": 1, "stage": stage, "identity": identity, "payload": payload}
+        )
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT result FROM jobs WHERE key=? AND status='completed'", (key,)
+            ).fetchone()
+        return json.loads(row[0]) if row else None
+
     def run_cached(
         self,
         stage: str,

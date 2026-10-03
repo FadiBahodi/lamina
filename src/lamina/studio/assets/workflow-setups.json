@@ -1,5 +1,39 @@
 [
   {
+    "id": "cards",
+    "name": "Flashcard decks",
+    "title": "A textbook section in, an Anki deck out.",
+    "description": "Read every page at once and write cards straight from the source: questions and cloze sentences with the exact passage behind each one. No planner and no writer in the way; near-duplicates are removed locally and a sample of pages is audited against its source.",
+    "brief": "Write flashcards from the supplied sources for an exam candidate. Make one card per distinct testable fact, threshold, exception, mechanism or decision rule; prefer many precise cards over few broad ones. Use cloze sentences for numbers, named entities and lists, and questions for reasoning. Keep every condition that changes an answer inside the card. Cite the source passage for each card.",
+    "options": {
+      "format": "cards",
+      "audit_rate": 0.25
+    },
+    "inputs": "Add the textbook chapters, lecture slides or notes you study from. Everything selected is read; nothing is planned.",
+    "stages": [
+      [
+        "Read every window at once",
+        "Each reader owns a few pages, sees a few sentences on either side, and writes cards with span citations. A window that fails is reported; the rest continues."
+      ],
+      [
+        "Remove near-duplicates locally",
+        "Cards are compared by local similarity, never by a model call. A later card is dropped only when it matches one already kept, so chains of different claims cannot collapse."
+      ],
+      [
+        "Audit a sample",
+        "A quarter of the windows get one source-centred audit call that reports facts no card tests and cards the source does not support. Findings are attached, never removed."
+      ],
+      [
+        "Export the deck",
+        "cards.tsv imports into Anki; cards.json keeps every citation."
+      ]
+    ],
+    "decision": "Readers decide what each card tests and how to phrase it. Code decides window boundaries, citations, duplicate accounting, sampling and the receipt. Two model calls deep: read, then audit.",
+    "context": "Owned pages + a few sentences of neighbouring context + the brief.",
+    "delivery": "Anki TSV, JSON with citations, and a readable deck page.",
+    "revision": "Re-run after editing a source: unchanged windows reuse their cards; the edited window and its two neighbours are read again."
+  },
+  {
     "id": "reference",
     "name": "Reference guides",
     "title": "Several sources, one place to find an answer.",
@@ -45,7 +79,8 @@
       "format": "podcast-script",
       "retrieval_targets": false,
       "workflow": "planned",
-      "reading": "task"
+      "reading": "task",
+      "episode_minutes": 20
     },
     "inputs": "Add teaching material and select its source roles. Set the audience and listening context in the brief. Configure a speech adapter when starting the local app to produce audio.",
     "stages": [
@@ -54,8 +89,8 @@
         "Readers collect explanations, conditions and examples from their assigned source regions."
       ],
       [
-        "Choose the teaching route",
-        "One plan sets the order and the evidence each section needs from earlier ideas."
+        "Choose the teaching route and the episodes",
+        "One plan sets the order, numbers the sections into episodes of about twenty minutes, and gives each section a spoken-word target and the evidence it needs from earlier ideas."
       ],
       [
         "Write the sections",
@@ -63,12 +98,12 @@
       ],
       [
         "Render the audio",
-        "A speech adapter converts a ready script to WAV. Local synthesis calls share one resource lane."
+        "Each section is synthesized the moment it is reviewed. Episodes are assembled as separate WAV files, with the full programme beside them."
       ]
     ],
     "decision": "Writers receive earlier planned ideas and their evidence. They can work at the same time because they share the intended route. A task that requires the actual preceding prose needs a dependency on that completed result.",
     "context": "Teaching route + assigned material + earlier planned ideas and selected quotations.",
-    "delivery": "Podcast script; WAV audio with a speech adapter.",
+    "delivery": "Podcast script per episode; one WAV per episode and the full programme, with a speech adapter.",
     "revision": "Revise the affected script section and review it, then render the revised script. The speech adapter caches identical requests."
   },
   {

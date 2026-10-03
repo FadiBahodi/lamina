@@ -7,7 +7,10 @@
   function preview(id) {
     const box = el('div', undefined, 'use-case-preview');
     box.setAttribute('aria-hidden', 'true');
-    if (id === 'audio') {
+    if (id === 'cards') {
+      const card = el('div', undefined, 'preview-question');
+      card.append(el('small','FLASHCARD'),el('strong','The clock starts at {{c1::grant time}}.'),el('div',undefined,'answer-lines'));box.append(card);
+    } else if (id === 'audio') {
       const card = el('div', undefined, 'preview-audio');
       card.append(el('strong', 'A concept worth explaining'), el('small', 'Chapter → script → audio'));
       const wave = el('div', undefined, 'waveform');

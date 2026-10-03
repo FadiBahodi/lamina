@@ -48,7 +48,7 @@
           <div class="hero-copy">
             <p class="eyebrow">Open-source infrastructure for document production</p>
             <h1 id="page-title">Build from<br>your sources.</h1>
-            <p class="hero-description">Turn a collection of documents into a reference guide, a podcast script or a practice exam. Lamina coordinates the model calls, keeps the source references, and saves work you can reuse.</p>
+            <p class="hero-description">Turn a collection of documents into a flashcard deck, a reference guide, a podcast in episodes or a practice exam. Lamina reads the sources in parallel, keeps every claim tied to its passage, and saves work you can reuse.</p>
             <div class="hero-actions"><a class="button button-primary" href="#use-cases">Explore use cases <span aria-hidden="true">↓</span></a><a class="button button-secondary" href="#install">Run it locally</a></div>
             <p class="hero-meta">Python framework · Local browser app · Your model connection</p>
           </div>
@@ -76,7 +76,7 @@
             <article><span class="mechanism-number">03</span><h3>Keep useful work</h3><p>Completed requests are cached. Revise a section or resume an interrupted project: unchanged requests reuse their saved results, while affected work runs again.</p><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/production.md#reuse-revision-and-failure">Caching and revision ↗</a></article>
             <article><span class="mechanism-number">04</span><h3>Check the finished result</h3><p>Review compares each draft with its sources. Practice questions get a blind solve and a marking check. Reports retain unresolved findings and work left out.</p><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/quality-evaluation.md">Quality evaluation ↗</a></article>
           </div>
-          <div class="engineering-note"><div><h3>Parallel where it helps.</h3><p>Reading can run across sources. Writing and review proceed section by section under a shared call limit. Speech synthesis uses its own resource lane.</p></div><div class="engineering-links"><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/architecture.md">Read the architecture</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/benchmarks.md">See execution measurements</a></div></div>
+          <div class="engineering-note"><div><h3>Parallel where it helps.</h3><p>Every reader window is one independent call. Planning starts on the pages already read. Writing and review proceed section by section under a shared call limit, and each podcast section is spoken the moment it is reviewed.</p></div><div class="engineering-links"><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/architecture.md">Read the architecture</a><a href="https://github.com/FadiBahodi/lamina/blob/main/docs/benchmarks.md">See execution measurements</a></div></div>
         </section>
         <section class="home-section example-feature" aria-labelledby="example-title">
           <div><p class="eyebrow">Try an example</p><h2 id="example-title">Follow a guide from source to revision.</h2><p>Open a small engineering guide, inspect the supporting passages, then compare a revised section with the original. The bundled example uses fixed model responses so it runs without an API key.</p><button class="button button-primary" type="button" data-view="workflows" data-open-replay>Explore the example</button><a class="plain-link" href="examples/production/index.html">Read the finished guide ↗</a></div>

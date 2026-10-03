@@ -150,6 +150,8 @@ def _options(options: dict | None) -> dict:
         "relation_threshold",
         "audit_rate",
         "dedup_threshold",
+        "episodes",
+        "episode_minutes",
     }
     if set(options) - allowed:
         raise ProductionError(
@@ -177,6 +179,8 @@ def _options(options: dict | None) -> dict:
         "relation_threshold": None,
         "audit_rate": 0.25,
         "dedup_threshold": None,
+        "episodes": "auto",
+        "episode_minutes": 20,
         "max_request_bytes": 1_500_000,
         "retrieval_targets": False,
     }
@@ -206,6 +210,12 @@ def _options(options: dict | None) -> dict:
             raise ProductionError(f"{key} must be a number in (0, 1]")
     if type(result["audit_rate"]) not in (int, float) or not 0 <= result["audit_rate"] <= 1:
         raise ProductionError("audit_rate must be a number from 0 to 1")
+    if result["episodes"] != "auto" and (
+        type(result["episodes"]) is not int or not 1 <= result["episodes"] <= 64
+    ):
+        raise ProductionError("episodes must be auto or an integer from 1 to 64")
+    if type(result["episode_minutes"]) is not int or not 3 <= result["episode_minutes"] <= 120:
+        raise ProductionError("episode_minutes must be an integer from 3 to 120")
     if result["reading"] not in ("task", "reusable"):
         raise ProductionError("reading must be task or reusable")
     if result["reading_failures"] not in ("abort", "continue"):
@@ -454,6 +464,15 @@ def _route_check(
         }
         seen_sections.add(sid)
         assigned.update(ids)
+        extra = {}
+        if row.get("episode") is not None:
+            if type(row["episode"]) is not int or not 1 <= row["episode"] <= 64:
+                raise ProductionError("section.episode must be an integer from 1 to 64")
+            extra["episode"] = row["episode"]
+        if row.get("target_words") is not None:
+            if type(row["target_words"]) is not int or not 20 <= row["target_words"] <= 20000:
+                raise ProductionError("section.target_words must be an integer from 20 to 20000")
+            extra["target_words"] = row["target_words"]
         sections.append(
             {
                 "id": sid,
@@ -464,6 +483,7 @@ def _route_check(
                 "context_section_ids": context_ids,
                 "candidate_context_ids": candidate_ids,
                 "representation": checked_representation,
+                **extra,
             }
         )
     omitted = raw.get("omitted", [])
@@ -689,3 +709,84 @@ def _review_check(raw, units: dict[str, dict]) -> dict:
 
 # Legacy replies may still return body/evidence/claims. New requests prefer
 # marked bodies so the engine can derive the duplicated structures locally.
+
+
+SPOKEN_WORDS_PER_MINUTE = 150
+
+
+def podcast_plan(options: dict) -> dict | None:
+    """Episode sizing shared by the planner, writers and delivery, or None."""
+    if options.get("format") != "podcast-script":
+        return None
+    minutes = options.get("episode_minutes", 20)
+    return {
+        "episodes": options.get("episodes", "auto"),
+        "episode_minutes": minutes,
+        "words_per_episode": minutes * SPOKEN_WORDS_PER_MINUTE,
+        "scope": (
+            "Each section carries the episode it belongs to and a spoken-word target. "
+            "Sections of one episode are consecutive and in listening order."
+        ),
+    }
+
+
+def episode_check(route: dict, plan: dict | None) -> dict:
+    """Normalize episodes on a podcast route: every section numbered, episodes
+    contiguous in listening order and renumbered from 1, word targets filled
+    from the episode budget by idea share when a section omits them."""
+    if plan is None:
+        return route
+    sections = route["sections"]
+    missing = [row["id"] for row in sections if row.get("episode") is None]
+    if missing and len(missing) == len(sections):
+        # No episode numbering at all: one episode, unless more were asked for.
+        if plan["episodes"] != "auto" and plan["episodes"] > 1:
+            raise ProductionError(
+                f"the brief asks for {plan['episodes']} episodes; give every section an "
+                "episode number from 1 in listening order"
+            )
+        for row in sections:
+            row["episode"] = 1
+    elif missing:
+        raise ProductionError(
+            f"podcast sections need an episode number; missing on {missing}. "
+            "Number episodes from 1 in listening order; a short collection may be one episode."
+        )
+    order = [row["episode"] for row in sections]
+    if any(b < a for a, b in zip(order, order[1:])):
+        raise ProductionError(
+            "podcast sections must be listed in listening order: an episode's sections are "
+            "consecutive and episodes ascend"
+        )
+    if plan["episodes"] != "auto" and len(set(order)) != plan["episodes"]:
+        raise ProductionError(
+            f"the brief asks for {plan['episodes']} episodes; the outline uses {len(set(order))}. "
+            "Use exactly that many, dividing the material by listening time."
+        )
+    renumber = {old: n for n, old in enumerate(dict.fromkeys(order), 1)}
+    by_episode = {}
+    for row in sections:
+        row["episode"] = renumber[row["episode"]]
+        by_episode.setdefault(row["episode"], []).append(row)
+    for rows in by_episode.values():
+        unfilled = [row for row in rows if row.get("target_words") is None]
+        if not unfilled:
+            continue
+        spent = sum(row.get("target_words") or 0 for row in rows)
+        remaining = max(0, plan["words_per_episode"] - spent)
+        ideas = sum(max(1, len(row.get("target_ids", row["idea_ids"]))) for row in unfilled)
+        for row in unfilled:
+            share = max(1, len(row.get("target_ids", row["idea_ids"]))) / ideas
+            row["target_words"] = max(20, int(round(remaining * share)))
+    return route
+
+
+def episode_summary(sections: list[dict]) -> list[dict]:
+    """Episodes as the receipt reports them, in listening order."""
+    episodes = {}
+    for row in sections:
+        number = row.get("episode", 1)
+        episodes.setdefault(number, {"number": number, "section_ids": [], "target_words": 0})
+        episodes[number]["section_ids"].append(row["id"])
+        episodes[number]["target_words"] += row.get("target_words") or 0
+    return [episodes[n] for n in sorted(episodes)]

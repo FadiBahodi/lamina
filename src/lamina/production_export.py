@@ -255,6 +255,17 @@ def export_production(receipt: dict, plan: dict, output: Path) -> dict:
         (output / f"{name}.json").write_text(
             json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
+    episodes = receipt.get("episodes")
+    if isinstance(episodes, list) and len(episodes) > 1:
+        links["episodes"] = []
+        for row in episodes:
+            name = f"episode-{row['number']:02d}"
+            (output / f"{name}.md").write_text(row["markdown"], encoding="utf-8")
+            (output / f"{name}.html").write_text(
+                document_html(row["markdown"], f"{title} — {row['title']}"),
+                encoding="utf-8",
+            )
+            links["episodes"].append(f"{name}.html")
     if isinstance(receipt.get("cards"), list) and receipt["cards"]:
         from .sweep import cards_tsv
 

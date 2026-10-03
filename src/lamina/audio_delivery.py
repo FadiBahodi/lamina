@@ -17,10 +17,11 @@ import tempfile
 import time
 import uuid
 import wave
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
-from filelock import FileLock
+from filelock import FileLock, Timeout
 
 from .store import Workspace, canonical, digest
 
@@ -129,26 +130,79 @@ def _lock_timeout(provider) -> float:
     return max(MIN_LOCK_TIMEOUT_SECONDS, seconds + 30)
 
 
+def _speech_provider(provider):
+    return getattr(provider, "stages", {}).get(
+        STAGE, getattr(provider, "default", provider)
+    )
+
+
+@contextmanager
+def _audio_slot(provider):
+    provider = _speech_provider(provider)
+    resource = getattr(provider, "audio_resource", None)
+    capacity = getattr(provider, "audio_concurrency", 1)
+    if not resource:
+        with FileLock(str(_local_audio_lock()), timeout=_lock_timeout(provider)):
+            yield
+        return
+    if (
+        not isinstance(resource, str)
+        or type(capacity) is not int
+        or not 1 <= capacity <= 128
+    ):
+        raise AudioDeliveryError(
+            "audio resource needs a name and concurrency from 1 to 128"
+        )
+    token = digest(resource)[:24]
+    start = time.monotonic()
+    while True:
+        for slot in range(capacity):
+            lock = FileLock(str(_local_audio_lock()) + f".{token}.{slot}")
+            try:
+                lock.acquire(timeout=0)
+            except Timeout:
+                continue
+            try:
+                yield
+            finally:
+                lock.release()
+            return
+        if time.monotonic() - start > _lock_timeout(provider):
+            raise AudioDeliveryError("timed out waiting for the speech resource")
+        time.sleep(0.05)
+
+
 def render_audio(
     workspace: Workspace,
     provider,
     receipt: dict,
     output: Path,
     progress: Callable[[dict], None] | None = None,
+    *,
+    require_ready: bool = True,
 ) -> dict[str, str]:
-    """Render a ready podcast script with a configured command provider.
+    """Render a ready podcast script, using sections when available.
 
-    The adapter receives the complete finished script and returns base64 PCM WAV
+    Sectioned receipts use independently cached segments. For a legacy receipt
+    without sections, the adapter receives the complete script and returns PCM WAV
     plus the text it submitted to speech synthesis. Cache identity includes the
     script, title, requested format, adapter identity, and this protocol version.
     A per-local-user process-safe file lock covers only the adapter invocation;
     cache hits never acquire it. The lock wait is at least 600 seconds or the
     adapter timeout plus 30 seconds, whichever is longer.
+
+    ``require_ready=False`` renders a script that is still in ``review``. A
+    finding on one section is not a reason to withhold the other sections from
+    the speech lane; the manifest lists the sections with remaining findings so
+    the listener knows which parts are provisional.
     """
     if not isinstance(receipt, dict) or receipt.get("format") != "podcast-script":
         raise AudioDeliveryError("audio delivery requires a podcast-script receipt")
     if receipt.get("status") != "ready":
-        raise AudioDeliveryError("audio delivery requires a ready podcast script")
+        if require_ready or receipt.get("status") != "review":
+            raise AudioDeliveryError("audio delivery requires a ready podcast script")
+    if receipt.get("sections"):
+        return render_audio_segments(workspace, provider, receipt, output, progress)
     script = _text(receipt.get("markdown"), "podcast script", 500000)
     title = _text(receipt.get("title"), "podcast title", 500)
     identity = _text(getattr(provider, "identity", None), "audio adapter identity", 500)
@@ -185,7 +239,7 @@ def render_audio(
     def handler(payload: dict) -> dict:
         nonlocal invoked
         invoked = True
-        with FileLock(str(_local_audio_lock()), timeout=_lock_timeout(provider)):
+        with _audio_slot(provider):
             raw = provider.call(STAGE, payload)
         return _reply(raw)
 
@@ -237,6 +291,162 @@ def render_audio(
                 "cache": "miss" if invoked else "hit",
             }
         )
+    return {
+        "audio": "narration.wav",
+        "transcript": "narration.txt",
+        "manifest": "audio.json",
+    }
+
+
+def render_audio_segments(workspace, provider, receipt, output, progress=None):
+    """Cache each reviewed section and assemble PCM on disk in source order.
+
+    A segment retains the adapter's 20 MB limit. The assembled file has no
+    base64 transport and may exceed it. PCM formats must agree; silently
+    resampling or truncating speech is forbidden. Prosody remains unmeasured.
+    """
+    from .execution import bounded_collect
+
+    target = Path(output)
+    rows = receipt["sections"]
+    if not isinstance(rows, list) or not rows:
+        raise AudioDeliveryError("audio segments require finished sections")
+    ids = [row.get("id") for row in rows if isinstance(row, dict)]
+    if (
+        len(ids) != len(rows)
+        or any(not isinstance(i, str) or not i for i in ids)
+        or len(set(ids)) != len(ids)
+    ):
+        raise AudioDeliveryError("audio segment IDs must be unique")
+    target.mkdir(parents=True, exist_ok=True)
+
+    def segment(row):
+        sid = digest(row["id"])[:24]
+        body = _text(row.get("body"), "section script", 500000)
+        title = _text(row.get("title"), "section title", 500)
+        folder = target / "segments" / sid
+
+        def report(event):
+            if progress:
+                progress(
+                    {
+                        **event,
+                        "item": row["id"],
+                        "audio_file": f"segments/{sid}/narration.wav"
+                        if event["status"] == "completed"
+                        else None,
+                    }
+                )
+
+        render_audio(
+            workspace,
+            provider,
+            {
+                "format": "podcast-script",
+                "status": "ready",
+                "title": title,
+                "markdown": body,
+            },
+            folder,
+            report,
+        )
+        manifest = json.loads((folder / "audio.json").read_text())
+        return {
+            "section_id": row["id"],
+            "title": title,
+            "file": f"segments/{sid}/narration.wav",
+            "transcript_file": f"segments/{sid}/narration.txt",
+            "audio": manifest["audio"],
+            "execution": manifest["execution"],
+        }
+
+    speech = _speech_provider(provider)
+    workers = (
+        getattr(speech, "audio_concurrency", 1)
+        if getattr(speech, "audio_resource", None)
+        else 1
+    )
+    outcomes = bounded_collect(segment, rows, workers)
+    # Sections that still carry review findings are rendered with the rest and
+    # named here, so a listener knows which parts may change after revision.
+    remaining = receipt.get("findings") or {}
+    provisional = sorted(remaining) if isinstance(remaining, dict) else []
+    manifest = {
+        "revision": "lamina-segmented-audio-1",
+        "stage": STAGE,
+        "title": receipt["title"],
+        "script_status": receipt.get("status", "ready"),
+        "provisional_sections": provisional,
+        "segments": [r.value for r in outcomes if r.ok],
+        "failed_sections": [rows[r.index]["id"] for r in outcomes if not r.ok],
+        "verification": "PCM structure and order checked. Listening quality, pronunciation, transitions and transcript fidelity were not checked.",
+    }
+    _write_atomic(
+        target / "audio-segments.json", (json.dumps(manifest, indent=2) + "\n").encode()
+    )
+    if manifest["failed_sections"]:
+        error = AudioDeliveryError(
+            "Some speech segments failed; completed segments are retained"
+        )
+        error.partial_results = manifest
+        raise error
+
+    pending = target / ("narration." + uuid.uuid4().hex + ".tmp")
+    params, frames = None, 0
+    try:
+        with wave.open(str(pending), "wb") as writer:
+            for row in manifest["segments"]:
+                with wave.open(str(target / row["file"]), "rb") as reader:
+                    current = (
+                        reader.getnchannels(),
+                        reader.getsampwidth(),
+                        reader.getframerate(),
+                    )
+                    if params is None:
+                        params = current
+                        writer.setnchannels(params[0])
+                        writer.setsampwidth(params[1])
+                        writer.setframerate(params[2])
+                    elif current != params:
+                        raise AudioDeliveryError(
+                            "Speech segments have different PCM formats"
+                        )
+                    frames += reader.getnframes()
+                    while chunk := reader.readframes(65536):
+                        writer.writeframesraw(chunk)
+        os.replace(pending, target / "narration.wav")
+    finally:
+        pending.unlink(missing_ok=True)
+    transcript = "\n\n".join(
+        (target / row["transcript_file"]).read_text() for row in manifest["segments"]
+    )
+    _write_atomic(target / "narration.txt", transcript.encode())
+    with (target / "narration.wav").open("rb") as stream:
+        sha = hashlib.file_digest(stream, "sha256").hexdigest()
+    manifest.update(
+        audio={
+            "file": "narration.wav",
+            "sha256": sha,
+            "bytes": (target / "narration.wav").stat().st_size,
+            "frames": frames,
+            "duration_seconds": frames / params[2],
+            "channels": params[0],
+            "sample_width_bytes": params[1],
+            "sample_rate_hz": params[2],
+        },
+        transcript={
+            "file": "narration.txt",
+            "source": "adapter-reported synthesis input; not independently transcribed",
+        },
+        execution={
+            "cache": "hit"
+            if all(r["execution"]["cache"] == "hit" for r in manifest["segments"])
+            else "miss"
+        },
+    )
+    _write_atomic(
+        target / "audio.json", (json.dumps(manifest, indent=2) + "\n").encode()
+    )
     return {
         "audio": "narration.wav",
         "transcript": "narration.txt",

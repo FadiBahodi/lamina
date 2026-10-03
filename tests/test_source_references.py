@@ -79,7 +79,7 @@ class Provider:
 
 
 def run_read(tmp_path, provider, units, *, tracker=None, ws=None, **overrides):
-    return read_sources(
+    windows, ideas, unresolved = read_sources(
         ws or Workspace(tmp_path),
         provider,
         {"goal": "Explain operation"},
@@ -88,6 +88,8 @@ def run_read(tmp_path, provider, units, *, tracker=None, ws=None, **overrides):
         units,
         tracker or CallTracker(),
     )
+    assert unresolved == []
+    return windows, ideas
 
 
 def test_spans_preserve_abbreviations_conditions_and_unicode_offsets():

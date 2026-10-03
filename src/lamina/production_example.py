@@ -181,6 +181,9 @@ class FixtureAdapter:
                     ]
                 }
             return {"findings": []}
+        if stage == "sweep_audit":
+            # The sweep's sampled audit: this fixture reports no defects.
+            return {"findings": []}
         raise ValueError("Unexpected fixture stage")
 
 

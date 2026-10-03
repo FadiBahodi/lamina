@@ -8,6 +8,7 @@ from .source_spans import source_spans
 
 _REF_LISTS = {
     "unit_ids",
+    "support_unit_ids",
     "context_unit_ids",
     "source_ids",
     "used_unit_ids",
@@ -73,9 +74,7 @@ def bind_context(data, units):
     }
     span_aliases = {
         span["id"]: f"s{number}"
-        for number, span in enumerate(
-            span for uid in units for span in spans[uid]
-        )
+        for number, span in enumerate(span for uid in units for span in spans[uid])
     }
     aliases.update(span_aliases)
     source_ids = list(dict.fromkeys(u["source_id"] for u in units.values()))
@@ -121,10 +120,7 @@ def bind_context(data, units):
         aliases[uid]: {
             **u,
             "id": aliases[uid],
-            "spans": [
-                {**span, "id": span_aliases[span["id"]]}
-                for span in spans[uid]
-            ],
+            "spans": [{**span, "id": span_aliases[span["id"]]} for span in spans[uid]],
         }
         for uid, u in units.items()
     }

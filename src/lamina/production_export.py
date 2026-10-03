@@ -255,6 +255,16 @@ def export_production(receipt: dict, plan: dict, output: Path) -> dict:
         (output / f"{name}.json").write_text(
             json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
+    if isinstance(receipt.get("cards"), list) and receipt["cards"]:
+        from .sweep import cards_tsv
+
+        (output / "cards.tsv").write_text(cards_tsv(receipt["cards"]), encoding="utf-8")
+        (output / "cards.json").write_text(
+            json.dumps(receipt["cards"], ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        links["cards_tsv"] = "cards.tsv"
+        links["cards_json"] = "cards.json"
     for key in ("candidate_markdown", "examiner_markdown"):
         if isinstance(receipt.get(key), str) and receipt[key]:
             name = key.removesuffix("_markdown")

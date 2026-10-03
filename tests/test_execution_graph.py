@@ -117,7 +117,7 @@ def test_submission_is_bounded_and_values_keep_input_order():
 def test_graph_handles_deep_reverse_order_without_recursive_or_layer_scans():
     # A deep graph must be traversable without Python recursion. Each edge is
     # represented once in each direction; no transitive closures are built.
-    nodes = [node(f"n{i}", [f"n{i-1}"] if i else []) for i in range(20000)]
+    nodes = [node(f"n{i}", [f"n{i - 1}"] if i else []) for i in range(20000)]
     graph = DependencyGraph(list(reversed(nodes)))
     assert graph.topological == [f"n{i}" for i in range(20000)]
     assert graph.depth["n0"] == 20000
@@ -131,7 +131,7 @@ def test_graph_handles_deep_reverse_order_without_recursive_or_layer_scans():
 
 
 def test_failed_root_skips_large_reverse_order_chain_but_runs_sibling(tmp_path):
-    nodes = [node(f"n{i}", [f"n{i-1}"] if i else []) for i in range(1000)]
+    nodes = [node(f"n{i}", [f"n{i - 1}"] if i else []) for i in range(1000)]
     nodes.reverse()
     nodes.append(node("sibling"))
     provider = Provider(fail="n0")
@@ -260,3 +260,23 @@ def test_section_pool_and_stage_capacities_are_shared():
     assert not remaining
     assert peak["total"] <= 3 and peak["write"] <= 2 and peak["review"] <= 2
     assert [r["id"] for r in result] == list(map(str, range(12)))
+
+
+def test_expanded_children_share_capacity_and_preserve_successful_siblings():
+    from lamina.execution import ExpandedTasks, bounded_collect
+    import threading
+
+    rendezvous = threading.Barrier(2)
+
+    def run(item):
+        if item == "root":
+            return ExpandedTasks(["left", "right"])
+        rendezvous.wait(timeout=3)  # sequential recursion would fail
+        if item == "right":
+            raise ValueError("right failed")
+        return item
+
+    results = bounded_collect(run, ["root"], 2, expand=True)
+    assert results[0].value == "left"
+    assert results[1].error.args == ("right failed",)
+    assert [r.index for r in results] == [(0, 0), (0, 1)]

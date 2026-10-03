@@ -166,7 +166,9 @@ def parser() -> argparse.ArgumentParser:
     )
     produce.add_argument("--timeout", type=float, default=120)
     produce.add_argument(
-        "--format", choices=["document", "guide", "podcast-script", "assessment"]
+        "--format",
+        choices=["document", "guide", "podcast-script", "assessment", "cards"],
+        help="cards selects the sweep route: read in parallel, deduplicate locally, audit a sample, export Anki-ready cards",
     )
     produce.add_argument("--readers", type=int)
     produce.add_argument("--writers", type=int)
@@ -179,8 +181,8 @@ def parser() -> argparse.ArgumentParser:
     )
     produce.add_argument(
         "--workflow",
-        choices=["auto", "direct", "assigned", "planned"],
-        help="auto uses declared workload limits; planned groups source ideas",
+        choices=["auto", "direct", "assigned", "planned", "sweep"],
+        help="auto uses declared workload limits; planned groups source ideas; sweep reads straight to cards",
     )
     produce.add_argument(
         "--assignments",
@@ -209,6 +211,32 @@ def parser() -> argparse.ArgumentParser:
         help="Maximum attempts per model request, including validation repair (1–5)",
     )
     produce.add_argument("--halo-units", type=int)
+    produce.add_argument(
+        "--reader-context-spans",
+        type=int,
+        help="Boundary halo: show this many sentence spans of each adjacent unit to every reader (0–64; 0 means ask only when needed)",
+    )
+    produce.add_argument(
+        "--reading-failures",
+        choices=["abort", "continue"],
+        help="continue plans from the successful reads and leaves the receipt in review; abort (default) stops the plan",
+    )
+    produce.add_argument(
+        "--audit-rate",
+        type=float,
+        help="Sweep route: fraction of reader windows that receive a source-centred audit call (0–1, default 0.25)",
+    )
+    produce.add_argument(
+        "--dedup-threshold",
+        type=float,
+        help="Sweep route: similarity at or above which a later card is suppressed as a duplicate (default by method)",
+    )
+    produce.add_argument(
+        "--audio-when",
+        choices=["ready", "any"],
+        default="any",
+        help="any (default) renders a podcast script even while it is in review and names its provisional sections in the audio manifest; ready withholds audio until every check passes",
+    )
     produce.add_argument("--output", type=Path, default=Path("output/project"))
     run = commands.add_parser(
         "run", help="Run a validated teaching procedure with a configured adapter"
@@ -440,6 +468,10 @@ def main(argv: list[str] | None = None) -> int:
                     "reading": args.reading,
                     "max_attempts": args.max_attempts,
                     "halo_units": args.halo_units,
+                    "reader_context_spans": args.reader_context_spans,
+                    "reading_failures": args.reading_failures,
+                    "audit_rate": args.audit_rate,
+                    "dedup_threshold": args.dedup_threshold,
                     "source_policy": (
                         json.loads(args.source_policy.read_text(encoding="utf-8"))
                         if args.source_policy
@@ -475,7 +507,6 @@ def main(argv: list[str] | None = None) -> int:
                 options["section_notes"] = json.loads(
                     args.section_notes.read_text(encoding="utf-8")
                 )
-            receipt = run_production(workspace, provider, plan, options)
             audio_provider = own(
                 make_provider(
                     args.audio_adapter,
@@ -483,8 +514,21 @@ def main(argv: list[str] | None = None) -> int:
                     timeout=args.timeout,
                 )
             )
+            receipt = run_production(
+                workspace,
+                provider,
+                plan,
+                options,
+                audio_provider=audio_provider,
+                audio_output=args.output,
+            )
             links = deliver_production(
-                workspace, receipt, plan, args.output, audio_provider=audio_provider
+                workspace,
+                receipt,
+                plan,
+                args.output,
+                audio_provider=audio_provider,
+                audio_when=args.audio_when,
             )
             result = {
                 "status": receipt["status"],

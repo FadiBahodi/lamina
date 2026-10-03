@@ -10,17 +10,32 @@ from .production_export import export_production
 
 
 def deliver_production(
-    workspace, receipt, plan, output, *, audio_provider=None, progress=None
+    workspace,
+    receipt,
+    plan,
+    output,
+    *,
+    audio_provider=None,
+    progress=None,
+    audio_when="any",
 ):
     """Attach delivery outcomes to the receipt before exporting the final report.
 
     Audio failures leave a readable document and a review outcome. Adapter errors
     stay in the operator console, not a public artifact or browser response.
+
+    ``audio_when="any"`` (default) renders a script whose checks completed and
+    also one still in ``review``; the audio manifest names the sections with
+    remaining findings and the receipt stays in ``review``. ``audio_when="ready"``
+    withholds audio until every check passes.
     """
+    if audio_when not in ("ready", "any"):
+        raise ValueError("audio_when must be ready or any")
     output = Path(output)
     links = {}
     if receipt.get("format") == "podcast-script" and audio_provider is not None:
-        if receipt.get("status") != "ready":
+        status = receipt.get("status")
+        if status != "ready" and (audio_when == "ready" or status != "review"):
             receipt["audio_delivery"] = {
                 "status": "skipped",
                 "reason": "Resolve the script findings before rendering audio.",
@@ -30,12 +45,20 @@ def deliver_production(
 
             try:
                 links = render_audio(
-                    workspace, audio_provider, receipt, output, progress
+                    workspace,
+                    audio_provider,
+                    receipt,
+                    output,
+                    progress,
+                    require_ready=audio_when == "ready",
                 )
                 manifest = json.loads(
                     (output / links["manifest"]).read_text(encoding="utf-8")
                 )
-                receipt["audio_delivery"] = {"status": "ready", **manifest}
+                receipt["audio_delivery"] = {
+                    "status": "ready" if status == "ready" else "provisional",
+                    **manifest,
+                }
             except Exception as exc:
                 print(
                     f"Lamina audio delivery failed: {type(exc).__name__}: {exc}",

@@ -124,7 +124,7 @@ def coverage_report(plan: dict, authored: list[dict]) -> dict:
                     for iid in target["member_idea_ids"]:
                         route_omitted.update(ideas[iid]["unit_ids"])
     workflow = plan.get("options", {}).get("workflow", "planned")
-    planned = workflow == "planned"
+    planned = workflow in {"planned", "sweep"}
     return {
         "selected_unit_count": len(units),
         "reading": {

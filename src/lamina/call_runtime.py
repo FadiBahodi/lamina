@@ -13,6 +13,7 @@ from .evidence import ValidationFailure
 from .production_contract import ProductionError, REVISION, _BASE
 
 _TOKEN_KEYS = ("input_tokens", "output_tokens", "cached_input_tokens")
+_OPTIONAL_TOKEN_KEYS = ("thinking_tokens", "reasoning_tokens", "total_tokens")
 
 
 def make_envelope(stage, instruction, expected_shape, data, *, workload_items=None):
@@ -58,7 +59,7 @@ def _usage_total(attempts):
     result = {}
     for attempt in attempts:
         usage = attempt.get("usage", {})
-        for key in _TOKEN_KEYS:
+        for key in _TOKEN_KEYS + _OPTIONAL_TOKEN_KEYS:
             if key in usage:
                 result[key] = result.get(key, 0) + usage[key]
         if isinstance(usage.get("model"), str):
@@ -111,9 +112,10 @@ class CallTracker:
         attempts = []
         validation_history = []
         retained_partial = None
-        initial_measurement = budget.measure(envelope)
         started = time.monotonic()
         self.event(stage, item, "started")
+        initial_measurement = budget.measure(envelope)
+        preparation_ms = round((time.monotonic() - started) * 1000, 3)
 
         def checked_budget(request):
             try:
@@ -172,7 +174,9 @@ class CallTracker:
                             key: value
                             for key, value in reported.items()
                             if (
-                                key in _TOKEN_KEYS and type(value) is int and value >= 0
+                                key in _TOKEN_KEYS + _OPTIONAL_TOKEN_KEYS
+                                and type(value) is int
+                                and value >= 0
                             )
                             or (key == "model" and isinstance(value, str))
                         }
@@ -250,6 +254,7 @@ class CallTracker:
                 attempt["request_bytes"] for attempt in attempts
             ),
             "wall_ms": round((time.monotonic() - started) * 1000, 3),
+            "preparation_ms": preparation_ms,
             "usage": _usage_total(attempts),
             "attempts": attempts,
         }
@@ -295,6 +300,11 @@ class CallTracker:
             "usage": {
                 key: sum(attempt["usage"].get(key, 0) for attempt in attempts)
                 for key in _TOKEN_KEYS
+                + tuple(
+                    k
+                    for k in _OPTIONAL_TOKEN_KEYS
+                    if any(k in a["usage"] for a in attempts)
+                )
             },
             "usage_reported_calls": sum(
                 any(key in attempt["usage"] for key in _TOKEN_KEYS)

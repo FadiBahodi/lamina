@@ -166,7 +166,9 @@ def parser() -> argparse.ArgumentParser:
     )
     produce.add_argument("--timeout", type=float, default=120)
     produce.add_argument(
-        "--format", choices=["document", "guide", "podcast-script", "assessment"]
+        "--format",
+        choices=["document", "guide", "podcast-script", "assessment", "cards"],
+        help="cards selects the sweep route: read in parallel, deduplicate locally, audit a sample, export Anki-ready cards",
     )
     produce.add_argument("--readers", type=int)
     produce.add_argument("--writers", type=int)
@@ -179,8 +181,8 @@ def parser() -> argparse.ArgumentParser:
     )
     produce.add_argument(
         "--workflow",
-        choices=["auto", "direct", "assigned", "planned"],
-        help="auto uses declared workload limits; planned groups source ideas",
+        choices=["auto", "direct", "assigned", "planned", "sweep"],
+        help="auto uses declared workload limits; planned groups source ideas; sweep reads straight to cards",
     )
     produce.add_argument(
         "--assignments",
@@ -218,6 +220,16 @@ def parser() -> argparse.ArgumentParser:
         "--reading-failures",
         choices=["abort", "continue"],
         help="continue plans from the successful reads and leaves the receipt in review; abort (default) stops the plan",
+    )
+    produce.add_argument(
+        "--audit-rate",
+        type=float,
+        help="Sweep route: fraction of reader windows that receive a source-centred audit call (0–1, default 0.25)",
+    )
+    produce.add_argument(
+        "--dedup-threshold",
+        type=float,
+        help="Sweep route: similarity at or above which a later card is suppressed as a duplicate (default by method)",
     )
     produce.add_argument(
         "--audio-when",
@@ -458,6 +470,8 @@ def main(argv: list[str] | None = None) -> int:
                     "halo_units": args.halo_units,
                     "reader_context_spans": args.reader_context_spans,
                     "reading_failures": args.reading_failures,
+                    "audit_rate": args.audit_rate,
+                    "dedup_threshold": args.dedup_threshold,
                     "source_policy": (
                         json.loads(args.source_policy.read_text(encoding="utf-8"))
                         if args.source_policy

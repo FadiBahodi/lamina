@@ -332,7 +332,7 @@ def read_sources(
             "partial": dict(partial or {}),
         }
 
-    def halo(core, side):
+    def halo(core, side, spans_shown=None):
         """One boundary unit on ``side`` showing only its nearest spans.
 
         A fixed halo keeps reading at dependency depth one: the common
@@ -341,7 +341,8 @@ def read_sources(
         the cost near a few hundred tokens per side. The context-request path
         remains for what a boundary halo cannot cover.
         """
-        if not context_spans or not core:
+        shown = context_spans if spans_shown is None else spans_shown
+        if not shown or not core:
             return [], {}
         local = by_source[core[0]["source_id"]]
         index = (
@@ -353,42 +354,62 @@ def read_sources(
             return [], {}
         unit = local[index]
         spans = source_spans(unit["id"], unit["text"], unit.get("kind"))
-        if len(spans) <= context_spans:
+        if len(spans) <= shown:
             return [unit], {}
         return [unit], {
             unit["id"]: {
                 "side": "tail" if side == "before" else "head",
-                "spans": context_spans,
+                "spans": shown,
             }
         }
 
-    def haloed(core):
-        before, partial_before = halo(core, "before")
-        after, partial_after = halo(core, "after")
+    def haloed(core, spans_shown=None):
+        before, partial_before = halo(core, "before", spans_shown)
+        after, partial_after = halo(core, "after", spans_shown)
         return window(core, before, after, {**partial_before, **partial_after})
 
-    def request(core):
-        if not core:
-            data = {"core": [], "before": [], "after": []}
-        else:
-            data, _ = reader_input(
-                haloed(core), source_map[core[0]["source_id"]], task, options
-            )
+    def envelope_for(win):
+        data, _ = reader_input(win, source_map[win["source_id"]], task, options)
         return envelope(
             stage,
             instruction,
             _SHAPES[stage],
             data,
             workload_items=sum(
-                len(source_spans(u["id"], u["text"], u.get("kind"))) for u in core
+                len(source_spans(u["id"], u["text"], u.get("kind")))
+                for u in win["core"]
             ),
         )
+
+    def fitted(core):
+        """The window with the largest halo (≤ configured) the budget accepts.
+
+        The halo is context, never a reason to reject owned material: when the
+        core fits alone but not with its halo, the halo shrinks, down to none.
+        """
+        shown = context_spans
+        while True:
+            win = haloed(core, shown)
+            if shown == 0 or budget.accepts(budget.measure(envelope_for(win))):
+                return win
+            shown //= 2
+
+    def request(core):
+        if not core:
+            return envelope(
+                stage,
+                instruction,
+                _SHAPES[stage],
+                {"core": [], "before": [], "after": []},
+                workload_items=0,
+            )
+        return envelope_for(fitted(core))
 
     if legacy_windows is not None:
         windows = legacy_windows
     elif getattr(budget, "workload", None) is not None:
         windows = (
-            haloed(batch.units) for batch in iter_packed_units(units, request, budget)
+            fitted(batch.units) for batch in iter_packed_units(units, request, budget)
         )
     else:
         # With no evaluated workload profile, keep native page/slide structures
@@ -396,7 +417,7 @@ def read_sources(
         # section. The complete request budget can still split prose batches.
         groups = _reader_groups(units)
         windows = (
-            haloed(batch.units)
+            fitted(batch.units)
             for group in groups
             for batch in iter_packed_units(group, request, budget)
         )

@@ -220,7 +220,7 @@ def test_context_request_completes_partial_halo_before_stepping_to_next_group(tm
 def test_packing_measures_the_window_with_its_halo(tmp_path):
     units = [unit(uid, text) for uid, text in PAGE.items()]
     bare, haloed = Provider(own_everything), Provider(own_everything)
-    run(tmp_path / "a", bare, units)
+    run(tmp_path / "a", bare, units, reader_context_spans=0)
     run(tmp_path / "b", haloed, units, reader_context_spans=3)
     assert all(
         len(canonical(h).encode()) > len(canonical(b).encode())
@@ -268,7 +268,7 @@ def test_continue_mode_keeps_reading_and_reports_unresolved_windows(tmp_path):
         return own_everything(request)
 
     with pytest.raises(ProductionError, match="reading batch.*unresolved"):
-        run(tmp_path / "abort", Provider(fail_middle), units)
+        run(tmp_path / "abort", Provider(fail_middle), units, reading_failures="abort")
 
     windows, ideas, unresolved = run(
         tmp_path / "continue", Provider(fail_middle), units, reading_failures="continue"
@@ -342,14 +342,19 @@ def test_build_continues_past_a_failed_window_and_stays_in_review(tmp_path):
     ws = workspace(tmp_path)
     with pytest.raises(ProductionError, match="reading batch.*unresolved"):
         build_production(
-            ws, FailsOneRead(), "Explain safety", ["s1", "s2"], {"workflow": "planned"}
+            ws,
+            FailsOneRead(),
+            "Explain safety",
+            ["s1", "s2"],
+            {"workflow": "planned", "reading_failures": "abort"},
         )
+    # The default policy continues.
     result = build_production(
         workspace(tmp_path / "continue"),
         FailsOneRead(),
         "Explain safety",
         ["s1", "s2"],
-        {"workflow": "planned", "reading_failures": "continue"},
+        {"workflow": "planned"},
     )
     plan = result["plan"]
     unresolved = plan["planning"]["unresolved_reads"]

@@ -222,8 +222,8 @@ def parser() -> argparse.ArgumentParser:
     produce.add_argument(
         "--audio-when",
         choices=["ready", "any"],
-        default="ready",
-        help="any renders a podcast script that is still in review and names its provisional sections in the audio manifest",
+        default="any",
+        help="any (default) renders a podcast script even while it is in review and names its provisional sections in the audio manifest; ready withholds audio until every check passes",
     )
     produce.add_argument("--output", type=Path, default=Path("output/project"))
     run = commands.add_parser(

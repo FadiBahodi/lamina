@@ -17,17 +17,17 @@ def deliver_production(
     *,
     audio_provider=None,
     progress=None,
-    audio_when="ready",
+    audio_when="any",
 ):
     """Attach delivery outcomes to the receipt before exporting the final report.
 
     Audio failures leave a readable document and a review outcome. Adapter errors
     stay in the operator console, not a public artifact or browser response.
 
-    ``audio_when="ready"`` renders audio only for a script whose checks all
-    completed. ``audio_when="any"`` also renders a script in ``review``; the
-    audio manifest names the sections with remaining findings and the receipt
-    stays in ``review``.
+    ``audio_when="any"`` (default) renders a script whose checks completed and
+    also one still in ``review``; the audio manifest names the sections with
+    remaining findings and the receipt stays in ``review``. ``audio_when="ready"``
+    withholds audio until every check passes.
     """
     if audio_when not in ("ready", "any"):
         raise ValueError("audio_when must be ready or any")

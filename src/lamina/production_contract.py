@@ -153,12 +153,12 @@ def _options(options: dict | None) -> dict:
         )
     defaults = {
         "format": "document",
-        "reader_workers": options.get("workers", 8),
-        "writer_workers": options.get("workers", 8),
-        "review_workers": options.get("workers", 8),
+        "reader_workers": options.get("workers", 16),
+        "writer_workers": options.get("workers", 16),
+        "review_workers": options.get("workers", 16),
         "core_words": None,
         "halo_units": 0,
-        "workers": 8,
+        "workers": 16,
         "workflow": "auto",
         "assignments": None,
         "max_input_bytes": None,
@@ -168,8 +168,8 @@ def _options(options: dict | None) -> dict:
         "sections_per_request": 1,
         "compare_relations": False,
         "relation_neighbors": 20,
-        "reader_context_spans": 0,
-        "reading_failures": "abort",
+        "reader_context_spans": 6,
+        "reading_failures": "continue",
         "max_request_bytes": 1_500_000,
         "retrieval_targets": False,
     }

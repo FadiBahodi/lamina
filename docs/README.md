@@ -1,26 +1,19 @@
-# Lamina documentation
+# Documentation
 
-Start with [Production](production.md) to make flashcards, a guide, a podcast or a practice exam. It covers the browser app, CLI and Python API.
+Install Lamina and configure a model using the [repository README](../README.md). Then use the local app, CLI or Python API with your own source files.
 
-| Task | Read |
+| Need | Guide |
 | --- | --- |
+| Generate, export or revise an artifact | [Production](production.md) |
 | Connect a model and set request limits | [Adapters](adapters.md) |
-| Understand file parsing and OCR | [Parsing](parsing.md) |
-| Design the work for a particular output | [Workflow design](workflow-design.md) |
-| Understand ownership, shared context and dependencies | [Design](design.md) |
-| Follow execution, caching and recovery in the code | [Architecture](architecture.md) |
-| See where latency, barriers and whole-run failures come from, with the inequalities | [Flow geometry](flow-geometry.md) |
+| Understand parsing, source boundaries and OCR | [Parsing](parsing.md) |
+| Choose the work and context for a particular product | [Workflow design](workflow-design.md) |
+| Follow scheduling, caching and recovery in code | [Architecture](architecture.md) |
 | Define a custom graph of jobs | [Methods](methods.md) |
-| Check model quality at different workloads | [Quality evaluation](quality-evaluation.md) |
-| Inspect live model runs and execution measurements | [Model evaluation](live-model-evaluation.md), [Benchmarks](benchmarks.md) |
-| See implemented capabilities and remaining work | [Capability reference](architecture-status.md) |
+| Check what is implemented | [Capability status](architecture-status.md) |
 
-[Product](product.md) gives a worked example from source files to a revised artifact. [System origins](system-origins.md) explains the reference, audio and exam systems that informed Lamina. [Workflow design](workflow-design.md#keep-the-product-specific-work-visible) records which parts of those systems are implemented and which still require their own workflow.
+For deeper technical detail, see [ownership and context](design.md), [evidence and batching](evidence-execution.md), and [latency and resource limits](flow-geometry.md). [Calibration](calibration.md) and [quality evaluation](quality-evaluation.md) describe how to assess a model on your material; [live-model results](live-model-evaluation.md) and [benchmarks](benchmarks.md) retain measured outcomes and their limits.
 
-The [method runtime](methods.md) runs custom dependency graphs. Its nodes return JSON; the method author supplies the output checks their application needs. The document production engine adds source ownership, citations, review and exports.
+[Request grouping comparison](matched-execution.md) reports planned, grouped and direct runs on the same sources.
 
-The older [procedures](procedures.md) API uses a fixed lesson format and remains available under the app's advanced tools. The [technical paper](paper/lamina.tex) describes the earlier implementation and its measurements; use the guides above for the v0.11 runtime.
-
-- [Calibration](calibration.md): run controls on your model and save workload profiles.
-- [Request grouping comparison](matched-execution.md): compare planned, grouped and direct execution on the same sources.
-- [Engineering decisions](engineering-decisions.md): alternatives considered and the mechanisms carried forward.
+[System origins](system-origins.md) records the earlier reference, audio and exam systems. [Engineering decisions](engineering-decisions.md) preserves alternatives considered. Older [procedure APIs](procedures.md) and the [technical paper](paper/lamina.tex) remain available; use the current guides above for runtime behavior.

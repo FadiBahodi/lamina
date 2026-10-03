@@ -23,9 +23,21 @@ class TaskResult:
 
 @dataclass(frozen=True)
 class ExpandedTasks:
-    """Replace one task with ordered children, using the same capacity pool."""
+    """Replace one task with children using the same capacity pool.
+
+    Section batches may include settled TaskResults alongside DeferredBatches;
+    the section scheduler releases the former before scheduling the latter.
+    """
 
     children: list
+
+
+@dataclass(frozen=True)
+class DeferredBatch:
+    """Unsettled positions and their next call, scheduled in the existing lane."""
+
+    indices: list[int]
+    call: Any
 
 
 def _capacity(value: int, name: str) -> int:
@@ -144,7 +156,9 @@ def section_pipeline(
 
     One shared pool and stage ceilings bound running calls. Eligible follow-up
     work precedes fresh writing; FIFO within each lane prevents newer follow-ups
-    from overtaking older ones. Failures leave other sections free to finish and
+    from overtaking older ones. Batch callbacks can return a complete list or
+    ExpandedTasks partitioning positions into settled results and deferred calls.
+    Failures leave other sections free to finish and
     cache their work; the first failed section is raised after the pool settles.
     """
     for name, value in (
@@ -165,7 +179,7 @@ def section_pipeline(
     def enqueue(job):
         nonlocal sequence
         lane = "write" if job[1] == "repair" else "review"
-        ready[lane].append((sequence, job))
+        ready[lane].append((sequence, [job], None))
         sequence += 1
 
     def settle(job, result):
@@ -201,10 +215,11 @@ def section_pipeline(
                     for lane in ready
                     if ready[lane] and occupied[lane] < capacity[lane]
                 ]
-                job = None
+                job, jobs, continuation = None, None, None
                 if eligible:
                     lane = min(eligible, key=lambda lane: ready[lane][0][0])
-                    _, job = ready[lane].popleft()
+                    _, jobs, continuation = ready[lane].popleft()
+                    job = jobs[0]
                 elif not exhausted and occupied["write"] < writers:
                     try:
                         index, section = next(fresh)
@@ -224,15 +239,13 @@ def section_pipeline(
                         else (review, (section, draft))
                     )
                 )
-                jobs = [job]
+                jobs = jobs or [job]
                 batch_fn = (
                     write_many
                     if stage == "write"
-                    else review_many
-                    if stage in {"review", "recheck"}
-                    else None
+                    else review_many if stage in {"review", "recheck"} else None
                 )
-                if batch_fn is not None:
+                if batch_fn is not None and continuation is None:
                     while len(jobs) < batch_size:
                         if stage == "write":
                             try:
@@ -243,12 +256,14 @@ def section_pipeline(
                             except StopIteration:
                                 exhausted = True
                                 break
-                        elif ready[lane]:
-                            _, next_job = ready[lane].popleft()
-                            jobs.append(next_job)
+                        elif ready[lane] and ready[lane][0][2] is None:
+                            _, next_jobs, _ = ready[lane].popleft()
+                            jobs.extend(next_jobs)
                         else:
                             break
-                if len(jobs) > 1:
+                if continuation is not None:
+                    pending[pool.submit(continuation)] = jobs
+                elif len(jobs) > 1:
                     args = [j[2] if stage == "write" else (j[2], j[3]) for j in jobs]
                     pending[pool.submit(batch_fn, args)] = jobs
                 else:
@@ -269,14 +284,56 @@ def section_pipeline(
                 occupied["write" if stage in {"write", "repair"} else "review"] -= 1
                 try:
                     results = future.result()
-                    if not isinstance(results, list) or len(results) != len(jobs):
+                    if isinstance(results, ExpandedTasks):
+                        positions = []
+                        for child in results.children:
+                            if isinstance(child, TaskResult):
+                                positions.append(child.index)
+                            elif isinstance(child, DeferredBatch):
+                                if not child.indices or not callable(child.call):
+                                    raise ValueError(
+                                        "deferred batch needs positions and a call"
+                                    )
+                                positions.extend(child.indices)
+                            else:
+                                raise ValueError(
+                                    "section expansion needs results or deferred batches"
+                                )
+                        if any(type(n) is not int for n in positions) or sorted(
+                            positions
+                        ) != list(range(len(jobs))):
+                            raise ValueError(
+                                "section expansion must settle or defer every position once"
+                            )
+                    elif not isinstance(results, list) or len(results) != len(jobs):
                         raise ValueError(
                             "batch callback must return one result per section"
                         )
                 except Exception as exc:
                     results = [exc] * len(jobs)
-                for job, result in zip(jobs, results):
-                    settle(job, result)
+                if isinstance(results, ExpandedTasks):
+                    # Release all logical completions before queueing repairs of
+                    # their transport siblings. Children consume the same pool
+                    # and stage limits as fresh physical requests.
+                    for child in results.children:
+                        if isinstance(child, TaskResult):
+                            settle(
+                                jobs[child.index],
+                                child.error if child.error is not None else child.value,
+                            )
+                    for child in results.children:
+                        if isinstance(child, DeferredBatch):
+                            child_jobs = [jobs[n] for n in child.indices]
+                            lane = (
+                                "write"
+                                if child_jobs[0][1] in {"write", "repair"}
+                                else "review"
+                            )
+                            ready[lane].append((sequence, child_jobs, child.call))
+                            sequence += 1
+                else:
+                    for job, result in zip(jobs, results):
+                        settle(job, result)
 
     if errors:
         error = errors[min(errors)]

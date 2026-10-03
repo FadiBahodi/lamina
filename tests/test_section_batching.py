@@ -174,3 +174,241 @@ def test_grouped_review_capacity_failure_stays_explicitly_unreviewed(tmp_path):
     assert all(
         rows[0]["verification_unperformed"] for rows in result["findings"].values()
     )
+
+
+def test_accepted_row_reaches_review_before_sibling_retry_returns(tmp_path):
+    import threading
+
+    reviewed = threading.Event()
+    retry_started = threading.Event()
+
+    class HeldRetry(BatchProvider):
+        def call(self, stage, payload):
+            data = payload["input"]
+            if stage == "production_write" and "section_tasks" not in data:
+                assert data["section"]["id"] == "sec_2"
+                retry_started.set()
+                assert reviewed.wait(3), "accepted sibling was held behind retry"
+            if stage == "production_review":
+                ids = [row["section_id"] for row in data.get("section_tasks", [])]
+                if data.get("section", {}).get("id") == "sec_1" or "sec_1" in ids:
+                    assert retry_started.wait(3), "retry did not share the pool"
+                    reviewed.set()
+            return super().call(stage, payload)
+
+    provider = HeldRetry(corrupt=True)
+    result = build_production(
+        setup(tmp_path),
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {
+            "workflow": "planned",
+            "sections_per_request": 6,
+            "workers": 4,
+            "writer_workers": 2,
+            "review_workers": 2,
+        },
+    )
+    assert reviewed.is_set() and retry_started.is_set()
+    assert len(result["sections"]) == 6
+    assert result["metrics"]["provider_attempts"] == sum(
+        stage in {"production_write", "production_review"}
+        for stage, _ in provider.physical
+    )
+
+
+def test_failed_retry_keeps_reviewed_siblings_and_reuses_their_cache(tmp_path):
+    import threading
+    import pytest
+
+    reviewed = threading.Event()
+
+    class FailedRetry(BatchProvider):
+        fail = True
+
+        def call(self, stage, payload):
+            data = payload["input"]
+            if stage == "production_review":
+                reviewed.set()
+            if (
+                self.fail
+                and stage == "production_write"
+                and "section_tasks" not in data
+            ):
+                assert reviewed.wait(3), "successful siblings did not progress"
+                raise RuntimeError("retry unavailable")
+            return super().call(stage, payload)
+
+    ws, provider = setup(tmp_path), FailedRetry(corrupt=True)
+    with pytest.raises(RuntimeError, match="retry unavailable") as failure:
+        build_production(
+            ws,
+            provider,
+            "Explain",
+            ["s1", "s2"],
+            {
+                "workflow": "planned",
+                "sections_per_request": 6,
+                "workers": 4,
+                "writer_workers": 2,
+                "review_workers": 2,
+            },
+        )
+    completed = failure.value.partial_results["completed_sections"]
+    assert {row["id"] for row in completed} == {f"sec_{n}" for n in (1, 3, 4, 5, 6)}
+    assert failure.value.partial_results["failed_sections"][0]["section_id"] == "sec_2"
+    provider.fail = False
+    provider.physical.clear()
+    resumed = run_production(ws, provider, failure.value.partial_results["plan"])
+    writes = [
+        payload for stage, payload in provider.physical if stage == "production_write"
+    ]
+    assert len(writes) == 1
+    assert writes[0]["input"]["section"]["id"] == "sec_2"
+    assert resumed["status"] == "ready"
+    assert resumed["metrics"]["cache_hits"] > 0
+
+
+def test_budget_children_run_concurrently_in_the_shared_pool(tmp_path):
+    from dataclasses import replace
+    import threading
+    from lamina.workload_profiles import WorkloadProfile
+
+    rendezvous = threading.Barrier(2)
+    lock = threading.Lock()
+    entered = 0
+    active = {"total": 0, "write": 0, "review": 0}
+    peak = active.copy()
+
+    class Split(BatchProvider):
+        def budget_for(self, stage):
+            budget = super().budget_for(stage)
+            if stage in {"production_write", "production_review"}:
+                return replace(budget, workload=WorkloadProfile(stage, max_items=2))
+            return budget
+
+        def call(self, stage, payload):
+            nonlocal entered
+            if stage not in {"production_write", "production_review"}:
+                return super().call(stage, payload)
+            lane = "write" if stage == "production_write" else "review"
+            with lock:
+                for key in ("total", lane):
+                    active[key] += 1
+                    peak[key] = max(peak[key], active[key])
+                paired = stage == "production_write" and entered < 2
+                if stage == "production_write":
+                    entered += 1
+            try:
+                if paired:
+                    rendezvous.wait(timeout=3)  # Serial child recursion fails.
+                return super().call(stage, payload)
+            finally:
+                with lock:
+                    for key in ("total", lane):
+                        active[key] -= 1
+
+    provider = Split()
+    result = build_production(
+        setup(tmp_path),
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {
+            "workflow": "planned",
+            "sections_per_request": 6,
+            "workers": 3,
+            "writer_workers": 2,
+            "review_workers": 1,
+        },
+    )
+    assert len(result["sections"]) == 6
+    assert peak["write"] == 2 and peak["review"] <= 1 and peak["total"] <= 3
+    assert all(
+        payload["workload_items"] <= 2
+        for stage, payload in provider.physical
+        if stage in {"production_write", "production_review"}
+    )
+
+
+def test_cached_rows_are_released_before_uncached_revision(tmp_path):
+    import threading
+
+    available = threading.Event()
+
+    class Revision(BatchProvider):
+        holding = False
+
+        def call(self, stage, payload):
+            if self.holding and stage == "production_write":
+                assert payload["input"]["section"]["id"] == "sec_2"
+                assert available.wait(3), "cached section waited for revised sibling"
+            return super().call(stage, payload)
+
+    ws, provider = setup(tmp_path), Revision()
+    first = build_production(
+        ws,
+        provider,
+        "Explain",
+        ["s1", "s2"],
+        {"workflow": "planned", "sections_per_request": 6, "workers": 4},
+    )
+    provider.holding = True
+    provider.physical.clear()
+
+    def progress(event):
+        if event.get("stage") == "production_section" and event.get("item") == "sec_1":
+            available.set()
+
+    second = run_production(
+        ws,
+        provider,
+        first["plan"],
+        {"section_notes": {"sec_2": "Explain more clearly"}},
+        progress=progress,
+    )
+    assert available.is_set()
+    assert second["status"] == "ready"
+    assert len([s for s, _ in provider.physical if s == "production_write"]) == 1
+
+
+def test_truncated_group_schedules_individual_children_without_nested_pool(tmp_path):
+    import threading
+
+    rendezvous = threading.Barrier(2)
+    lock = threading.Lock()
+    entered = 0
+
+    class Truncated(RuntimeError):
+        code = "output_truncated"
+
+    class SplitTruncated(BatchProvider):
+        def call(self, stage, payload):
+            nonlocal entered
+            if stage == "production_write":
+                if "section_tasks" in payload["input"]:
+                    raise Truncated("group too long")
+                with lock:
+                    paired = entered < 2
+                    entered += 1
+                if paired:
+                    rendezvous.wait(timeout=3)
+            return super().call(stage, payload)
+
+    result = build_production(
+        setup(tmp_path),
+        SplitTruncated(),
+        "Explain",
+        ["s1", "s2"],
+        {
+            "workflow": "planned",
+            "sections_per_request": 6,
+            "workers": 3,
+            "writer_workers": 2,
+            "review_workers": 1,
+            "max_attempts": 1,
+        },
+    )
+    assert len(result["sections"]) == 6
+    assert result["metrics"]["failed_requests"] == 1

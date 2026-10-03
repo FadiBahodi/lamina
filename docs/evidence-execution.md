@@ -14,10 +14,10 @@ prior ideas; their request hashes therefore change when supporting text changes.
 Unrelated requests can remain reusable. Source edits that change packing or
 planning boundaries may still invalidate more work.
 
-Optional comparison runs after reading and before planning. An inverted index
-nominates pairs using lexical evidence, source-structure/support overlap and
-entity/date/quantity metadata when supplied. A provider hook can add retrieval
-lanes and multi-source groups. Frequent postings are skipped to bound retrieval
+Optional comparison runs after reading and before planning. Local similarity
+(provider embeddings when the adapter offers `embed`, otherwise TF-IDF) nominates
+pairs above a threshold, plus same-unit and same-structure lanes. A provider
+hook can add retrieval lanes and multi-source groups. Frequent postings are skipped to bound retrieval
 work; their count is reported. Models compare the actual source passages and
 can request missing evidence. Relations preserve participant IDs, evidence,
 classification and searches. Planning sees their conditions; affected writers

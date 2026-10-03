@@ -39,6 +39,7 @@ The [adapter guide](docs/adapters.md) has the file format, an HTTP example, the 
 ```sh
 lamina ingest --workspace .lamina chapter.pdf slides.pptx
 lamina produce --workspace .lamina --adapter @models.json --format cards --brief "Flashcards for the emergency medicine board exam"
+lamina produce --workspace .lamina --adapter @models.json --audio-adapter @speech.json --format podcast-script --episode-minutes 25 --brief "A review podcast on the same material"
 ```
 
 ## How a run works
@@ -47,11 +48,11 @@ lamina produce --workspace .lamina --adapter @models.json --format cards --brief
 
 **The sweep** (`--format cards`) stops here: readers write the cards, local similarity suppresses near-duplicates, a quarter of the windows (configurable) get one audit call that looks for omissions and unsupported cards, and the deck is exported. Audit findings are attached to the receipt; they never remove a card.
 
-**Planning**, for guides and podcasts, groups the extracted ideas into an outline. When the ideas do not fit one call, a tree of grouping calls summarizes them, and the tree streams: a level starts as soon as a full batch of the level below exists. The outline sees each group's description plus one original card as an exemplar. Every original idea is then assigned to exactly one section or explicitly omitted.
+**Planning**, for guides and podcasts, groups the extracted ideas into an outline, and it starts while reading is still running: grouping calls begin on the pages already read. When the ideas do not fit one call, a tree of grouping calls summarizes them, level by level, each level starting as soon as a full batch of the level below exists. The outline sees each group's description plus one original card as an exemplar. For a podcast the outline also divides the sections into episodes of a chosen length and gives each section a spoken-word target. Every original idea is then assigned to exactly one section or explicitly omitted.
 
 **Writing and review** run per section in one shared pool: write, review, one repair, one recheck, with review of one section overlapping writing of another. Writers see their assigned ideas, the original passages, the exact supporting passages those ideas cited, and the titles of neighbouring sections.
 
-**Delivery** exports Markdown, HTML, PDF, a plan and a receipt. Podcast scripts render to WAV through a speech adapter; cards export to `cards.tsv` and `cards.json`.
+**Delivery** exports Markdown, HTML, PDF, a plan and a receipt. Podcasts render to one WAV per episode through a speech adapter, with the full programme beside them; cards export to `cards.tsv` and `cards.json`.
 
 Workers default to 16 and apply across stages. Restarting a run reuses every completed call. Revising one section reruns only the requests that changed.
 

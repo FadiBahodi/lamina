@@ -267,25 +267,7 @@ def _read_and_plan(
         if opts["core_words"] is not None
         else None
     )
-    windows, ideas, unresolved_reads = read_sources(
-        workspace, provider, task, opts, sources, units, tracker, legacy
-    )
-    if not ideas:
-        raise ProductionError("Readers found no anchored ideas in selected sources")
-    relation_report = None
-    if opts["compare_relations"]:
-        from .evidence_relations import compare_relations
-
-        relations, relation_report = compare_relations(
-            workspace, provider, ideas, units, task, opts, tracker
-        )
-        by_idea = {idea["id"]: [] for idea in ideas}
-        for relation in relations:
-            if relation["kind"] != "unrelated":
-                for iid in relation["member_idea_ids"]:
-                    by_idea[iid].append(relation)
-        ideas = [{**idea, "evidence_relations": by_idea[idea["id"]]} for idea in ideas]
-    from .planning import plan_bounded, target_bounded, refine_sections
+    from .planning import plan_bounded, plan_streaming, target_bounded, refine_sections
     from .source_reading import request_budget, envelope
     from .retrieval_targets import RetrievalTargetError
     from .production_contract import ProductionValidationError
@@ -325,10 +307,40 @@ def _read_and_plan(
         "form_exemplars": form_exemplars,
         "experience": selection["observations"],
     }
-    retrieval_catalog, target_report = None, None
     workers = min(opts["workers"], opts["reader_workers"])
-    if opts["retrieval_targets"]:
-        retrieval_catalog, target_report = target_bounded(
+    relation_report = None
+    retrieval_catalog, target_report = None, None
+    if opts["compare_relations"] or opts["retrieval_targets"]:
+        # Comparison and retrieval targets need every idea before planning.
+        windows, ideas, unresolved_reads = read_sources(
+            workspace, provider, task, opts, sources, units, tracker, legacy
+        )
+        if not ideas:
+            raise ProductionError("Readers found no anchored ideas in selected sources")
+        if opts["compare_relations"]:
+            from .evidence_relations import compare_relations
+
+            relations, relation_report = compare_relations(
+                workspace, provider, ideas, units, task, opts, tracker
+            )
+            by_idea = {idea["id"]: [] for idea in ideas}
+            for relation in relations:
+                if relation["kind"] != "unrelated":
+                    for iid in relation["member_idea_ids"]:
+                        by_idea[iid].append(relation)
+            ideas = [{**idea, "evidence_relations": by_idea[idea["id"]]} for idea in ideas]
+        if opts["retrieval_targets"]:
+            retrieval_catalog, target_report = target_bounded(
+                ideas,
+                units,
+                task,
+                invoke,
+                max_bytes=request_limit(opts),
+                shared=shared,
+                workers=workers,
+                fits=fits,
+            )
+        route, planning_report = plan_bounded(
             ideas,
             units,
             task,
@@ -337,18 +349,25 @@ def _read_and_plan(
             shared=shared,
             workers=workers,
             fits=fits,
+            catalog=retrieval_catalog,
         )
-    route, planning_report = plan_bounded(
-        ideas,
-        units,
-        task,
-        invoke,
-        max_bytes=request_limit(opts),
-        shared=shared,
-        workers=workers,
-        fits=fits,
-        catalog=retrieval_catalog,
-    )
+    else:
+        # The default planned route: grouping starts as reads complete.
+        def read(on_batch):
+            return read_sources(
+                workspace, provider, task, opts, sources, units, tracker, legacy, on_batch=on_batch
+            )
+
+        windows, ideas, unresolved_reads, route, planning_report = plan_streaming(
+            read,
+            units,
+            task,
+            invoke,
+            max_bytes=request_limit(opts),
+            shared=shared,
+            workers=workers,
+            fits=fits,
+        )
 
     fit_route, fit_plan, fit_index = None, None, None
 

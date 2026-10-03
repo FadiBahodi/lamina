@@ -364,171 +364,231 @@ def _summary_card(level, batch_index, row, members_by_id):
     }
 
 
-def _outline(cards, shared, brief, budget, workers, instruction, report):
-    """Return a model-chosen outline, with a complete tree retained in the report.
+class _Tree:
+    """A streaming grouping tree over cards that may still be arriving.
 
-    The tree streams: a grouping call at level l+1 starts as soon as a full
-    batch of level-l summaries exists, so no level waits for the slowest call
-    of the level below it. Level l+1 grouping begins only once the level-l
-    summaries that have arrived already exceed the outline budget, which
-    proves the whole level will not fit; no grouping call is ever wasted on a
-    level that could have gone straight to the outline. The outline call
-    itself still needs the complete top level.
+    Level-0 cards are fed as reads complete (``feed``) and the level is closed
+    with ``finish``. A grouping call at level l+1 starts as soon as a full
+    batch of level-l summaries exists, and only once the summaries that have
+    arrived already exceed the outline budget, which proves the whole level
+    will not fit; no grouping call is spent on a level that could have gone
+    straight to the outline. ``run`` returns ``("compact", cards)`` when the
+    complete level 0 fits one outline call, else ``("outline", route)``.
     """
-    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
-    shape = _route_shape()
-    shape["shared_context"] = []
-    route_data = lambda rows: _route_data(shared, brief, rows)
-    data_for = lambda rows: {
-        **_shared_for_cards(shared, rows),
-        "brief": brief,
-        "purpose": instruction,
-        "cards": rows,
-    }
+    _POLL_SECONDS = 0.05
 
-    def route_fits(rows):
-        return budget.allows("production_route", instruction, shape, route_data(rows))
+    def __init__(self, shared, brief, budget, workers, instruction, report):
+        import threading
 
-    def pack_prefix(rows):
+        self.shared, self.brief, self.budget = shared, brief, budget
+        self.workers, self.instruction, self.report = workers, instruction, report
+        self.shape = _route_shape()
+        self.shape["shared_context"] = []
+        self.lock = threading.Lock()
+        self.incoming = []  # level-0 cards fed from another thread
+        self.closed = False
+        self.read_error = None
+
+    # ---- input side (any thread) -------------------------------------
+    def feed(self, cards, key=None):
+        """Add level-0 cards. ``key`` orders them among other fed cards (source
+        position), so batches formed from arrivals still keep locality."""
+        with self.lock:
+            self.incoming.extend((key, card) for card in cards)
+
+    def finish(self, error=None):
+        with self.lock:
+            self.closed = True
+            self.read_error = error
+
+    # ---- budget helpers ---------------------------------------------
+    def route_data(self, rows):
+        return _route_data(self.shared, self.brief, rows)
+
+    def group_data(self, rows):
+        return {
+            **_shared_for_cards(self.shared, rows),
+            "brief": self.brief,
+            "purpose": self.instruction,
+            "cards": rows,
+        }
+
+    def route_fits(self, rows):
+        return self.budget.allows(
+            "production_route", self.instruction, self.shape, self.route_data(rows)
+        )
+
+    def pack_prefix(self, rows):
         """Largest prefix of ``rows`` that fits one grouping call (≥ 1)."""
-        if not budget.allows("production_group", GROUP_INSTRUCTION, GROUP_SHAPE, data_for(rows[:1])):
+        allows = lambda n: self.budget.allows(
+            "production_group", GROUP_INSTRUCTION, GROUP_SHAPE, self.group_data(rows[:n])
+        )
+        if not allows(1):
             raise ProductionError(
                 f"production_group: indivisible card {rows[0]['id']} or shared context exceeds the declared budget"
             )
         lo, hi = 1, min(2, len(rows))
-        while hi < len(rows) and budget.allows(
-            "production_group", GROUP_INSTRUCTION, GROUP_SHAPE, data_for(rows[:hi])
-        ):
+        while hi < len(rows) and allows(hi):
             lo, hi = hi, min(hi * 2, len(rows))
         while lo < hi:
             middle = (lo + hi + 1) // 2
-            if budget.allows(
-                "production_group", GROUP_INSTRUCTION, GROUP_SHAPE, data_for(rows[:middle])
-            ):
+            if allows(middle):
                 lo = middle
             else:
                 hi = middle - 1
         return lo
 
-    arrived = {0: list(cards)}  # level -> cards materialised so far
-    unpacked = {0: list(cards)}  # level -> cards not yet in a grouping batch
-    members = {card["id"]: card for card in cards}
-    in_flight = {0: 0}  # level -> grouping calls running on that level's cards
-    exceeded = {0: True}  # level -> known not to fit the outline (this call's premise)
-    complete = {0: True}
-    batch_counter = {}
-    pending = {}
-    top = 0
+    # ---- scheduler --------------------------------------------------
+    def run(self):
+        from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
-    def submit(pool, level, rows):
-        index = batch_counter.get(level, 0)
-        batch_counter[level] = index + 1
-        in_flight[level] = in_flight.get(level, 0) + 1
-        future = pool.submit(
-            budget.call,
-            "production_group",
-            f"level_{level}_batch_{index}",
-            GROUP_INSTRUCTION,
-            GROUP_SHAPE,
-            data_for(rows),
-            lambda raw: _group_check(raw, rows),
-        )
-        pending[future] = (level, index)
+        arrived = {0: []}
+        unpacked = {0: []}
+        members = {}
+        in_flight = {0: 0}
+        exceeded = {}
+        complete = {0: False}
+        batch_counter = {}
+        pending = {}
+        top = 0
 
-    def release(pool, level):
-        """Submit every full batch at ``level``; the final partial batch only
-        once the level is complete (nothing more can arrive)."""
-        rows = unpacked.setdefault(level, [])
-        while rows:
-            size = pack_prefix(rows)
-            if size == len(rows) and not complete.get(level):
-                return
-            submit(pool, level, rows[:size])
-            del rows[:size]
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        release(pool, 0)
-        while True:
-            # Does the current top level already settle the outline?
-            if complete.get(top) and not exceeded.get(top):
-                if route_fits(arrived[top]):
-                    break
-                exceeded[top] = True
-                release(pool, top)
-            if not pending:
-                if complete.get(top) and exceeded.get(top) and not unpacked.get(top):
-                    # Every card at the top was grouped; the next level is now
-                    # complete and becomes the top.
-                    top += 1
-                    arrived.setdefault(top, [])
-                    unpacked.setdefault(top, [])
-                    complete[top] = True
-                    if len(canonical(arrived[top]).encode()) >= len(
-                        canonical(arrived[top - 1]).encode()
-                    ):
-                        raise ProductionError(
-                            "The grouping descriptions did not reduce the planning input. Increase the declared "
-                            "model budget or supply a narrower task/explicit assignments; no source was dropped."
-                        )
-                    continue
-                raise RuntimeError("planning tree cannot advance")
-            done, _ = wait(pending, return_when=FIRST_COMPLETED)
-            for future in done:
-                level, index = pending.pop(future)
-                in_flight[level] -= 1
-                result = future.result()
-                next_level = level + 1
-                arrived.setdefault(next_level, [])
-                unpacked.setdefault(next_level, [])
-                for row in result["groups"]:
-                    gid, card = _summary_card(level, index, row, members)
-                    report["groups"].append({**row, "id": gid, "level": level})
-                    members[gid] = card
-                    arrived[next_level].append(card)
-                    unpacked[next_level].append(card)
-            # A level is complete when the level below it is complete and has
-            # no grouping work left; its cards are then all materialised.
-            for level in sorted(arrived):
-                if level == 0:
-                    continue
-                below = level - 1
-                complete[level] = bool(
-                    complete.get(below) and in_flight.get(below, 0) == 0 and not unpacked.get(below)
-                )
-                if complete[level] and level > top:
-                    top = level
-                    if len(canonical(arrived[level]).encode()) >= len(
-                        canonical(arrived[below]).encode()
-                    ):
-                        raise ProductionError(
-                            "The grouping descriptions did not reduce the planning input. Increase the declared "
-                            "model budget or supply a narrower task/explicit assignments; no source was dropped."
-                        )
-                # Start grouping an incomplete level only once its arrived
-                # cards already exceed the outline budget, which proves the
-                # complete level will not fit either.
-                if not exceeded.get(level) and arrived[level] and not route_fits(arrived[level]):
-                    exceeded[level] = True
-                if exceeded.get(level):
-                    release(pool, level)
-    current = arrived[top]
-    report["hierarchy_levels"] = top
-    expected = {card["id"] for card in current}
-
-    def check(raw):
-        if isinstance(raw, dict) and raw.get("shared_context"):
-            raise ProductionError(
-                "Summary cards have no source references; return shared_context: []; "
-                "later assignment adds relationships"
+        def submit(pool, level, rows):
+            index = batch_counter.get(level, 0)
+            batch_counter[level] = index + 1
+            in_flight[level] = in_flight.get(level, 0) + 1
+            future = pool.submit(
+                self.budget.call,
+                "production_group",
+                f"level_{level}_batch_{index}",
+                GROUP_INSTRUCTION,
+                GROUP_SHAPE,
+                self.group_data(rows),
+                lambda raw: _group_check(raw, rows),
             )
-        restored = _restore_shared(raw, [])
-        _diagnose_route(restored, expected)
-        return _route_check(restored, expected, {})
+            pending[future] = (level, index)
 
-    return budget.call(
-        "production_route", "outline", instruction, shape, route_data(current), check
-    )
+        def release(pool, level):
+            rows = unpacked.setdefault(level, [])
+            while rows:
+                size = self.pack_prefix(rows)
+                if size == len(rows) and not complete.get(level):
+                    return
+                submit(pool, level, rows[:size])
+                del rows[:size]
+
+        keys = {}
+
+        def drain():
+            with self.lock:
+                fresh, self.incoming = self.incoming, []
+                closed, error = self.closed, self.read_error
+            for position, (key, card) in enumerate(fresh):
+                members[card["id"]] = card
+                keys[card["id"]] = (key is None, key if key is not None else 0, len(keys))
+                arrived[0].append(card)
+                unpacked[0].append(card)
+            if fresh:
+                unpacked[0].sort(key=lambda card: keys[card["id"]])
+            if error is not None:
+                raise error
+            complete[0] = closed
+
+        def reduced(level):
+            if len(canonical(arrived[level]).encode()) >= len(
+                canonical(arrived[level - 1]).encode()
+            ):
+                raise ProductionError(
+                    "The grouping descriptions did not reduce the planning input. Increase the declared "
+                    "model budget or supply a narrower task/explicit assignments; no source was dropped."
+                )
+
+        with ThreadPoolExecutor(max_workers=self.workers) as pool:
+            while True:
+                drain()
+                # Start grouping a level only once its arrived cards already
+                # exceed the outline budget; the complete level then cannot fit.
+                for level in sorted(arrived):
+                    if not exceeded.get(level) and arrived[level] and not self.route_fits(arrived[level]):
+                        exceeded[level] = True
+                    if exceeded.get(level):
+                        release(pool, level)
+                if complete.get(top) and not exceeded.get(top):
+                    if not arrived[top] and top == 0:
+                        raise ProductionError("planning requires ideas")
+                    if self.route_fits(arrived[top]):
+                        break
+                    exceeded[top] = True
+                    release(pool, top)
+                    continue
+                if not pending:
+                    if complete.get(0) and all(
+                        not unpacked.get(level) for level in arrived
+                    ) and complete.get(top):
+                        raise RuntimeError("planning tree cannot advance")
+                    # Nothing running: wait for more level-0 cards from the reader.
+                    import time as _time
+
+                    _time.sleep(self._POLL_SECONDS)
+                    continue
+                done, _ = wait(pending, timeout=self._POLL_SECONDS, return_when=FIRST_COMPLETED)
+                for future in done:
+                    level, index = pending.pop(future)
+                    in_flight[level] -= 1
+                    result = future.result()
+                    nxt = level + 1
+                    arrived.setdefault(nxt, [])
+                    unpacked.setdefault(nxt, [])
+                    for row in result["groups"]:
+                        gid, card = _summary_card(level, index, row, members)
+                        self.report["groups"].append({**row, "id": gid, "level": level})
+                        members[gid] = card
+                        arrived[nxt].append(card)
+                        unpacked[nxt].append(card)
+                # A level is complete when the level below is complete and has
+                # no grouping work left.
+                for level in sorted(arrived):
+                    if level == 0:
+                        continue
+                    below = level - 1
+                    complete[level] = bool(
+                        complete.get(below)
+                        and in_flight.get(below, 0) == 0
+                        and not unpacked.get(below)
+                    )
+                    if complete[level] and level > top:
+                        top = level
+                        reduced(level)
+        self.report["hierarchy_levels"] = top
+        current = arrived[top]
+        if top == 0:
+            return "compact", current
+        expected = {card["id"] for card in current}
+
+        def check(raw):
+            if isinstance(raw, dict) and raw.get("shared_context"):
+                raise ProductionError(
+                    "Summary cards have no source references; return shared_context: []; "
+                    "later assignment adds relationships"
+                )
+            restored = _restore_shared(raw, [])
+            _diagnose_route(restored, expected)
+            return _route_check(restored, expected, {})
+
+        return "outline", self.budget.call(
+            "production_route", "outline", self.instruction, self.shape, self.route_data(current), check
+        )
+
+
+def _outline(cards, shared, brief, budget, workers, instruction, report):
+    """Return a model-chosen outline for a complete card list (hierarchical)."""
+    tree = _Tree(shared, brief, budget, workers, instruction, report)
+    tree.feed(cards)
+    tree.finish()
+    kind, value = tree.run()
+    if kind != "outline":
+        raise ProductionError("outline was requested for cards that fit one route call")
+    return value
 
 
 def _diagnose_route(raw, expected):
@@ -620,113 +680,106 @@ def _assign_check(raw, cards, sections, original):
     }
 
 
-def plan_bounded(
-    ideas,
-    units,
-    brief,
-    invoke: Invoke,
-    *,
-    max_bytes,
-    shared=None,
-    workers=8,
-    fits=None,
-    catalog=None,
-    instruction=None,
-    allow_omissions=True,
-    route_validator=None,
-):
-    """Plan bounded requests; return ``(validated_route, planning_report)``.
+def _target_objects(ideas, idea_map, catalog):
+    """Retrieval targets are indivisible at the writer-assignment boundary."""
+    if not catalog:
+        return ideas
+    return [
+        {
+            "id": target["id"],
+            "title": target["title"],
+            "explanation": canonical(
+                {
+                    "prompt": target["prompt"],
+                    "context": target["context"],
+                    "answer_groups": [
+                        {
+                            "label": group["label"],
+                            "items": [item["text"] for item in group["items"]],
+                        }
+                        for group in target["answer_groups"]
+                    ],
+                }
+            ),
+            "unit_ids": list(
+                dict.fromkeys(
+                    uid
+                    for iid in target["member_idea_ids"]
+                    for uid in idea_map[iid]["unit_ids"]
+                )
+            ),
+            "evidence": list(
+                {
+                    (e["unit_id"], e["quote"]): e
+                    for iid in target["member_idea_ids"]
+                    for e in idea_map[iid]["evidence"]
+                }.values()
+            ),
+        }
+        for target in catalog["targets"]
+    ]
 
-    ``fits(stage, instruction, shape, data)`` may enforce a model token budget in
-    addition to the byte limit. ``invoke`` owns retries/cache/metrics. This module
-    raises precise validation errors and adds no hidden retry policy.
-    """
-    shared = dict(shared or {})
-    fmt = shared.get("format", "document")
-    instruction = (instruction or ROUTE_INSTRUCTION) + " " + _FORM[fmt]
-    if not ideas:
-        raise ProductionError("planning requires ideas")
-    idea_map = {idea["id"]: idea for idea in ideas}
-    if len(idea_map) != len(ideas):
-        raise ProductionError("planning input idea IDs must be unique")
-    # A retrieval target is indivisible at the writer-assignment boundary.
-    objects = ideas
-    if catalog:
-        objects = [
-            {
-                "id": target["id"],
-                "title": target["title"],
-                "explanation": canonical(
-                    {
-                        "prompt": target["prompt"],
-                        "context": target["context"],
-                        "answer_groups": [
-                            {
-                                "label": group["label"],
-                                "items": [item["text"] for item in group["items"]],
-                            }
-                            for group in target["answer_groups"]
-                        ],
-                    }
-                ),
-                "unit_ids": list(
-                    dict.fromkeys(
-                        uid
-                        for iid in target["member_idea_ids"]
-                        for uid in idea_map[iid]["unit_ids"]
-                    )
-                ),
-                "evidence": list(
-                    {
-                        (e["unit_id"], e["quote"]): e
-                        for iid in target["member_idea_ids"]
-                        for e in idea_map[iid]["evidence"]
-                    }.values()
-                ),
-            }
-            for target in catalog["targets"]
-        ]
-    cards = compact_cards(objects, units)
-    unit_map = {unit["id"]: unit for unit in units}
-    expected = {card["id"] for card in cards}
-    budget = _Budget(invoke, max_bytes, fits)
-    report = {
-        "mode": "compact",
-        "original_cards": len(cards),
-        "hierarchy_levels": 0,
-        "groups": [],
-        "requests": budget.records,
-    }
-    shape = _route_shape()
-    data = _route_data(shared, brief, cards)
 
-    def check(raw):
-        restored = _restore_shared(raw, objects)
-        if not allow_omissions and restored.get("omitted"):
-            raise ProductionError(
-                "This reconciliation must preserve every input object; omissions are forbidden"
-            )
-        _diagnose_route(restored, expected)
-        checked = _route_check(restored, expected, unit_map)
-        if route_validator:
-            route_validator(checked)
-        return checked
+class _Planner:
+    """Shared machinery for the complete-list and streaming planners."""
 
-    if budget.allows("production_route", instruction, shape, data):
-        route = budget.call(
-            "production_route", "global", instruction, shape, data, check
+    def __init__(self, units, brief, invoke, *, max_bytes, shared, workers, fits, catalog, instruction, allow_omissions, route_validator):
+        self.shared = dict(shared or {})
+        self.fmt = self.shared.get("format", "document")
+        self.instruction = (instruction or ROUTE_INSTRUCTION) + " " + _FORM[self.fmt]
+        self.units, self.brief, self.workers = units, brief, workers
+        self.unit_map = {unit["id"]: unit for unit in units}
+        self.catalog = catalog
+        self.allow_omissions, self.route_validator = allow_omissions, route_validator
+        self.budget = _Budget(invoke, max_bytes, fits)
+        self.report = {
+            "mode": "compact",
+            "original_cards": 0,
+            "hierarchy_levels": 0,
+            "groups": [],
+            "requests": self.budget.records,
+        }
+
+    def tree(self):
+        return _Tree(self.shared, self.brief, self.budget, self.workers, self.instruction, self.report)
+
+    def compact(self, objects, cards):
+        expected = {card["id"] for card in cards}
+        shape = _route_shape()
+
+        def check(raw):
+            restored = _restore_shared(raw, objects)
+            if not self.allow_omissions and restored.get("omitted"):
+                raise ProductionError(
+                    "This reconciliation must preserve every input object; omissions are forbidden"
+                )
+            _diagnose_route(restored, expected)
+            checked = _route_check(restored, expected, self.unit_map)
+            if self.route_validator:
+                self.route_validator(checked)
+            return checked
+
+        return self.budget.call(
+            "production_route",
+            "global",
+            self.instruction,
+            shape,
+            _route_data(self.shared, self.brief, cards),
+            check,
         )
-    else:
-        report["mode"] = "hierarchical"
-        outline = _outline(cards, shared, brief, budget, workers, instruction, report)
+
+    def assign(self, outline, objects, cards):
+        """Return every original card to the outline: one owner or an omission."""
+        expected = {card["id"] for card in cards}
+        self.report["mode"] = "hierarchical"
         sections = [
             {key: value for key, value in section.items() if key != "idea_ids"}
             for section in outline["sections"]
         ]
         assignment_for = lambda rows: {
-            **_shared_for_cards(shared, rows),
-            "brief": brief,
-            "format": fmt,
+            **_shared_for_cards(self.shared, rows),
+            "brief": self.brief,
+            "format": self.fmt,
             "outline": {
                 "title": outline["title"],
                 "summary": outline["summary"],
@@ -734,7 +787,7 @@ def plan_bounded(
             },
             "ideas": rows,
         }
-        batches = budget.pack(
+        batches = self.budget.pack(
             _interleave(cards),
             "production_assign",
             ASSIGN_INSTRUCTION,
@@ -744,7 +797,7 @@ def plan_bounded(
 
         def check_assignment(raw, batch):
             checked = _assign_check(raw, batch, sections, objects)
-            if not allow_omissions and checked["omitted"]:
+            if not self.allow_omissions and checked["omitted"]:
                 raise ProductionError(
                     "This reconciliation must preserve every input object; omissions are forbidden"
                 )
@@ -752,7 +805,7 @@ def plan_bounded(
 
         def assign(job):
             index, batch = job
-            return budget.call(
+            return self.budget.call(
                 "production_assign",
                 f"batch_{index}",
                 ASSIGN_INSTRUCTION,
@@ -761,7 +814,7 @@ def plan_bounded(
                 lambda raw: check_assignment(raw, batch),
             )
 
-        results = bounded_map(assign, list(enumerate(batches)), workers)
+        results = bounded_map(assign, list(enumerate(batches)), self.workers)
         by_section = defaultdict(list)
         omitted, shared_context = [], []
         for result in results:
@@ -794,12 +847,16 @@ def plan_bounded(
             "shared_context": shared_context,
         }
         _diagnose_route(route, expected)
-        route = _route_check(route, expected, unit_map)
-        if route_validator:
-            route_validator(route)
-        report["assignment_batches"] = len(batches)
-        report["outline_omissions"] = outline["omitted"]
-    if catalog:
+        route = _route_check(route, expected, self.unit_map)
+        if self.route_validator:
+            self.route_validator(route)
+        self.report["assignment_batches"] = len(batches)
+        self.report["outline_omissions"] = outline["omitted"]
+        return route
+
+    def translate(self, route, idea_map):
+        if not self.catalog:
+            return route
         translated = copy.deepcopy(route)
         for section in translated["sections"]:
             section["target_ids"] = section.pop("idea_ids")
@@ -807,8 +864,113 @@ def plan_bounded(
             {"target_id": row["idea_id"], "reason": row["reason"]}
             for row in translated["omitted"]
         ]
-        route = _route_check(translated, set(idea_map), unit_map, catalog)
-    return route, report
+        return _route_check(translated, set(idea_map), self.unit_map, self.catalog)
+
+
+def plan_bounded(
+    ideas,
+    units,
+    brief,
+    invoke: Invoke,
+    *,
+    max_bytes,
+    shared=None,
+    workers=8,
+    fits=None,
+    catalog=None,
+    instruction=None,
+    allow_omissions=True,
+    route_validator=None,
+):
+    """Plan bounded requests; return ``(validated_route, planning_report)``.
+
+    ``fits(stage, instruction, shape, data)`` may enforce a model token budget in
+    addition to the byte limit. ``invoke`` owns retries/cache/metrics. This module
+    raises precise validation errors and adds no hidden retry policy.
+    """
+    if not ideas:
+        raise ProductionError("planning requires ideas")
+    idea_map = {idea["id"]: idea for idea in ideas}
+    if len(idea_map) != len(ideas):
+        raise ProductionError("planning input idea IDs must be unique")
+    planner = _Planner(
+        units, brief, invoke, max_bytes=max_bytes, shared=shared, workers=workers,
+        fits=fits, catalog=catalog, instruction=instruction,
+        allow_omissions=allow_omissions, route_validator=route_validator,
+    )
+    objects = _target_objects(ideas, idea_map, catalog)
+    cards = compact_cards(objects, units)
+    planner.report["original_cards"] = len(cards)
+    tree = planner.tree()
+    tree.feed(cards)
+    tree.finish()
+    kind, value = tree.run()
+    if kind == "compact":
+        route = planner.compact(objects, cards)
+    else:
+        route = planner.assign(value, objects, cards)
+    return planner.translate(route, idea_map), planner.report
+
+
+def plan_streaming(
+    read,
+    units,
+    brief,
+    invoke: Invoke,
+    *,
+    max_bytes,
+    shared=None,
+    workers=8,
+    fits=None,
+):
+    """Plan while reading: level-0 grouping starts as reads complete.
+
+    ``read(on_batch)`` performs the reads, calling ``on_batch(ideas)`` from any
+    thread for each completed window, and returns ``(windows, ideas, unresolved)``.
+    Returns ``(windows, ideas, unresolved, route, report)``. The reading barrier
+    disappears for the default planned route; comparison and retrieval targets
+    still need every idea first and use ``plan_bounded``.
+    """
+    import threading
+
+    planner = _Planner(
+        units, brief, invoke, max_bytes=max_bytes, shared=shared, workers=workers,
+        fits=fits, catalog=None, instruction=None, allow_omissions=True, route_validator=None,
+    )
+    tree = planner.tree()
+    outcome = {}
+
+    def on_batch(ideas, key=None):
+        tree.feed(compact_cards(ideas, units), key)
+
+    def reader():
+        try:
+            outcome["result"] = read(on_batch)
+        except BaseException as exc:  # surfaced in the planner thread
+            outcome["error"] = exc
+            tree.finish(exc)
+            return
+        tree.finish()
+
+    thread = threading.Thread(target=reader, name="lamina-reader", daemon=True)
+    thread.start()
+    try:
+        kind, value = tree.run()
+    finally:
+        thread.join()
+    if "error" in outcome:
+        raise outcome["error"]
+    windows, ideas, unresolved = outcome["result"]
+    if not ideas:
+        raise ProductionError("Readers found no anchored ideas in selected sources")
+    idea_map = {idea["id"]: idea for idea in ideas}
+    cards = compact_cards(ideas, units)
+    planner.report["original_cards"] = len(cards)
+    if kind == "compact":
+        route = planner.compact(ideas, cards)
+    else:
+        route = planner.assign(value, ideas, cards)
+    return windows, ideas, unresolved, planner.translate(route, idea_map), planner.report
 
 
 def _merge_answer_groups(targets):

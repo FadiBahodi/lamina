@@ -856,3 +856,84 @@ def test_outline_receives_one_exemplar_per_summary_group():
     assert any(call["item"].startswith("level_1_batch_") for call in provider.calls) or (
         outline and len(cards) <= 64
     )
+
+
+def test_streaming_plan_groups_while_reads_are_still_arriving():
+    """Level-0 grouping starts on the cards already read; the reading barrier
+    is gone from the default planned route."""
+    import threading
+    import time
+
+    from lamina.planning import plan_streaming
+
+    ideas, units = corpus(1600, topics=8)
+    half = len(ideas) // 2
+    fed_second_half = threading.Event()
+    first_group_started = threading.Event()
+    marks = {}
+
+    class Marking(ScriptedPlanner):
+        def __call__(self, stage, item, instruction, shape, data, checker):
+            if item.startswith("level_0_batch_") and not first_group_started.is_set():
+                marks["first_group"] = time.monotonic()
+                first_group_started.set()
+            return super().__call__(stage, item, instruction, shape, data, checker)
+
+    def read(on_batch):
+        # First half arrives at once; the second half only after the planner
+        # has had the chance to start grouping (bounded wait, never a hang).
+        on_batch(ideas[:half], (0, 0))
+        first_group_started.wait(timeout=20)
+        marks["second_half_fed"] = time.monotonic()
+        fed_second_half.set()
+        on_batch(ideas[half:], (0, half))
+        return [], ideas, []
+
+    provider = Marking()
+    windows, returned, unresolved, route, report = plan_streaming(
+        read,
+        units,
+        {"goal": "Compare operating conditions across eight sources"},
+        provider,
+        max_bytes=12_000,
+        workers=4,
+    )
+    assert first_group_started.is_set(), "no grouping started before the second half arrived"
+    assert marks["first_group"] < marks["second_half_fed"]
+    assert report["mode"] == "hierarchical" and report["hierarchy_levels"] >= 2
+    assigned = [iid for sec in route["sections"] for iid in sec["idea_ids"]]
+    assert len(assigned) == len(set(assigned)) == 1600
+    assert returned is ideas and unresolved == []
+
+
+def test_streaming_plan_takes_the_compact_route_when_everything_fits():
+    from lamina.planning import plan_streaming
+
+    ideas, units = corpus(8)
+    provider = ScriptedPlanner()
+
+    def read(on_batch):
+        on_batch(ideas[:4], (0, 0))
+        on_batch(ideas[4:], (0, 4))
+        return [], ideas, []
+
+    _, _, _, route, report = plan_streaming(
+        read, units, {"goal": "Compare wind turbines"}, provider, max_bytes=30_000
+    )
+    assert report["mode"] == "compact"
+    assert [call["stage"] for call in provider.calls] == ["production_route"]
+    assert sorted(iid for sec in route["sections"] for iid in sec["idea_ids"]) == sorted(
+        idea["id"] for idea in ideas
+    )
+
+
+def test_streaming_plan_surfaces_a_reading_failure():
+    from lamina.planning import plan_streaming
+
+    _, units = corpus(8)
+
+    def read(on_batch):
+        raise ProductionError("2 reading batch(es) unresolved")
+
+    with pytest.raises(ProductionError, match="unresolved"):
+        plan_streaming(read, units, {"goal": "x"}, ScriptedPlanner(), max_bytes=30_000)

@@ -6,12 +6,12 @@ Lamina is a Python library, command-line tool and local web app for turning sour
 
 | What you can make | How it is built |
 | --- | --- |
-| Flashcards (`cards`) | Every reader window is one independent call that writes cards with citations. Duplicates are removed locally, a sample of windows is audited against its source, and the deck exports to Anki. No planner, no writer, no review chain. |
-| Reference guide, document | Readers extract ideas, a streaming planner groups them into sections, writers draft each section from its own evidence, reviewers check it, one repair if needed. |
-| Podcast script and audio | A guide with a spoken-prose contract and an episode plan. Each section is synthesized the moment it leaves review, so the audio is assembled from cached segments. |
+| Flashcards (`cards`) | Independent reader calls write cards directly from cited sources. Duplicates are removed locally, a sample of windows is audited against its source, and the deck exports to Anki. |
+| Reference guide, document | Readers extract ideas, a streaming planner groups them into sections, and writers draft each section from its evidence. Reviewers check the drafts, with one repair and recheck if needed. |
+| Podcast script and audio | Writers produce a spoken lesson following an episode plan. Speech generation starts as each section finishes review, and the audio is assembled from cached segments. |
 | Practice exam | Candidate prompts and a separate marking guide, then a blind solver attempts each question before a judge marks it. |
 
-Models decide what the sources mean, what belongs together and how to explain it. Code decides everything that must not drift: source identity, who owns which passage, what each call can see, how big a request may be, which work runs together, what gets cached, and what the receipt says.
+Models decide what the sources mean, what belongs together and how to explain it. Code tracks source identity and ownership, supplies each call's context, enforces request limits, schedules work and saves results with a record of the run.
 
 ## Install
 
@@ -73,7 +73,7 @@ Without a model, `lamina demo --output demo` runs the production engine on two b
 
 ## How a run works
 
-**Reading** runs first and wide. Sources are packed into windows that fit the reader's budget. Each window owns its core text and also sees the last few sentences of the previous unit and the first few of the next, so a list or qualification cut by a page break is visible without a second call. Readers cite spans by ID; code materializes the exact quotation. A window that fails after its retry is recorded and the run continues on what was read.
+**Reading** divides the sources into windows that fit the reader's budget and processes them in parallel. Each window owns its core text and also sees the last few sentences of the previous unit and the first few of the next, so a list or qualification cut by a page break is visible without a second call. Readers cite spans by ID; code retrieves the exact quotation. A window that fails after its retry is recorded and the run continues on what was read.
 
 **The sweep** (`--format cards`) stops here: readers write the cards, local similarity suppresses near-duplicates, a quarter of the windows (configurable) get one audit call that looks for omissions and unsupported cards, and the deck is exported. Audit findings are attached to the receipt; they never remove a card.
 
@@ -93,11 +93,11 @@ Without a model, `lamina demo --output demo` runs the production engine on two b
 - [`evidence_relations.py`](src/lamina/evidence_relations.py) compares related claims and can reopen original material omitted by extraction.
 - [`method_runtime.py`](src/lamina/method_runtime.py) runs custom dependency graphs with selected observations from earlier work.
 
-[Architecture](docs/architecture.md) explains these contracts. [Workflow design](docs/workflow-design.md) covers the different needs of references, audio and exams; [system origins](docs/system-origins.md) preserves their history.
+[Architecture](docs/architecture.md) explains the current implementation. The [workflow design](docs/workflow-design.md) describes how to extend it so an agent can choose a method, ask for missing information, revise the work during a run and use the experience on a later project. It includes the different requirements of references, audio, written exams and oral cases; [system origins](docs/system-origins.md) preserves their history.
 
 ## Limits
 
-Models can omit qualifications or misinterpret real citations. Parsing does not reliably interpret figures, and generated audio needs listening review. Workload settings and cached results do not establish quality. Assessments are exported materials; live oral-case administration requires a separate application. Custom methods execute declared workflows and reuse selected observations without automatically discovering better methods. [Capability status](docs/architecture-status.md) lists the remaining limits; [live model results](docs/live-model-evaluation.md) records measured successes and failures.
+Models can omit qualifications or misinterpret real citations. Parsing does not reliably interpret figures, and generated audio needs listening review. Workload settings and cached results do not establish quality. Assessments are exported materials; live oral-case administration requires a separate application. Custom job graphs remain fixed during execution, and callers choose which earlier observations to include. [Capability status](docs/architecture-status.md) lists the remaining limits; [live model results](docs/live-model-evaluation.md) records measured successes and failures.
 
 ## Contribute
 

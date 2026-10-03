@@ -1,117 +1,112 @@
-# Designing a workflow with Lamina
+# Choosing and changing the work
 
-Start with the object a person needs to use. A reference guide gives a question one place to live. A podcast script carries a listener through an explanation in a sensible order. A practice exam gives the candidate enough information to answer and gives the examiner a separate marking view. These products can share source handling and execution machinery, but they do not have the same natural unit of work.
+Lamina should let an agent take a large job, choose a useful way to divide it, and change that division when the work reveals a better approach. The agent should also be able to use what earlier projects taught it: which source material mattered, why a particular structure worked, and what the user wanted.
 
-Lamina provides that shared machinery: structured source import, exact source references, bounded model requests, parallel execution, saved plans, local revision and receipts. The requested product and source roles determine how to use it.
+The current engine provides source reading, planning, parallel writing, review, caching and custom job graphs. This document describes the design for connecting those capabilities into a method the model can revise during a project. The runtime changes described below are proposed; [Production](production.md) and [Methods](methods.md) document the available interfaces.
 
-## Read source structures before dividing the product
+## Start with the requested result
 
-Import preserves the structures the parser can identify:
+Keep the user's goal, audience, source permissions, delivery format and relevant preferences with the project. Identify which sources supply content, which demonstrate style or format, and which must stay held out for evaluation. A request for an answered reference book sets different requirements from a request for an exam that withholds its key. A preference given for one project needs its original context when reused.
 
-- Markdown headings, paragraphs, lists, tables, quotations and code blocks;
-- PowerPoint slide text, tables, shapes and speaker notes, with material from one slide kept together;
-- PDF pages as text units, with an explicit warning that extraction does not interpret figures or guarantee reading order.
+The model chooses what to organise around. A source paragraph, a complete answer list, a clinical presentation, an episode and a staged case are all useful units for different jobs. The unit used to read a source need not become a chapter or episode in the result.
 
-Without a reading workload policy, a call owns up to eight contiguous units from one heading section, a single PDF page or one slide group. A configured policy can allow several structures from the same source in one call, within the measured request and workload limits. Lists, tables and slide groups stay intact. An oversized structure needs explicit decomposition or a larger allowance.
-
-Each reader also receives a small boundary halo by default: up to six sentence spans from the preceding unit and six from the following unit, reduced when needed to fit the request. If those spans leave a dependency unresolved, the reader can request more context and give a reason. The first request completes the partial neighboring unit; another request steps farther in that direction. These passages remain context, with separate source ownership.
-
-This policy handles local boundaries. A generic rule qualified many pages later, two equivalent questions in different files, or a callback to an earlier episode needs a later planning or reconciliation decision. Optional evidence comparison can request a bounded search of the permitted original source units when extracted ideas leave a question unresolved. It can reopen a unit no reader represented, but its lexical search can still miss relevant material.
-
-## Build a reference around the reader's question
-
-Suppose several documents discuss the same presenting problem. A chapter-per-file layout will repeat shared material and separate conditions that belong in one answer. A useful reference first decides what question the reader is trying to answer.
-
-Historical reference builds used several valid objects:
-
-| Product | Unit of work | Design consequence |
+| Work | Decisions that shape the method | Finished result to inspect |
 | --- | --- | --- |
-| Broad differential atlas | Source-derived list | Preserved variants close to their source; related fragments occupied many separate drills. |
-| Reconciled question atlas | Question with a complete answer group | Family editors decided which prompts were equivalent and which conditions justified a variant. |
-| Presentation book | Presenting problem with discriminating findings | A diagnosis could recur under several presentations because each comparison taught a different decision. |
-| List collection | Self-contained answer list | Procedural sequences, differentials and prompts missing their original case were routed elsewhere or quarantined. |
+| Extraction or reconciliation | Which source objects must survive; which are equivalent; which variants change the answer | An inventory whose members, merges and omissions can be traced to the originals |
+| Reference book | Whether to organise around questions, presentations or procedures; where related material belongs | Complete answers and useful comparisons, with working contents, indexes and readable pages |
+| Podcast | The explanation's order, episode boundaries, shared examples, terminology and callbacks | The spoken lesson, including pronunciation, transitions, transcript and playback |
+| Written exam | The whole case, reveal order, questions, marks and information each candidate solve may receive | Candidate and examiner versions, attempted answers and repairs to ambiguous questions |
+| Oral encounter | Patient states, requestable findings, consequences of actions and examiner controls | An encounter that can be run with a candidate, including exhibits and private marking |
 
-These products had different scopes and organizing questions; [system origins](system-origins.md) records their sizes.
+Earlier projects used all of these forms. A differential atlas preserved source lists; a later atlas reconciled equivalent questions; another book organised material around presentations. Related diagnoses could recur because they answered different questions. The audio and exam systems needed their own teaching and information boundaries. [System origins](system-origins.md) preserves those decisions, sizes and timings.
 
-Lamina's planned guide path reads source structures into source-backed ideas. When retrieval targets are enabled, models group equivalent tasks and compatible variants while retaining answer items and their supporting passages. If the planning request is too large, a grouping tree forms a provisional hierarchy of groups as reads complete, a model designs an outline from the reduced cards, and every original idea is then reassigned against that outline. Transport groups never become final source owners. Writers receive their assigned answer groups, original evidence, declared cross-section context and a local outline containing their neighbors' titles and purposes.
+## A podcast example
 
-This path does not reproduce every historical reference mechanism. It starts from model-extracted ideas rather than an independently audited inventory of all original question objects. It has no built-in router for sending procedural sequences, treatments and context-dependent prompts to separate products, and PDF export has no atlas-scale bookmark, widget, link and page-inspection acceptance pass. Use a custom method when the work requires family-by-family reconciliation or an explicit routing and quarantine stage.
+Suppose the sources describe a general operating rule and an exception for older equipment. The requested lesson should teach listeners when each applies.
 
-Review a complete answer group, including its conditions, exceptions and meaningful variants. Two lists can share most of their words while applying to different situations. Exact source membership makes the decision inspectable; it does not make the merge semantically correct.
+Readers examine different source regions concurrently and keep links to the original passages. One finds the general rule. Another finds a conflicting addendum. A joint reading resolves whether the difference comes from the equipment version, operating conditions or a genuine disagreement.
 
-## Plan a podcast before dividing the script
+Before commissioning a full script, the model can try a short explanation or worked example where the choice of teaching structure is uncertain. It might choose to introduce two similar machines that require different decisions. The resulting shared material states the example, the terminology and the condition that changes the answer.
 
-A podcast has a dependency that an ordinary reference does not: each section belongs in a route the listener must be able to follow without scanning the whole artifact. The historical audio factory therefore separated these decisions:
+Writers can then explain the rule, develop the example and write the closing questions at the same time. A writer making an exact callback to an earlier sentence waits for that sentence. Other writers can proceed from the agreed example and supporting evidence.
 
-1. local readers recovered idea families from ordered source material;
-2. one topology pass chose the natural episode or series shape;
-3. a sparse pass resolved only distant relationships and conflicts that several sections needed;
-4. one route assigned teaching jobs, objectives, useful callbacks and evidence;
-5. section writers worked concurrently from that route, their assigned evidence, earlier planned ideas and selected callback evidence;
-6. local factual checks and targeted turn repairs preceded speech, transcription checks and phone publication.
+If a writer discovers that a source qualification was lost, it asks a specific question. The answer may require changing the shared example and the sections that use it. If two sections keep needing each other's drafts, the model can combine them. If a section contains unrelated explanations, it can split them. The finished episode is reviewed as a lesson before its delivery is accepted.
 
-The writers did not need the exact preceding prose when a shared route was sufficient. If a transition, summary or later decision depends on what an earlier writer actually produced, the later job must instead depend on that completed result. That dependency lengthens the critical path and should be declared only when the finished text matters.
+The earlier audio factory used parallel readers, a choice of episode structure, targeted checks of distant relationships, a shared teaching route, concurrent section writers, factual review, speech generation and audio checks. Current Lamina carries several of those parts. The new design makes the choice and revision of the method part of the running job.
 
-Lamina's current podcast format uses the shared-plan arrangement. It creates a source-grounded script whose sections can be written and reviewed concurrently. A configured speech adapter can synthesize sections as they leave review, then assemble the cached segments into episode and programme WAV files.
+## Give each worker what its decision needs
 
-The current planner numbers sections into episodes and assigns word targets from the requested episode length. This is less extensive than the historical factory's editorial choice of a natural episode or series shape. Spoken-turn roles, a shared board for distant relationships, turn-level audio repair, transcription comparison, a timed transcript and a phone player remain outside the current engine. WAV checks establish file structure, duration and hashes. Listening, pronunciation, pacing and educational quality require checks on the delivered audio and listener surface.
+Readers keep source structures intact where possible: heading sections, lists, tables, PDF pages and slide groups. Nearby context helps with a list or qualification that crosses a boundary. The existing reader supplies a sentence-span halo and can request additional neighboring material. [Parsing](parsing.md) and [Production](production.md#read-and-organize-the-sources) describe the current limits.
 
-## Give a practice exam distinct candidate and examiner inputs
+Later work can need information far outside that neighborhood. A comparison may need an addendum no reader extracted. A writer may need the original table behind a short summary. Source access must therefore remain available throughout the job, including passages that never became extracted ideas.
 
-A practice exam needs an information boundary. Candidate prompts must not contain the answer key, and later findings must not make an earlier question answerable only in retrospect.
+Shared decisions can be ordinary small job results: an agreed definition, a case opening, an example or a resolved exception, with its source support. A worker depends on the decision it uses. Work requiring an earlier draft depends on that completed draft. Keeping decisions separate allows a changed example to affect its users without invalidating every section.
 
-The historical written-case factory used one setter to own the case opening, reveal order, questions and marks. Question-specific marking guides and candidate solves then ran concurrently. The solver for each question saw only the case prefix available at that point. One examiner compared the assembled paper, keys, blind answers and exact evidence. A material finding named the affected question, after which the factory repaired it and ran the solves and judgment again.
+A planner should send enough context to make each decision well. Sending the same complete inventory to every worker increases cost; reducing it to a generic summary can lose the distinction the next worker needs. A targeted question is often the smaller useful exchange. The original passages stay available to resolve it. Targeted retrieval supplements any full-source coverage required by the brief.
 
-Lamina's current assessment path plans source-backed sections and writes candidate and examiner material separately. Each blind solve receives the current candidate section and only the earlier candidate sections declared as required context. A separate judge receives that answer, the marking text and cited source passages. These calls can run concurrently because the engine constructs a separate information-limited request for each section. Use a stateless adapter or isolated provider sessions when the blind boundary matters.
+## Let work ask questions and propose changes
 
-The current path does not install one setter over a whole staged case, repair named questions from blind-solve findings, or repeat the solve-and-judge loop after that repair. Findings remain in examiner and operator records. A live oral encounter also needs requestable findings, examiner-controlled release, reassessment after candidate actions, exhibits, private scoring and participant access. Those require a stateful application.
+Extend the existing method response so a worker can return finished outputs, questions that prevent completion, and proposed changes to the work. Control actions need a defined response shape that code validates. An ordinary sentence in a draft cannot change the schedule.
 
-### Proposed case graph and publication check
+A question identifies the affected work, the missing information, the sources it may consult and what the worker has already established. It can request a passage, interpretation of conflicting evidence, a decision shared with other workers, or clarification from the user. Ask when the answer could change the requested result; record why an unresolved detail does not need to hold up completion.
 
-A staged oral case needs state that the production engine does not hold. One design represents the case as a graph `G = (V, E)`. A node `v ∈ V` is a named patient state. An edge `e = (v, a, g, Δtₚ, v′) ∈ E` holds an examiner-asserted action `a`, a guard `g`, a simulated patient-time advance `Δtₚ` and a successor `v′`. Each edge carries candidate-safe releases, private interpretation, a next prompt, rubric IDs and source support. Oral time `tₒ` and patient time `tₚ` stay separate.
+The scheduler saves the unfinished work and releases the worker slot. A known passage can be fetched directly; interpretation runs as another model job within the same limits. When an answer arrives, the waiting work resumes with that answer and its earlier progress. Independent work continues. An unanswered question remains visible at a budget limit or interruption.
 
-The examiner decides whether an utterance merits action `a`. Code selects the authored transition and computes the candidate's view `O(v, R, candidate)` from state `v` and the released set `R`; it does not infer treatment quality or biological response from free text. A run log replays decisions, releases, withdrawals, marks and both clocks. Static path tests look for contradictory branches and leaks, and two-person runs test plausibility and pacing.
+A proposed plan change identifies the plan and job revisions it used, the jobs to split, combine, replace or retire, the new dependencies and the reason. The model maintaining the plan decides whether to accept it against the original goal and current work. Code checks the graph, recorded source assignments and omissions, and source access and resource limits. A proposal based on an outdated revision returns for reconsideration before application.
 
-Publication review would bind the exact case bytes, source-unit and media manifests, reviewer, rubric, verdict and open issues, so a changed branch, answer, source or image makes the pass stale. Lamina's caching and production review do not implement this independent exact-hash gate. Calling the same adapter again is not an independent expert review.
+This supports several ways of working. A simple conversion can finish directly. A large reference can use family editors before a book editor. A case setter can finish the staged scenario before question-specific marking and blind solving. The model chooses the jobs and their relationships; the engine runs them.
 
-## Keep the product-specific work visible
+## Apply changes without losing useful work
 
-Reference guides, podcasts and practice exams differ in more than their final file format. They ask readers to recover different objects, make different decisions with the combined evidence and test different delivered surfaces. Current Lamina supplies useful common infrastructure, while some product-specific work remains outside the production engine:
+Use the existing scheduler and worker pool. When a result arrives, apply any accepted plan change before releasing its dependent jobs. Stop dispatching retired work, keep unaffected jobs running, and schedule newly ready work within the current capacities.
 
-| Product | Current Lamina production | Product-specific work still needed for the fuller historical method |
-| --- | --- | --- |
-| Reference guide | Structured reading, source-backed ideas, optional retrieval targets, hierarchical planning, reassignment of original ideas, parallel sections and local revision | An audited original-question inventory, explicit routing or quarantine across product types, family-level reconciliation when required, and atlas-scale navigation/render checks |
-| Podcast | Shared teaching route, assigned source evidence, concurrent section writing and review, episode and word-target planning, section WAV synthesis during writing | Editorial selection of natural episode/series topology, sparse distant-relationship resolution, spoken-turn and segment repair, transcript comparison, and a tested listener/player journey |
-| Practice exam | Separate candidate and examiner text, declared earlier candidate context, blind answers and separate key/evidence judgments | One setter-owned staged case, question-level marks and repairs, repeat solve/judge after a change, and live oral-state behavior when the product is an encounter |
-| Reusable method | Operator-declared nodes, completed-result dependencies, resource lanes, receipts and selected same-family observations | Evidence-based selection among methods and a measured result showing that a retained observation improved a later run |
+Record a revision for the plan and for each job definition. A late response from an obsolete job still consumes its worker slot until the call ends, but cannot release current dependents or appear as the latest output. Immediate cancellation of a provider call is optional; retiring its result must work regardless.
 
-Choose the source handling, execution and recording machinery that fits the requested product. Each product still needs its own editorial decisions and acceptance test.
+Cache identity continues to depend on the instructions, selected inputs, dependency results and model configuration. A global plan revision belongs in the run history, not every cache key. Changed dependencies cause affected work to be reconsidered. Unchanged inputs can reuse completed results. Split or combined jobs retain links to the work they replace so required material cannot disappear during restructuring.
 
-## Choose plan sharing and completed-result dependencies deliberately
+Searches also depend on the collection searched. An earlier finding of no exception becomes stale when a relevant source is added, even if its few citations are unchanged. The existing original-source comparison includes the permitted collection in its cache key; general source questions need the same treatment.
 
-Two jobs can run together when they need the same finished plan and different owned evidence. A later job must wait when it needs an earlier job's actual result. These are different kinds of context:
+Save questions, accepted plan changes, completed work and reasons as they occur. Resuming should reconstruct the current job from these records and the original user request. A conversation summary can help explain the history, while the saved project determines what still needs doing.
 
-| Context | Use it when | Cost |
-| --- | --- | --- |
-| Owned source structure | A reader must interpret one intact list, table, slide or page | Local model work |
-| Requested neighboring structure | A local boundary hides a necessary qualifier or continuation | Repeated adjacent source context |
-| Shared route | Writers need the same intended order, ownership and requirements | One global planning dependency |
-| Selected earlier evidence | A writer needs a planned callback or common definition | Small repeated source context |
-| Completed prior result | Exact earlier wording or output changes the later job | Longer dependency chain and more context |
-| Resource lane | Jobs can be ready together but compete for one renderer or constrained service | Queue time without an informational dependency |
+## Review the delivered work
 
-A custom [method](methods.md) declares completed-result dependencies, selected task fields and resource lanes directly. The production planner uses a shared route and declared source context. Give concurrent writers the common decisions they need: terminology, conditions, an agreed example or an exact callback. They can develop separate parts once those decisions are available. A reference to an earlier writer's unplanned wording still needs the completed text.
+Local review checks a passage or answer against its sources. Whole-work review checks whether the parts serve the requested result: consistent terms, complete answer groups, useful examples, correct reveal order and sensible transitions. A finding names the affected material and explains the change needed. A wording problem can stay local; a misplaced explanation may require revising the plan.
 
-When a handoff loses a condition that changes the answer, revisit the original source and revise the affected work. For example, a manual may allow eight bar generally but limit an older seal to five. A compact summary that drops the seal condition cannot resolve that difference. Optional evidence comparison can reopen the original addendum even if no reader extracted it. Search results supply evidence; a model must still interpret it.
+The reference workflows also need decisions about procedural material, treatment lists and prompts whose case context is missing. Route these to a suitable destination or leave them unresolved with a reason. Preserve every source object required by the brief through reconciliation, then inspect the rendered book and its navigation.
 
-Changing a declared dependency result changes its consumers' cache identities. Choosing or revising the workflow remains the method author's responsibility. Preserve the goal, source scope, relevant user preferences and reason for the division of work alongside the result. Selected observations can inform later runs; Lamina does not automatically choose a better method from them.
+For written exams, the setter owns the complete case and marks before question-level work starts. Each blind solve receives only the case information available at that point. A separate examiner compares the questions, keys, attempts and source evidence. Repair affected questions and repeat the relevant solves and judgment. Use isolated model sessions where the candidate/examiner separation matters.
 
-[Flow geometry](flow-geometry.md#context-amplification) defines context amplification, the input tokens sent across requests divided by the distinct accepted source tokens. Record it beside source extraction results, the largest request and output quality. A lower ratio may remove context a reader needed; a higher one may spend time and money without improving the result. Capacity establishes what fits; an evaluated workload policy establishes how much work a stage has shown it can handle.
+Audio review includes the actual speech and player. A clean script can still produce a missing phrase, poor pronunciation or an awkward transition. Repair the affected script or recording, and reuse unchanged segments. Current Lamina supplies section synthesis and episode WAV files; the fuller method also needs transcription comparison, listening checks and playback review.
 
-Compare time and cost against an accepted result under the same source scope and quality criteria. [Live model results](live-model-evaluation.md) record current measurements, [system origins](system-origins.md) keeps the historical timings separate, and the [measurement protocol](measurement.md) describes evaluation.
+### Oral encounters
 
-## Run and retain a workflow
+An oral case needs a stateful application. The existing proposal uses a graph `G = (V, E)`: each node is a patient state. An edge `e = (v, a, g, Δtₚ, v′)` describes a transition from state `v` to `v′` after an action `a` recorded by the examiner. The condition `g` must hold, and `Δtₚ` is the elapsed patient time. Each transition records what becomes visible to the candidate, private interpretation, the next prompt, rubric IDs and source support. Oral time `tₒ` and patient time `tₚ` are separate.
 
-[Production](production.md) gives the CLI and Python calls. All selected factual sources default to authority. Use `source_policy` when some sources are supplements, historical accounts or form examples. Use task-specific reading when the brief should guide source selection; choose reusable reading only when you need a source inventory that can support later briefs. The inventory remains a model interpretation and does not prove complete semantic capture.
+The examiner interprets the candidate's action. Code applies the authored transition and computes the candidate view `O(v, R, candidate)` from state `v` and the set of released findings `R`. The log records decisions, releases, withdrawals, marks and both clocks. Path checks examine contradictions and leaks; two-person runs assess plausibility and pacing.
 
-Production options select the route and output. A custom method specifies the graph itself. After a run, retain an observation about applicability, representation or review when it can guide a later decision. Selecting that observation for a later run makes its effect inspectable. Storage alone does not show that Lamina learned a better method.
+The proposed publication review records the case version, source and media manifests, reviewer, rubric, verdict and open issues. Changing a branch, answer, source or image makes that review stale. This application and its publication check remain separate implementation work from exported assessments.
+
+## Carry the approach into the next project
+
+Retain the method used, the reasons for its important choices, the delivered version and what happened when it was used. Include the relevant user preferences with their context. Keep direct user feedback, observed defects and the model's explanation of a result distinguishable.
+
+For example, a note that listeners lost track of an undefined term can justify introducing it earlier in a later episode. A request for fully answered material before an exam belongs with that study task. A future practice exam may need a separate answer key instead.
+
+At the next project's design stage, retrieve potentially useful approaches and observations. The model decides which apply and records what it adopts or changes. Existing family names can help find candidates; the requested product and circumstances determine whether an approach fits. Keep inferred preferences labeled with their evidence; direct user instructions take precedence.
+
+Current method observations provide a starting point for this record. They are selected manually and passed to named jobs. Choosing relevant experience, using it to revise the method and relating the outcome to a delivered result are the additional work. Compare the resulting artifact and the editing it needs; including a note in a prompt is only one step.
+
+## Build on the current engine
+
+| Existing part | Extension needed for the design above |
+| --- | --- |
+| `validate_method()` and `run_method()` | Let a model propose the initial method from the goal, source inventory and applicable experience. Preserve its reasons with the plan. |
+| Adjacent reader requests and original-source comparisons | General questions with saved unfinished work, an answer job and resumption. Enforce the control response shape. |
+| `DependencyGraph`, the shared pool and section continuations | Apply model-proposed graph changes as results settle; retire obsolete jobs and prevent late results from becoming current. |
+| Request-based caching, leases and saved receipts | Persist method revisions and pending questions during execution. Track the current job revision separately from reusable request results. |
+| Observations and run history | Find applicable approaches and feedback, preserve preference context, and pass selected experience into the next design. |
+| Production review and exports | Supply the product-specific editorial and delivery checks described above. A generic JSON job does not inherit them. |
+
+These changes belong in one complete project path. A useful first integration would create a lesson from conflicting source passages, ask a question that changes a shared decision, revise the affected work, recover through an interruption, and deliver the corrected result while preserving an unaffected section. A second task should use the saved experience to choose an appropriate method of its own.
+
+Read the finished outputs and their source support alongside the run history. Track time to useful output, completion time, cost and human editing. [Flow geometry](flow-geometry.md) explains the scheduling tradeoffs; [Measurement](measurement.md) describes comparisons; [Capability status](architecture-status.md) separates implemented behavior from the additions proposed here.

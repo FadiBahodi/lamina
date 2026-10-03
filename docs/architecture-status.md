@@ -15,7 +15,9 @@
 | Revision | Reusable readings and local section request identities with exact citation rebinding | Boundary and dependency changes can invalidate additional work. |
 | Assessment | Separate candidate/marking exports and blind solve/judge checks | No live staged oral-case administration. |
 | Audio | Speech adapter, per-section synthesis during writing on a bounded lane, cached segments, one WAV per episode plus the full programme, WAV checks; scripts in review render by default | No listening or transition evaluation. |
-| Methods | Explicit graphs, lane limits, saved receipts and selected observations | No autonomous method discovery or demonstrated learning from observations. |
+| Methods | Caller-supplied graphs, worker limits, saved receipts and selected observations | The graph stays fixed during a run. Worker questions and proposed changes have no scheduling behavior; the caller chooses experience for later jobs. |
 | Search | Persistent SQLite FTS5 and optional caller-vector rank fusion; relation nomination by TF-IDF or provider embeddings; comparison follow-ups can reopen full permitted original units, including material absent from extracted ideas | Pair nomination and original-source follow-up retrieval are bounded. Retrieval recall and the correctness of the resulting interpretation remain unmeasured. |
 
-Tests establish exercised implementation behavior. Synthetic timing measures its stated fixture. Live model quality, cost, latency and usefulness require matched evaluation on the chosen material. See [production](production.md), [adapters](adapters.md), [parsing](parsing.md), [calibration](calibration.md) and [benchmarks](benchmarks.md).
+[Workflow design](workflow-design.md#build-on-the-current-engine) describes the proposed additions for model-chosen methods, questions and resumption, plan changes during a run, and reuse of earlier experience.
+
+Tests cover implementation behavior. Assess model quality, cost, latency and usefulness on the intended material and finished result. See [production](production.md), [adapters](adapters.md), [parsing](parsing.md), [calibration](calibration.md) and [benchmarks](benchmarks.md).

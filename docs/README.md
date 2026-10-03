@@ -8,7 +8,7 @@ Install Lamina and configure a model using the [repository README](../README.md)
 | Connect a model, set request and workload limits, configure speech | [Adapters](adapters.md) |
 | Import Markdown, text, PDF and PowerPoint files, with optional OCR | [Parsing](parsing.md) |
 | Run a custom graph of jobs and reuse selected observations | [Methods](methods.md) |
-| Choose the work and context for a reference, podcast or practice exam | [Workflow design](workflow-design.md) |
+| Follow the design for choosing work, asking questions, revising plans and reusing experience | [Workflow design](workflow-design.md) |
 | Measure workload limits and fact preservation on your model and material | [Calibration](calibration.md) |
 
 ## Design

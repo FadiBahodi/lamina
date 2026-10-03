@@ -2,6 +2,8 @@
 
 A Lamina workflow specifies what each worker produces, the evidence it may use and the results it must wait for. Models or a calling agent organize the material and write the output. Code records source identity and ownership, limits requests, schedules the declared work and checks exact contracts. [Production](production.md) describes the sweep, direct, planned and caller-assigned routes and their options; this document describes the mechanisms behind them.
 
+[Workflow design](workflow-design.md) describes the proposed extension: an agent chooses the method, workers can ask questions, and the plan can change during execution. It also explains how later projects would use the choices and outcomes of earlier ones.
+
 ## 1. Source structure and capacity
 
 Ingestion stores exact source revisions and ordered units with locations. Markdown paragraphs, lists, tables, code blocks and quotations remain intact. PDF text keeps its page boundaries. PowerPoint text, tables and speaker notes remain separately citable units that share a slide-level structural group. Optional OCR adds a searchable text layer before PDF extraction. Import parses every file before publishing any of them, so a failed batch leaves no mixed parser output.

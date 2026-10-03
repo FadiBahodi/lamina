@@ -20,6 +20,7 @@ from .production_contract import (
     _SHAPES,
     _route_check,
     _str,
+    episode_check,
 )
 from .retrieval_targets import TARGET_REVISION, TARGET_SHAPE, validate_retrieval_targets
 from .store import canonical, digest
@@ -256,9 +257,23 @@ def _restore_shared(raw, ideas):
     return result
 
 
-def _route_shape():
+EPISODE_INSTRUCTION = (
+    "This is a podcast. Organize the sections into episodes: give every section an "
+    "episode number (1-based) and target_words, the spoken words it should take. List "
+    "sections in listening order, each episode's sections consecutive. Size episodes from "
+    "input.podcast: words_per_episode is the spoken budget per episode; when episodes is "
+    "auto choose the count from the amount of material (a short collection is one episode), "
+    "otherwise use exactly that many. Open each episode with its orienting section and "
+    "close it with a section that lands its main point. "
+)
+
+
+def _route_shape(fmt="document"):
     shape = copy.deepcopy(_SHAPES["production_route"])
     shape["shared_context"] = copy.deepcopy(ASSIGN_SHAPE["shared_context"])
+    if fmt == "podcast-script":
+        shape["sections"][0]["episode"] = "1-based episode number"
+        shape["sections"][0]["target_words"] = "spoken words for this section"
     return shape
 
 
@@ -573,7 +588,9 @@ class _Tree:
                 )
             restored = _restore_shared(raw, [])
             _diagnose_route(restored, expected)
-            return _route_check(restored, expected, {})
+            return episode_check(
+                _route_check(restored, expected, {}), self.shared.get("podcast")
+            )
 
         return "outline", self.budget.call(
             "production_route", "outline", self.instruction, self.shape, self.route_data(current), check
@@ -727,6 +744,9 @@ class _Planner:
         self.shared = dict(shared or {})
         self.fmt = self.shared.get("format", "document")
         self.instruction = (instruction or ROUTE_INSTRUCTION) + " " + _FORM[self.fmt]
+        self.podcast = self.shared.get("podcast")
+        if self.podcast:
+            self.instruction += " " + EPISODE_INSTRUCTION
         self.units, self.brief, self.workers = units, brief, workers
         self.unit_map = {unit["id"]: unit for unit in units}
         self.catalog = catalog
@@ -745,7 +765,7 @@ class _Planner:
 
     def compact(self, objects, cards):
         expected = {card["id"] for card in cards}
-        shape = _route_shape()
+        shape = _route_shape(self.fmt)
 
         def check(raw):
             restored = _restore_shared(raw, objects)
@@ -754,7 +774,9 @@ class _Planner:
                     "This reconciliation must preserve every input object; omissions are forbidden"
                 )
             _diagnose_route(restored, expected)
-            checked = _route_check(restored, expected, self.unit_map)
+            checked = episode_check(
+                _route_check(restored, expected, self.unit_map), self.podcast
+            )
             if self.route_validator:
                 self.route_validator(checked)
             return checked
@@ -847,7 +869,7 @@ class _Planner:
             "shared_context": shared_context,
         }
         _diagnose_route(route, expected)
-        route = _route_check(route, expected, self.unit_map)
+        route = episode_check(_route_check(route, expected, self.unit_map), self.podcast)
         if self.route_validator:
             self.route_validator(route)
         self.report["assignment_batches"] = len(batches)
@@ -1301,8 +1323,16 @@ def refine_sections(
                 for child in children
             }
             renamed = []
+            total_owned = sum(
+                max(1, len(child.get("target_ids", child["idea_ids"]))) for child in children
+            )
             for child in children:
                 row = {**child, "id": names[child["id"]]}
+                if section.get("episode") is not None:
+                    row["episode"] = section["episode"]
+                if section.get("target_words") is not None:
+                    share = max(1, len(child.get("target_ids", child["idea_ids"]))) / total_owned
+                    row["target_words"] = max(20, int(round(section["target_words"] * share)))
                 for key in ("context_section_ids", "candidate_context_ids"):
                     row[key] = list(
                         dict.fromkeys(

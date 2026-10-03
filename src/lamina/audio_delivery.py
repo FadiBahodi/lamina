@@ -298,6 +298,48 @@ def render_audio(
     }
 
 
+def _assemble(target: Path, name: str, segments: list[dict]) -> dict:
+    """Concatenate matching PCM segment files in order into ``target/name``."""
+    pending = target / (name + "." + uuid.uuid4().hex + ".tmp")
+    params, frames = None, 0
+    try:
+        with wave.open(str(pending), "wb") as writer:
+            for row in segments:
+                with wave.open(str(target / row["file"]), "rb") as reader:
+                    current = (
+                        reader.getnchannels(),
+                        reader.getsampwidth(),
+                        reader.getframerate(),
+                    )
+                    if params is None:
+                        params = current
+                        writer.setnchannels(params[0])
+                        writer.setsampwidth(params[1])
+                        writer.setframerate(params[2])
+                    elif current != params:
+                        raise AudioDeliveryError(
+                            "Speech segments have different PCM formats"
+                        )
+                    frames += reader.getnframes()
+                    while chunk := reader.readframes(65536):
+                        writer.writeframesraw(chunk)
+        os.replace(pending, target / name)
+    finally:
+        pending.unlink(missing_ok=True)
+    with (target / name).open("rb") as stream:
+        sha = hashlib.file_digest(stream, "sha256").hexdigest()
+    return {
+        "file": name,
+        "sha256": sha,
+        "bytes": (target / name).stat().st_size,
+        "frames": frames,
+        "duration_seconds": frames / params[2],
+        "channels": params[0],
+        "sample_width_bytes": params[1],
+        "sample_rate_hz": params[2],
+    }
+
+
 def render_audio_segments(workspace, provider, receipt, output, progress=None):
     """Cache each reviewed section and assemble PCM on disk in source order.
 
@@ -391,49 +433,30 @@ def render_audio_segments(workspace, provider, receipt, output, progress=None):
         error.partial_results = manifest
         raise error
 
-    pending = target / ("narration." + uuid.uuid4().hex + ".tmp")
-    params, frames = None, 0
-    try:
-        with wave.open(str(pending), "wb") as writer:
-            for row in manifest["segments"]:
-                with wave.open(str(target / row["file"]), "rb") as reader:
-                    current = (
-                        reader.getnchannels(),
-                        reader.getsampwidth(),
-                        reader.getframerate(),
-                    )
-                    if params is None:
-                        params = current
-                        writer.setnchannels(params[0])
-                        writer.setsampwidth(params[1])
-                        writer.setframerate(params[2])
-                    elif current != params:
-                        raise AudioDeliveryError(
-                            "Speech segments have different PCM formats"
-                        )
-                    frames += reader.getnframes()
-                    while chunk := reader.readframes(65536):
-                        writer.writeframesraw(chunk)
-        os.replace(pending, target / "narration.wav")
-    finally:
-        pending.unlink(missing_ok=True)
+    manifest["audio"] = _assemble(target, "narration.wav", manifest["segments"])
+    # One file per episode as well, when the script declared episodes.
+    episodes = {}
+    for row in rows:
+        number = row.get("episode")
+        if number is not None:
+            episodes.setdefault(number, []).append(row["id"])
+    if len(episodes) > 1:
+        by_id = {seg["section_id"]: seg for seg in manifest["segments"]}
+        manifest["episodes"] = [
+            {
+                "number": number,
+                "section_ids": ids,
+                **_assemble(
+                    target, f"episode-{number:02d}.wav", [by_id[sid] for sid in ids]
+                ),
+            }
+            for number, ids in sorted(episodes.items())
+        ]
     transcript = "\n\n".join(
         (target / row["transcript_file"]).read_text() for row in manifest["segments"]
     )
     _write_atomic(target / "narration.txt", transcript.encode())
-    with (target / "narration.wav").open("rb") as stream:
-        sha = hashlib.file_digest(stream, "sha256").hexdigest()
     manifest.update(
-        audio={
-            "file": "narration.wav",
-            "sha256": sha,
-            "bytes": (target / "narration.wav").stat().st_size,
-            "frames": frames,
-            "duration_seconds": frames / params[2],
-            "channels": params[0],
-            "sample_width_bytes": params[1],
-            "sample_rate_hz": params[2],
-        },
         transcript={
             "file": "narration.txt",
             "source": "adapter-reported synthesis input; not independently transcribed",

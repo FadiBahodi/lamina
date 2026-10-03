@@ -15,7 +15,7 @@
   const format = make("select"); format.setAttribute("aria-label", "Output format");
   [["document", "Document"], ["guide", "Reference guide"], ["assessment", "Practice exam"], ["podcast-script", "Podcast script"], ["cards", "Flashcards (sweep)"]].forEach(([value, label]) => { const option = make("option", "", label); option.value = value; format.append(option); });
   const formatNote=make("p","pb-format-note");
-  function updateFormatNote(){formatNote.hidden=format.value!=="podcast-script";formatNote.textContent=state.audioAdapter?"Your speech adapter will turn the script into WAV audio.":"Produces a script. Start the local app with a speech adapter to add WAV audio.";}
+  function updateFormatNote(){formatNote.hidden=format.value!=="podcast-script";formatNote.textContent=state.audioAdapter?"Planned in episodes of about 20 minutes; each section is spoken as soon as it is reviewed and the episodes are assembled as WAV files.":"Planned in episodes of about 20 minutes. Start the local app with a speech adapter to add WAV audio per episode.";}
   format.addEventListener("change",updateFormatNote);
   formatLabel.append(format); goalBlock.append(goalHead, goal, formatLabel,formatNote);updateFormatNote();
   const sourceBlock = make("section", "pb-block");

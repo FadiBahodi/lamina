@@ -217,3 +217,62 @@ def test_segment_cache_rebuilds_only_changed_speech_and_retains_order(tmp_path):
         ]
         == "hit"
     )
+
+
+def test_review_script_renders_only_when_requested_and_names_provisional_sections(
+    tmp_path,
+):
+    provider, ws = AudioProvider(), Workspace(tmp_path / "ws")
+    in_review = {
+        **receipt(),
+        "status": "review",
+        "sections": [
+            {"id": "one", "title": "First", "body": "First speech."},
+            {"id": "two", "title": "Second", "body": "Second speech."},
+        ],
+        "findings": {"two": [{"issue": "A quantity is unsupported."}]},
+    }
+    with pytest.raises(AudioDeliveryError, match="ready"):
+        render_audio(ws, provider, in_review, tmp_path / "blocked")
+    assert provider.requests == []
+    render_audio(ws, provider, in_review, tmp_path / "out", require_ready=False)
+    assert len(provider.requests) == 2
+    data = json.loads((tmp_path / "out" / "audio.json").read_text())
+    assert data["script_status"] == "review"
+    assert data["provisional_sections"] == ["two"]
+    assert [row["section_id"] for row in data["segments"]] == ["one", "two"]
+    # A failed script never renders, whatever the policy.
+    with pytest.raises(AudioDeliveryError, match="ready"):
+        render_audio(
+            ws, provider, {**in_review, "status": "failed"}, tmp_path / "failed", require_ready=False
+        )
+
+
+def test_delivery_policy_controls_review_audio(tmp_path, monkeypatch):
+    from lamina.production_delivery import deliver_production
+
+    monkeypatch.setattr(
+        "lamina.production_delivery.export_production", lambda *a, **k: {"html": "x"}
+    )
+    provider, ws = AudioProvider(), Workspace(tmp_path / "ws")
+    base = {
+        **receipt(),
+        "status": "review",
+        "sections": [{"id": "one", "title": "First", "body": "First speech."}],
+        "findings": {"one": [{"issue": "Unsupported."}]},
+        "plan_digest": "x",
+    }
+    skipped = dict(base)
+    deliver_production(ws, skipped, {}, tmp_path / "a", audio_provider=provider)
+    assert skipped["audio_delivery"]["status"] == "skipped"
+    assert provider.requests == []
+    rendered = dict(base)
+    links = deliver_production(
+        ws, rendered, {}, tmp_path / "b", audio_provider=provider, audio_when="any"
+    )
+    assert rendered["status"] == "review"
+    assert rendered["audio_delivery"]["status"] == "provisional"
+    assert rendered["audio_delivery"]["provisional_sections"] == ["one"]
+    assert links["audio"] == "narration.wav"
+    with pytest.raises(ValueError, match="audio_when"):
+        deliver_production(ws, dict(base), {}, tmp_path / "c", audio_when="later")

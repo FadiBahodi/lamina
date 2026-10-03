@@ -178,6 +178,8 @@ def render_audio(
     receipt: dict,
     output: Path,
     progress: Callable[[dict], None] | None = None,
+    *,
+    require_ready: bool = True,
 ) -> dict[str, str]:
     """Render a ready podcast script, using sections when available.
 
@@ -188,11 +190,17 @@ def render_audio(
     A per-local-user process-safe file lock covers only the adapter invocation;
     cache hits never acquire it. The lock wait is at least 600 seconds or the
     adapter timeout plus 30 seconds, whichever is longer.
+
+    ``require_ready=False`` renders a script that is still in ``review``. A
+    finding on one section is not a reason to withhold the other sections from
+    the speech lane; the manifest lists the sections with remaining findings so
+    the listener knows which parts are provisional.
     """
     if not isinstance(receipt, dict) or receipt.get("format") != "podcast-script":
         raise AudioDeliveryError("audio delivery requires a podcast-script receipt")
     if receipt.get("status") != "ready":
-        raise AudioDeliveryError("audio delivery requires a ready podcast script")
+        if require_ready or receipt.get("status") != "review":
+            raise AudioDeliveryError("audio delivery requires a ready podcast script")
     if receipt.get("sections"):
         return render_audio_segments(workspace, provider, receipt, output, progress)
     script = _text(receipt.get("markdown"), "podcast script", 500000)
@@ -359,10 +367,16 @@ def render_audio_segments(workspace, provider, receipt, output, progress=None):
         else 1
     )
     outcomes = bounded_collect(segment, rows, workers)
+    # Sections that still carry review findings are rendered with the rest and
+    # named here, so a listener knows which parts may change after revision.
+    remaining = receipt.get("findings") or {}
+    provisional = sorted(remaining) if isinstance(remaining, dict) else []
     manifest = {
         "revision": "lamina-segmented-audio-1",
         "stage": STAGE,
         "title": receipt["title"],
+        "script_status": receipt.get("status", "ready"),
+        "provisional_sections": provisional,
         "segments": [r.value for r in outcomes if r.ok],
         "failed_sections": [rows[r.index]["id"] for r in outcomes if not r.ok],
         "verification": "PCM structure and order checked. Listening quality, pronunciation, transitions and transcript fidelity were not checked.",

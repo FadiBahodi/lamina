@@ -9,6 +9,7 @@ Start with [Production](production.md) to make a guide, podcast script or practi
 | Design the work for a particular output | [Workflow design](workflow-design.md) |
 | Understand ownership, shared context and dependencies | [Design](design.md) |
 | Follow execution, caching and recovery in the code | [Architecture](architecture.md) |
+| See where latency, barriers and whole-run failures come from, with the inequalities | [Flow geometry](flow-geometry.md) |
 | Define a custom graph of jobs | [Methods](methods.md) |
 | Check model quality at different workloads | [Quality evaluation](quality-evaluation.md) |
 | Inspect live model runs and execution measurements | [Model evaluation](live-model-evaluation.md), [Benchmarks](benchmarks.md) |

@@ -12,9 +12,9 @@
   fetch(new URL("assets/workflow-setups.json", document.baseURI))
     .then(response => { if (!response.ok) throw Error("Project setups unavailable"); return response.json(); })
     .then(setups => {
-      const list = el("div", undefined, "procedure-choices");
+      const list = el("div", undefined, "setup-choices");
       setups.forEach(setup => {
-        const button = el("button", undefined, "procedure-choice");
+        const button = el("button", undefined, "setup-choice");
         button.type = "button";
         button.append(el("strong", setup.name), el("span", setup.description));
         button.addEventListener("click", () => {

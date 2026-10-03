@@ -1,6 +1,6 @@
 # Reusable methods
 
-A method describes the jobs for a task: what each worker receives, which completed results it needs, and how many jobs can run at once. Independent readers can work together; an editor starts when their results are ready. Repeated inputs reuse cached results. Use [procedures](procedures.md) to configure the structured lesson pipeline.
+A method describes the jobs for a task: what each worker receives, which completed results it needs, and how many jobs can run at once. Independent readers can work together; an editor starts when their results are ready. Repeated inputs reuse cached results. Use a method when a job needs another job's completed result, or when the work does not fit the [production](production.md) routes.
 
 ## Run a method
 
@@ -66,7 +66,7 @@ The first command saves an operator judgment with a local 32-character ID and ti
 
 ## Local browser workbench
 
-Start `lamina app --adapter @models.json` and open **Custom workflow** in the local app. Import a method JSON, edit the task, validate, and run. The graph shows dependencies and selected task fields. Results show returned objects and cache decisions; download the receipt for a copy outside the browser.
+Start `lamina app --adapter @models.json` and open **Projects → Advanced tools** in the local app. Import a method JSON, edit the task, validate, and run. The graph shows dependencies and selected task fields. Results show returned objects and cache decisions; download the receipt for a copy outside the browser.
 
 For a completed run, select a worker and save a note, outcome, and applicability. The browser inserts the observation ID into that worker's method definition for review and a later run. To use the method in another workspace, select observations available there or remove the old IDs.
 
@@ -79,8 +79,25 @@ The browser uses the adapter configured at startup and accepts local, same-origi
 | `GET /api/runs/{id}` | Current status and completed receipt |
 | `POST /api/method-observations` with `{run_id,node_id,note,outcome,applicability}` | Stored observation ID |
 
-The website provides installation instructions and documentation; method runs happen in the local app or CLI. Custom workflow progress lives in browser memory; committed jobs and receipts persist in SQLite. Browser responses and downloads redact failed-node diagnostics; full diagnostics stay local. A reviewer node can return a domain verdict such as `revise` after its runtime call succeeds.
+The website provides installation instructions and documentation; method runs happen in the local app or CLI. Method editor progress lives in browser memory; committed jobs and receipts persist in SQLite. Browser responses and downloads redact failed-node diagnostics; full diagnostics stay local. A reviewer node can return a domain verdict such as `revise` after its runtime call succeeds.
+
+## Designing a method
+
+The runtime executes JSON jobs; the method supplies the editorial and delivery decisions. A recurring failure in the [earlier systems](system-origins.md) was a polished artifact with an important answer missing while its citations and page counts looked correct. A useful method makes these decisions explicit:
+
+1. **Source roles.** Declare teaching material, style examples, conflicting references and held-out questions before ingestion, including how to handle unreadable tables, images, scans and attachments. The same prior exam question can guide form in one project and stay held out in another.
+2. **Objects to preserve.** Inventory the answers, conditions, quantities, visual dependencies, conflicts and retrieval demands the task needs, and keep source wording beside the model's interpretation so an editor can find a lost qualifier.
+3. **Editorial choices.** Record inclusion, deferral, exclusion and uncertainty with reasons an editor can revisit. Keep search relevance separate from priority, and suggested gaps separate from attributed source facts.
+4. **Output form.** Lists, contrasts, changed-case decisions, annotated images, calculations and audio have different requirements. Audio also needs pacing, pronunciation, script-to-file checks and playback review.
+5. **Dependencies and resources.** Read independent regions in parallel, add a bridge review where related material crosses partitions, and give a shared route its evidence before writing starts. Model review, human review, media generation and delivery each have their own dependencies and lanes.
+6. **Context budget.** Send each worker its source passage, useful neighbors and shared planning material. Record request bytes and tokens, the largest request, repeated context and excluded material. Compact records need source pointers so reviewers can reopen passages.
+7. **Actionable findings.** A finding names the affected assertion, answer, grouping, figure, prompt or delivered file and its version. A wording fix can stay local; a missing central concept can require a new plan.
+8. **Recovery and delivery.** Jobs need durable status, retry limits, idempotent publication and stale-owner protection. A delivery record includes destination, artifact hash, timestamp, access check and failed checks; generation, upload, device access and learner use are distinct events.
+9. **Versioned changes.** A method revision needs an observation, a proposed change, a new version and cache identity, a comparison on held-out tasks and an acceptance decision. Keep the old version and its counterexamples.
+10. **Visible gaps.** Source and coverage views identify accepted regions, their output locations, deferred work, pending review and finished files, with a denominator and exclusions for every coverage figure.
+
+The runtime covers graph validation, dependency results, lanes, caching and recovery for these designs. Source policy, domain checks and delivery acceptance belong in the nodes the author writes. [Benchmarks](benchmarks.md#method-runtime-fixture) runs a fixture that exercises cached and executed nodes, dependency context and a selected observation.
 
 ## Limits
 
-The generic runtime checks object shape, scheduling, and cache identity. `expected_shape` guides the adapter but does not enforce its reply structure. It does not verify citations, completeness, correctness, teaching quality, or usefulness. An observation records a person's judgment, without verifying the claimed digest or outcome.
+The generic runtime checks object shape, scheduling, and cache identity. `expected_shape` guides the adapter but does not enforce its reply structure. It does not verify citations, completeness, correctness, teaching quality, or usefulness. An observation records a person's judgment, without verifying the claimed digest or outcome. Selected observations enter a node's context through an operator decision; they trigger no autonomous revision or learning. Several of the design requirements above are goals for method authors, and high-stakes content needs qualified domain review beyond a model verdict.

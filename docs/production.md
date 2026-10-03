@@ -20,7 +20,25 @@ A provider profile separates the endpoint's hard request capacity from the amoun
 
 Planned mode checks the policies for planning, writing and review before it starts paid reading. Automatic mode reports missing setup if choosing a route would require it to combine unprofiled work. A single assigned source structure can run without a workload profile only when the request includes no other source units, form examples or retained observations. A declared limit makes the resource decision visible; it says nothing about the quality the model will produce at that limit. See [Adapters](adapters.md) for configuration.
 
-Python entry points are `plan_production(workspace, provider, brief, source_ids, options=None)`, `run_production(workspace, provider, plan, options=None)` and `build_production`, which combines both. A brief is text or `{goal, audience?, constraints?}`. Selected sources must have the teaching role.
+Python entry points are `plan_production(workspace, provider, brief, source_ids, options=None)`, `run_production(workspace, provider, plan, options=None)` and `build_production`, which combines both. A brief is text or `{goal, audience?, constraints?}`. Selected sources must have the teaching role. Ingest the files first with `lamina ingest ./sources --workspace .lamina`, then, from a clone with `models.json` configured as described in the [adapter guide](adapters.md):
+
+```python
+from pathlib import Path
+from lamina.store import Workspace
+from lamina.providers import configured_provider
+from lamina.production import plan_production, run_production
+from lamina.production_export import export_production
+
+workspace = Workspace(Path(".lamina"))
+source_ids = [s["id"] for s in workspace.sources() if s["role"] == "teaching"]
+with configured_provider(Path("models.json")) as provider:
+    plan = plan_production(workspace, provider, "An answered reference guide", source_ids,
+                           options={"format": "guide"})
+    receipt = run_production(workspace, provider, plan)
+export_production(receipt, plan, Path("output/my-project"))
+```
+
+The CLI equivalent is `lamina produce --workspace .lamina --adapter @models.json --brief "..."`, and `lamina app` runs the same engine from the local Projects interface.
 
 ## Sweep: straight to cards
 
@@ -34,7 +52,7 @@ Exports add `cards.tsv` (prompt, answer, tags; Anki-importable) and `cards.json`
 
 ## Read and organize the sources
 
-The planned route begins with complete source structures such as a Markdown block, PDF page or PowerPoint slide group. Without a reading workload profile, each call owns one of those structures. A configured profile can put several structures from the same source in one call while respecting both the workload and request limits. Slide text, tables and speaker notes stay together. The plan stores each unit once and refers to it by ID. See [Parsing](parsing.md) for the retained structures.
+The planned route begins with complete source structures such as a Markdown block, PDF page or PowerPoint slide group. Without a reading workload profile, a call owns up to eight contiguous units from one heading section of one source, a single PDF page, or one slide group; the request budget can split such a group further. A configured profile can put several structures from the same source in one call while respecting both the workload and request limits. Slide text, tables and speaker notes stay together. The plan stores each unit once and refers to it by ID. See [Parsing](parsing.md) for the retained structures.
 
 A natural structure can still be dense, poorly parsed or difficult for the selected model. If one structure exceeds the configured limit, it needs explicit decomposition or a different policy. A valid JSON response proves that the response follows the data contract; it does not prove that the model understood the page.
 
@@ -85,7 +103,7 @@ Writers place compact source markers after supported statements. Lamina resolves
 
 Worker settings accept 1 through 128. Byte limits accept 4096 through 2000000. Provider context and output limits, along with per-stage workload policies, belong in the [adapter profile](adapters.md). The other numeric defaults bound resource use and should be evaluated against the actual workload.
 
-Legacy `core_words` and `halo_units` remain available for comparisons with older workflows. There is no default word target. A fixed halo requires an explicit `core_words` value and supports zero through eight neighboring units. By default, the reader asks for missing context when it needs it.
+`core_words` and `halo_units` remain available for comparisons with older reading policies. There is no default word target. A whole-unit halo requires an explicit `core_words` value and supports zero through eight neighboring units. By default, readers receive the six-span boundary halo and request further context when they need it.
 
 A complete `source_policy` map can mark sources `authority`, `supplement`, `historical` or `form_exemplar`; the default is authority. Form exemplars supply bounded structural samples and cannot support factual citations. `observation_ids` selects up to 20 retained observations in `method_family` (default `document-production`). The model interprets these supplied policies and observations.
 
@@ -128,7 +146,9 @@ When extraction returns invalid rows, a correction request identifies those rows
 
 Invalid material remains visible as unresolved work, and only a fully validated result enters the successful cache. Independent jobs can finish and retain their results after a sibling fails. A restart reuses completed requests. Renewable leases and owner fencing prevent an expired worker from writing over its replacement.
 
-Receipts record request sizes, attempts, failures, cache hits, elapsed times and reported token usage. `provider_request_bytes` counts actual provider attempts, including failed attempts; missing usage remains unknown. Coverage reports distinguish source material considered, reader citations, assignment and output citations. These counts cannot detect every silently omitted fact. The [quality evaluation protocol](quality-evaluation.md) tests fragile facts across workload sizes and follows them into the finished output. Semantic recall and live model performance require those separate measurements.
+Receipts record request sizes, attempts, failures, cache hits, elapsed times and reported token usage. `provider_request_bytes` counts actual provider attempts, including failed attempts; missing usage remains unknown. Coverage reports distinguish source material considered, reader citations, assignment and output citations. These counts cannot detect every silently omitted fact. [Calibration](calibration.md) tests fragile facts across workload sizes and follows them into the finished output. Semantic recall and live model performance require those separate measurements.
+
+A plan retains the selected source revisions, reading batches, extracted ideas, grouping records, section ownership, declared context, omissions and the capacity decision. The receipt retains completed sections, citations, claim links, review findings, unperformed checks, request measurements, attempts, reported usage and cache outcomes. These records can show that a source unit reached a reader, that an extracted idea cited an exact span, that a planner assigned it once and that an output claim links to an original passage. They cannot show that extraction found every relevant fact, that the passage supports the interpretation or that the finished artifact is useful.
 
 ## Export documents, assessments and podcast scripts
 
@@ -136,12 +156,12 @@ Assessments export separate candidate and examiner files. A blind solver receive
 
 A podcast script is planned in episodes. The outline numbers every section with an `episode` and a `target_words` budget sized from `episode_minutes` (150 spoken words per minute); sections of one episode are consecutive in listening order, and a subdivided section's children inherit its episode and share its words. Writers are told their episode and word target. The receipt carries `episodes`, the export writes `episode-NN.md` and `.html` per episode, and audio delivery assembles `episode-NN.wav` per episode beside the full `narration.wav`. An outline that does not number sections produces one episode unless a count was requested.
 
-A podcast script uses a separate speech adapter. When the adapter is given to `run_production` (the CLI and the local app do this), each section is synthesized on a speech lane the moment it leaves review, bounded by the adapter's declared `audio_concurrency`, as the same cached segment delivery later assembles; speech overlaps writing instead of following it, and the receipt's `speech_prefetch` metric lists the sections rendered that way. Delivery assembles matching PCM formats in order on disk. Only affected segments rerender after revision. Receipts without section objects retain whole-script compatibility. Individual adapter responses retain the 20 MB limit; the assembled WAV does not travel as base64 and may be larger. A failed segment leaves successful segment files and cache results available for recovery. By default (`--audio-when any`) a script still in `review` renders too; the audio manifest names the sections with remaining findings as `provisional_sections` and the receipt stays in `review`. `--audio-when ready` withholds audio until every check passes. Someone still needs to listen for pronunciation, pacing, fidelity and educational quality.
+A podcast script uses a separate speech adapter. When the adapter is given to `run_production` (the CLI and the local app do this), each section is synthesized on a speech lane the moment it leaves review, bounded by the adapter's declared `audio_concurrency`, as the same cached segment delivery later assembles; speech overlaps writing instead of following it, and the receipt's `speech_prefetch` metric lists the sections rendered that way. Delivery assembles matching PCM formats in order on disk; incompatible formats fail visibly. Only affected segments rerender after revision. Receipts without section objects retain whole-script compatibility. Individual adapter responses retain the 20 MB limit; the assembled WAV does not travel as base64 and may be larger. A failed segment leaves successful segment files and cache results available for recovery. By default (`--audio-when any`) a script still in `review` renders too; the audio manifest names the sections with remaining findings as `provisional_sections` and the receipt stays in `review`. `--audio-when ready` withholds audio until every check passes. Someone still needs to listen for pronunciation, pacing, fidelity and educational quality.
 
-`export_production(receipt, plan, output_path)` writes Markdown, HTML, a JSON receipt, the plan and an optional PDF. Plans and receipts contain source text and can include assessment keys. `ready` means that the enabled checks completed. The plan and receipt also record `semantic_recall: "unmeasured"`, and plan validation protects that declaration from silent removal. Evaluate factual accuracy and delivery quality on the exported artifact.
+`export_production(receipt, plan, output_path)` writes Markdown, HTML, a JSON receipt, the plan and an optional PDF. To inspect these outputs without a model, `lamina demo --output DIR` runs the production engine's deterministic fixture (two short original notes, a scripted adapter, no credentials) and exports `index.html`, `document.md`, `plan.json` and `report.json` into `DIR`. Plans and receipts contain source text and can include assessment keys. `ready` means that the enabled checks completed. The plan and receipt also record `semantic_recall: "unmeasured"`, and plan validation protects that declaration from silent removal. Evaluate factual accuracy and delivery quality on the exported artifact.
 
-The local app runs one project at a time and allows parallel calls inside that project. It polls compact `/api/progress/{id}` records, obtains up to ten bounded previews from `/api/section-updates/{id}/{cursor}`, fetches the full result from `/api/runs/{id}` and stores plans separately from receipts. Previews remain provisional until all enabled project checks finish. Assessment previews contain candidate text only. The raw-file upload route accepts up to 256 MiB per file and writes bounded chunks to temporary disk; the older JSON upload route retains its original limits. An interrupted project can resume from cached work. Keep the app on loopback because project identifiers do not provide authentication.
+The local app runs one project at a time and allows parallel calls inside that project. It polls compact `/api/progress/{id}` records, obtains up to ten bounded previews from `/api/section-updates/{id}/{cursor}`, fetches the full result from `/api/runs/{id}` and stores plans separately from receipts. Previews remain provisional until all enabled project checks finish. Assessment previews contain candidate text only, with no examiner prose, source quotations or diagnostic titles. The browser sends each selected file to `POST /api/source-upload` as an `application/octet-stream` body with a required Content-Length, a safe basename in `X-Lamina-Filename` and an optional `X-Lamina-Role` (`teaching` by default). Each upload can contain up to 256 MiB; the server writes at most 1 MiB at a time to a temporary file before parsing and accepts no client filesystem paths. Files import individually, so an earlier successful upload stays available if a later file fails. Upload capacity says nothing about parsing throughput. An interrupted project can resume from cached work. Keep the app on loopback because project identifiers do not provide authentication.
 
 Writer source references use compact markers such as `[s3]` and `[s3-s5]`. Escape a literal marker with a Markdown backslash (`\[s3]`) when discussing that notation. Evidence records store a source unit and its quotation; identical repeated quotations within one unit share the same quote locator.
 
-See [evidence and execution changes](evidence-execution.md) for the grouping, comparison, cache, measurement and delivery contracts.
+See [architecture](architecture.md) for the reading, grouping, comparison, cache and recovery mechanisms behind these options.

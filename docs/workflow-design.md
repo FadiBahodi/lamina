@@ -12,11 +12,11 @@ Import preserves the structures the parser can identify:
 - PowerPoint slide text, tables, shapes and speaker notes, with material from one slide kept together;
 - PDF pages as text units, with an explicit warning that extraction does not interpret figures or guarantee reading order.
 
-Without a reading workload policy, each call owns one parser structure. A configured policy can allow several structures from the same source in one call, within the measured request and workload limits. Lists, tables and slide groups stay intact. An oversized structure needs explicit decomposition or a larger allowance.
+Without a reading workload policy, a call owns up to eight contiguous units from one heading section, a single PDF page or one slide group. A configured policy can allow several structures from the same source in one call, within the measured request and workload limits. Lists, tables and slide groups stay intact. An oversized structure needs explicit decomposition or a larger allowance.
 
 Each reader also receives a small boundary halo by default: up to six sentence spans from the preceding unit and six from the following unit, reduced when needed to fit the request. If those spans leave a dependency unresolved, the reader can request more context and give a reason. The first request completes the partial neighboring unit; another request steps farther in that direction. These passages remain context, with separate source ownership.
 
-This policy handles local boundaries. A generic rule qualified many pages later, two equivalent questions in different files, or a callback to an earlier lesson needs a later planning or reconciliation decision. Optional evidence comparison can request a bounded search of the permitted original source units when extracted ideas leave a question unresolved. It can reopen a unit no reader represented, but its lexical search can still miss relevant material.
+This policy handles local boundaries. A generic rule qualified many pages later, two equivalent questions in different files, or a callback to an earlier episode needs a later planning or reconciliation decision. Optional evidence comparison can request a bounded search of the permitted original source units when extracted ideas leave a question unresolved. It can reopen a unit no reader represented, but its lexical search can still miss relevant material.
 
 ## Build a reference around the reader's question
 
@@ -29,13 +29,13 @@ Historical reference builds used several valid objects:
 | Broad differential atlas | Source-derived list | Preserved variants close to their source; related fragments occupied many separate drills. |
 | Reconciled question atlas | Question with a complete answer group | Family editors decided which prompts were equivalent and which conditions justified a variant. |
 | Presentation book | Presenting problem with discriminating findings | A diagnosis could recur under several presentations because each comparison taught a different decision. |
-| List collection | Self-contained answer list | Procedures, differentials and prompts missing their original case were routed elsewhere or quarantined. |
+| List collection | Self-contained answer list | Procedural sequences, differentials and prompts missing their original case were routed elsewhere or quarantined. |
 
-The broad atlas recorded 1,473 entries across 1,579 pages. A later direct-question atlas recorded 122 owned questions across 270 pages. A separate presentation book contained 205 sheets across 263 pages. These products had different scopes and organizing questions. Their page counts do not establish relative quality or speed, and the saved receipts do not provide a matched cold-build comparison.
+These products had different scopes and organizing questions; [system origins](system-origins.md) records their sizes.
 
-Lamina's planned guide path reads source structures into source-backed ideas. When retrieval targets are enabled, models group equivalent tasks and compatible variants while retaining answer items and their supporting passages. If the planning request is too large, Lamina builds a provisional hierarchy of groups, designs an outline from the reduced cards, and then reassigns every original idea against that outline. Transport groups never become final source owners. Writers receive their assigned answer groups, original evidence, declared cross-section context and a local outline containing their neighbors' titles and purposes.
+Lamina's planned guide path reads source structures into source-backed ideas. When retrieval targets are enabled, models group equivalent tasks and compatible variants while retaining answer items and their supporting passages. If the planning request is too large, a grouping tree forms a provisional hierarchy of groups as reads complete, a model designs an outline from the reduced cards, and every original idea is then reassigned against that outline. Transport groups never become final source owners. Writers receive their assigned answer groups, original evidence, declared cross-section context and a local outline containing their neighbors' titles and purposes.
 
-This path does not reproduce every historical reference mechanism. It starts from model-extracted ideas rather than an independently audited inventory of all original question objects. It has no built-in router for sending procedures, treatments and context-dependent prompts to separate products, and PDF export has no atlas-scale bookmark, widget, link and page-inspection acceptance pass. Use a custom method when the work requires family-by-family reconciliation or an explicit routing and quarantine stage.
+This path does not reproduce every historical reference mechanism. It starts from model-extracted ideas rather than an independently audited inventory of all original question objects. It has no built-in router for sending procedural sequences, treatments and context-dependent prompts to separate products, and PDF export has no atlas-scale bookmark, widget, link and page-inspection acceptance pass. Use a custom method when the work requires family-by-family reconciliation or an explicit routing and quarantine stage.
 
 Review a complete answer group, including its conditions, exceptions and meaningful variants. Two lists can share most of their words while applying to different situations. Exact source membership makes the decision inspectable; it does not make the merge semantically correct.
 
@@ -65,6 +65,14 @@ The historical written-case factory used one setter to own the case opening, rev
 Lamina's current assessment path plans source-backed sections and writes candidate and examiner material separately. Each blind solve receives the current candidate section and only the earlier candidate sections declared as required context. A separate judge receives that answer, the marking text and cited source passages. These calls can run concurrently because the engine constructs a separate information-limited request for each section. Use a stateless adapter or isolated provider sessions when the blind boundary matters.
 
 The current path does not install one setter over a whole staged case, repair named questions from blind-solve findings, or repeat the solve-and-judge loop after that repair. Findings remain in examiner and operator records. A live oral encounter also needs requestable findings, examiner-controlled release, reassessment after candidate actions, exhibits, private scoring and participant access. Those require a stateful application.
+
+### Proposed case graph and publication check
+
+A staged oral case needs state that the production engine does not hold. One design represents the case as a graph `G = (V, E)`. A node `v ∈ V` is a named patient state. An edge `e = (v, a, g, Δtₚ, v′) ∈ E` holds an examiner-asserted action `a`, a guard `g`, a simulated patient-time advance `Δtₚ` and a successor `v′`. Each edge carries candidate-safe releases, private interpretation, a next prompt, rubric IDs and source support. Oral time `tₒ` and patient time `tₚ` stay separate.
+
+The examiner decides whether an utterance merits action `a`. Code selects the authored transition and computes the candidate's view `O(v, R, candidate)` from state `v` and the released set `R`; it does not infer treatment quality or biological response from free text. A run log replays decisions, releases, withdrawals, marks and both clocks. Static path tests look for contradictory branches and leaks, and two-person runs test plausibility and pacing.
+
+Publication review would bind the exact case bytes, source-unit and media manifests, reviewer, rubric, verdict and open issues, so a changed branch, answer, source or image makes the pass stale. Lamina's caching and production review do not implement this independent exact-hash gate. Calling the same adapter again is not an independent expert review.
 
 ## Keep the product-specific work visible
 
@@ -98,56 +106,12 @@ When a handoff loses a condition that changes the answer, revisit the original s
 
 Changing a declared dependency result changes its consumers' cache identities. Choosing or revising the workflow remains the method author's responsibility. Preserve the goal, source scope, relevant user preferences and reason for the division of work alongside the result. Selected observations can inform later runs; Lamina does not automatically choose a better method from them.
 
-For source exposure, a useful diagnostic is:
+[Flow geometry](flow-geometry.md#context-amplification) defines context amplification, the input tokens sent across requests divided by the distinct accepted source tokens. Record it beside source extraction results, the largest request and output quality. A lower ratio may remove context a reader needed; a higher one may spend time and money without improving the result. Capacity establishes what fits; an evaluated workload policy establishes how much work a stage has shown it can handle.
 
-```math
-A = \frac{\sum_j \text{source tokens sent in request }j}{\text{distinct accepted source tokens}}
-```
-
-Record source extraction results, the largest request, repeated context and output quality beside this ratio. A lower ratio may remove context a reader needed. A higher ratio may spend time and money without improving the result. Capacity establishes what fits; an evaluated workload policy establishes how much work a stage has shown it can handle.
-
-## Keep historical and current timing evidence separate
-
-The following observations come from saved records in the earlier audio system's 4 September 2026 infrastructure review. They do not measure current Lamina performance.
-
-| Historical audio observation | Sample and clock |
-| --- | --- |
-| 109.06 seconds to saved script, median | 82 rendered audio parts; measured from engine start and excluding queue wait. |
-| 336.65 seconds to ready part, median | The same 82 parts; parts shared setup and contended for local media capacity. |
-| 575.54 seconds job service, median | 19 completed course jobs; one job could produce several parts. |
-| 5,042.11 seconds queue wait, median | The same 19 jobs in that saved batch. |
-| 73.754 seconds planning; 4.122 seconds for the slowest of eight writers | One recorded part; call timers included provider-gate waiting. |
-
-The 82-part sample included four recorded model-cache hits and had a median delivered duration of 18.47 minutes. Subtracting the median script and ready times does not recover one stage duration because jobs and parts shared setup and waited on different resources. The private source text and production logs are outside this repository.
-
-Current measurements are recorded separately in [live model results](live-model-evaluation.md). Compare time and cost to an accepted result under the same source scope and quality criteria. [Latency and resource limits](flow-geometry.md) explains the scheduling model; the [measurement protocol](measurement.md) describes evaluation.
+Compare time and cost against an accepted result under the same source scope and quality criteria. [Live model results](live-model-evaluation.md) record current measurements, [system origins](system-origins.md) keeps the historical timings separate, and the [measurement protocol](measurement.md) describes evaluation.
 
 ## Run and retain a workflow
 
-Ingest the source files and assign their roles before production:
+[Production](production.md) gives the CLI and Python calls. All selected factual sources default to authority. Use `source_policy` when some sources are supplements, historical accounts or form examples. Use task-specific reading when the brief should guide source selection; choose reusable reading only when you need a source inventory that can support later briefs. The inventory remains a model interpretation and does not prove complete semantic capture.
 
-```sh
-lamina ingest ./sources --workspace .lamina
-```
-
-From a clone with `models.json` configured as described in the [adapter guide](adapters.md):
-
-```python
-from pathlib import Path
-from lamina.store import Workspace
-from lamina.providers import configured_provider
-from lamina.production import plan_production, run_production
-from lamina.production_export import export_production
-
-workspace = Workspace(Path(".lamina"))
-source_ids = [s["id"] for s in workspace.sources() if s["role"] == "teaching"]
-with configured_provider(Path("models.json")) as provider:
-    plan = plan_production(workspace, provider, "An answered reference guide", source_ids,
-                           options={"format": "guide"})
-    receipt = run_production(workspace, provider, plan)
-export_production(receipt, plan, Path("output/my-project"))
-```
-
-All selected factual sources default to authority. Use `source_policy` when some sources are supplements, historical accounts or form examples. Use task-specific reading when the brief should guide source selection; choose reusable reading only when you need a source inventory that can support later briefs. The inventory remains a model interpretation and does not prove complete semantic capture.
-
-Production options select the route and output. A custom method specifies the graph itself. After a run, retain a useful observation about applicability, representation or review only when it can guide a later decision. Selecting that observation for a later run makes its effect inspectable. Storage alone does not show that Lamina learned a better method.
+Production options select the route and output. A custom method specifies the graph itself. After a run, retain an observation about applicability, representation or review when it can guide a later decision. Selecting that observation for a later run makes its effect inspectable. Storage alone does not show that Lamina learned a better method.

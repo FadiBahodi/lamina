@@ -1,4 +1,4 @@
-name: Publish Lamina Studio
+name: Publish website
 on:
   push:
     branches: [main]
@@ -21,12 +21,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install '.[pdf]'
-      - run: python -m lamina.studio_site demo --pdf
+      - run: python -m pip install .
+      - run: python -m lamina.studio_site site-output
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: demo
+          path: site-output
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

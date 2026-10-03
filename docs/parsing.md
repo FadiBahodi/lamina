@@ -24,17 +24,15 @@ A page or slide with no extractable text stops the import with its location. All
 
 A Markdown table remains one table even when it is long. A paragraph remains complete even when its language uses no spaces. PowerPoint text and speaker notes remain separately citable units, but the reader receives their whole slide group. PDF pages remain complete units because this parser exposes page boundaries without claiming a reconstructed document layout.
 
-There is no character-count slicing rule. Without a reader workload profile, each call owns one complete parser structure or slide group. With a profile, packing may combine structures across headings within one source while respecting its workload limits and the complete-request capacity limits. These boundaries are a starting policy, not a guarantee of faithful extraction. A structure that cannot fit is reported with its locator. Adjust the relevant allowance using evaluation evidence or explicitly decompose the structure while retaining its relationships.
+There is no character-count slicing rule. Without a reader workload profile, a call owns up to eight contiguous units from one heading section of one source, a single PDF page, or one slide group; the complete request budget can split such a group further. With a profile, packing may combine structures across headings within one source while respecting its workload limits and the complete-request capacity limits. These boundaries are a starting policy and do not guarantee faithful extraction. A structure that cannot fit is reported with its locator. Adjust the relevant allowance using evaluation evidence or explicitly decompose the structure while retaining its relationships.
 
-Heading ancestry and reference links retain known relationships. A page or slide boundary does not establish semantic independence. Readers can request adjacent source context when a dependency is missing; requested additions must also fit. Parsing does not infer the meaning of diagrams or establish which slides form one argument.
+Heading ancestry and reference links retain known relationships. A page or slide boundary does not establish semantic independence. Every reader therefore also sees a boundary halo by default: the last six sentence spans of the preceding unit and the first six of the following unit (`reader_context_spans`, 0–64), reduced to fit the reader's request budget. When a dependency is still missing, a reader can request adjacent source context with a reason, up to two extensions; requested additions must also fit. Halo and requested context remain unowned. Parsing does not infer the meaning of diagrams or establish which slides form one argument.
 
 ## Source references
 
-Each reader input contains the unchanged source text once and an ordered `spans` index. Every index entry has an `id`, `start` and `end`; offsets count Unicode characters in that unit's text. Blank-line paragraph boundaries define spans, while parser-identified tables, lists and code blocks stay whole. Abbreviations, decimal points and punctuation do not create boundaries. Separating whitespace belongs to the preceding span, so contiguous ranges reproduce the source exactly.
+Reading addresses source text by spans. Inside each paragraph, a prose span ends after `.`, `!` or `?` (and any closing quotation mark or bracket) when whitespace follows and the next text does not begin with a lowercase letter. A period stays inside the span after a listed abbreviation such as "e.g.", "Dr." or "approx.", after a single letter, or between two digits. A blank line also ends a span. Tables, lists, code blocks and HTML blocks identified by the parser are single spans. Separating whitespace belongs to the preceding span, so contiguous spans reproduce the source exactly. A missed boundary produces a broader address and leaves offsets and quotations unchanged.
 
-Readers return `evidence_refs` containing `span_id` and optionally `end_span_id` for a contiguous range within the same owned unit. An optional `phrase` narrows the evidence to an exact substring that occurs once within that range. Code resolves the references into the existing source unit and exact quotation records; legacy quotation replies remain accepted. Unknown IDs, reversed ranges and ranges crossing unit boundaries fail validation.
-
-These addresses establish where cited text occurs. They do not identify semantic facts, prove support for an interpretation or measure extraction recall. Neighboring context has its own addresses and cannot originate an owned idea. Reader workload `max_items` counts owned spans; the token allowance includes all rendered context and instructions.
+Readers cite one span or a contiguous range within one unit; code resolves it to the exact quotation. Neighboring context has its own addresses and cannot originate an owned idea. [Adapters](adapters.md#source-spans-and-citations) specifies the reply format.
 
 ## OCR choice and limits
 
@@ -51,16 +49,3 @@ The OCR integration test reads an original synthetic scanned sentence and checks
 - [PowerPoint notes](https://python-pptx.readthedocs.io/en/latest/user/notes.html) and [tables](https://python-pptx.readthedocs.io/en/latest/user/table.html)
 - [OCRmyPDF cookbook](https://ocrmypdf.readthedocs.io/en/latest/cookbook.html)
 - [Docling technical report](https://arxiv.org/abs/2408.09869)
-
-
-## Large local-app uploads
-
-The browser sends each selected file to `POST /api/source-upload` as an
-`application/octet-stream` body, with `X-Lamina-Filename` containing a safe
-basename and optional `X-Lamina-Role` (`teaching` by default). Content-Length is
-required; each upload can contain up to 256 MiB. The server writes at most 1 MiB
-at a time to a temporary file before parsing. It accepts no client filesystem
-paths. Files are imported individually, so an earlier successful upload remains
-available if a later file fails. The original JSON/base64 endpoint is retained.
-Binary source hashing streams from disk. Native PDF parsing, optional OCR and
-layout limitations are unchanged; upload capacity is not parsing throughput.

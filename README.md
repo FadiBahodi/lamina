@@ -69,7 +69,7 @@ lamina produce --workspace .lamina --adapter @models.json \
 
 Use `--format cards` for an Anki-importable deck, `podcast-script` for episodes, or `assessment` for separate candidate and examiner material. Audio also requires a [speech adapter](docs/adapters.md#speech-resources). Document exports include Markdown, HTML and optional PDF, alongside the plan and receipt. See [Production](docs/production.md) for source selection, options, revisions and Python usage.
 
-Without a model, `lamina demo --output demo` builds a deterministic guide from bundled fixtures so you can see the outputs and receipt. Model runs use the installed app or CLI; selected source text goes to the configured model service.
+Without a model, `lamina demo --output demo` runs the production engine on two bundled notes with a scripted adapter and writes the guide, plan and receipt to `demo/`, so you can see the output shape before connecting anything. Model runs use the installed app or CLI; selected source text goes to the configured model service.
 
 ## How a run works
 

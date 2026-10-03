@@ -187,69 +187,84 @@ class FixtureAdapter:
         raise ValueError("Unexpected fixture stage")
 
 
-def production_demo() -> dict:
-    """Run the real engine twice: original build, then one section note revision."""
-    with tempfile.TemporaryDirectory(prefix="lamina-production-example-") as tmp:
-        workspace = Workspace(Path(tmp))
-        for i, row in enumerate(SOURCES, 1):
-            sid = f"fixture_source_{i}"
-            workspace.put_source(
-                {
-                    "id": sid,
-                    "title": row["name"].removesuffix(".md"),
-                    "filename": row["name"],
-                    "sha256": f"fixture-{i}",
-                    "role": "teaching",
-                }
-            )
-            for j, paragraph in enumerate(row["text"].split("\n\n")):
-                if paragraph.startswith("#") or not paragraph.strip():
-                    continue
-                workspace.put_units(
-                    [
-                        {
-                            "id": f"fixture_unit_{i}_{j}",
-                            "source_id": sid,
-                            "heading": row["name"],
-                            "text": paragraph,
-                            "locator": f"paragraph {j}",
-                            "ordinal": j,
-                            "role": "teaching",
-                        }
-                    ]
-                )
-        provider = FixtureAdapter()
-        events: list[dict] = []
-        plan = plan_production(
-            workspace,
-            provider,
-            BRIEF,
-            ["fixture_source_1", "fixture_source_2"],
-            {"workflow": "planned", **(OPTIONS)},
-            events.append,
-        )
-        first = run_production(workspace, provider, plan, progress=events.append)
-        revised = run_production(
-            workspace,
-            provider,
-            plan,
+def fixture_workspace(root: Path) -> Workspace:
+    """Store the two fixture notes in ``root`` as teaching sources with paragraph units."""
+    workspace = Workspace(Path(root))
+    for i, row in enumerate(SOURCES, 1):
+        sid = f"fixture_source_{i}"
+        workspace.put_source(
             {
-                "section_notes": {
-                    "section_3": "Add the incident ticket ID beside each rejected write."
-                }
-            },
-            progress=events.append,
+                "id": sid,
+                "title": row["name"].removesuffix(".md"),
+                "filename": row["name"],
+                "sha256": f"fixture-{i}",
+                "role": "teaching",
+            }
         )
-        return {
-            "label": "Deterministic fixture exercising the actual production engine; no generative quality claim.",
-            "brief": BRIEF,
-            "options": OPTIONS,
-            "sources": SOURCES,
-            "plan": plan,
-            "runs": [
-                {"title": "Initial build", "receipt": first},
-                {"title": "Targeted section revision", "receipt": revised},
-            ],
-            "events": events,
-            "provider_calls": provider.calls,
-        }
+        for j, paragraph in enumerate(row["text"].split("\n\n")):
+            if paragraph.startswith("#") or not paragraph.strip():
+                continue
+            workspace.put_units(
+                [
+                    {
+                        "id": f"fixture_unit_{i}_{j}",
+                        "source_id": sid,
+                        "heading": row["name"],
+                        "text": paragraph,
+                        "locator": f"paragraph {j}",
+                        "ordinal": j,
+                        "role": "teaching",
+                    }
+                ]
+            )
+    return workspace
+
+
+def production_demo(root: Path | None = None) -> dict:
+    """Run the real engine twice: original build, then one section note revision.
+
+    With ``root`` the workspace persists there (so ``lamina search`` can query the
+    fixture sources afterwards); otherwise a temporary directory is used.
+    """
+    if root is not None:
+        return _production_demo(fixture_workspace(root))
+    with tempfile.TemporaryDirectory(prefix="lamina-production-example-") as tmp:
+        return _production_demo(fixture_workspace(Path(tmp)))
+
+
+def _production_demo(workspace: Workspace) -> dict:
+    provider = FixtureAdapter()
+    events: list[dict] = []
+    plan = plan_production(
+        workspace,
+        provider,
+        BRIEF,
+        ["fixture_source_1", "fixture_source_2"],
+        {"workflow": "planned", **(OPTIONS)},
+        events.append,
+    )
+    first = run_production(workspace, provider, plan, progress=events.append)
+    revised = run_production(
+        workspace,
+        provider,
+        plan,
+        {
+            "section_notes": {
+                "section_3": "Add the incident ticket ID beside each rejected write."
+            }
+        },
+        progress=events.append,
+    )
+    return {
+        "label": "Deterministic fixture exercising the actual production engine; no generative quality claim.",
+        "brief": BRIEF,
+        "options": OPTIONS,
+        "sources": SOURCES,
+        "plan": plan,
+        "runs": [
+            {"title": "Initial build", "receipt": first},
+            {"title": "Targeted section revision", "receipt": revised},
+        ],
+        "events": events,
+        "provider_calls": provider.calls,
+    }

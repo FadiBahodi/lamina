@@ -1,4 +1,4 @@
-"""Loopback-only Studio API and static output host.
+"""Loopback-only local app API and static output host.
 
 The adapter is selected at server startup, never by an HTTP request. Uploaded
 text is reference material, not an executable instruction or filesystem path.
@@ -22,15 +22,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from .export import export_bundle
 from .ingest import read_source
 from .method_runtime import record_observation, run_method
 from .methods import validate_method
-from .pipeline import build
-from .procedures import BUILTINS, validate_procedure
 from .providers import CommandProvider
 from .store import Workspace, canonical
-from .validation import validate_bundle
 
 MAX_BODY = 8_000_000
 MAX_FILES = 12
@@ -59,58 +55,6 @@ def make_provider(
     return CommandProvider(command, timeout=timeout, version=version)
 
 
-def run_procedure(
-    workspace: Workspace, provider, procedure: dict, output: Path
-) -> dict:
-    """Generate selected artifacts through the same validated path as the CLI."""
-    selected = validate_procedure(procedure)
-    if provider is None:
-        raise ValueError(
-            "A local adapter must be configured before running a procedure"
-        )
-    bundle = build(workspace, provider, workers=selected["workers"], procedure=selected)
-    validate_bundle(bundle)
-    if "oral-case" in selected["outputs"] and not any(
-        lesson.get("scenario") for lesson in bundle["lessons"]
-    ):
-        raise ValueError("oral-case procedure produced no reviewed scenario")
-    output.mkdir(parents=True, exist_ok=True)
-    (output / "procedure.json").write_text(
-        json.dumps(selected, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    links = {"site": "", "bundle": "bundle.json", "procedure": "procedure.json"}
-    if "study-guide" in selected["outputs"]:
-        from .print_export import export_markdown
-
-        export_markdown(bundle, output / "study-guide.md")
-        bundle["downloads"] = {"markdown": "study-guide.md"}
-        links["study_guide"] = "study-guide.md"
-    export_bundle(bundle, output)
-    if "samp" in selected["outputs"]:
-        from .samp import export_samp, generate_samp
-
-        artifact = generate_samp(bundle, provider, workspace, procedure=selected)
-        export_samp(artifact, output)
-        links["samp"] = "samp.md"
-    if "audio-script" in selected["outputs"]:
-        scripts = [
-            {
-                "lesson_id": lesson["id"],
-                "title": lesson["title"],
-                "script": lesson["audio_script"],
-            }
-            for lesson in bundle["lessons"]
-        ]
-        (output / "audio-script.json").write_text(
-            json.dumps(scripts, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
-        links["audio_script"] = "audio-script.json"
-    # Oral-case practice is already a required, reviewed field in every lesson.
-    if "oral-case" in selected["outputs"]:
-        links["oral_case"] = ""
-    return {"title": bundle["title"], "lessons": len(bundle["lessons"]), "links": links}
-
-
 def validate_method_task(task: object) -> dict:
     """Bound browser-supplied reference data without interpreting it as a path."""
     if (
@@ -131,7 +75,7 @@ def public_method_receipt(receipt: dict) -> dict:
     cleaned = json.loads(json.dumps(receipt, ensure_ascii=False))
     for node in cleaned["nodes"].values():
         if "error" in node:
-            node["error"] = "Node failed; see the local Studio console"
+            node["error"] = "Node failed; see the local app console"
     return cleaned
 
 
@@ -210,56 +154,10 @@ class StudioServer(ThreadingHTTPServer):
             self._job_condition.wait_for(lambda: not self._jobs)
         self._provider_resources.close()
 
-    def start_run(self, procedure: dict) -> dict:
-        if self.provider is None:
-            raise RuntimeError(
-                "No adapter configured. Start Studio with --adapter to generate from your sources."
-            )
-        selected = validate_procedure(procedure)
-        with self.run_lock:
-            if any(
-                run["status"] in {"queued", "running"} for run in self.runs.values()
-            ):
-                raise RuntimeError("A build is already running in this workspace")
-            run_id = uuid.uuid4().hex
-            status = {"id": run_id, "status": "queued", "error": None, "outputs": {}}
-            self.runs[run_id] = status
-
-        def work():
-            with self.run_lock:
-                status["status"] = "running"
-            try:
-                result = run_procedure(
-                    self.workspace, self.provider, selected, self.output_root / run_id
-                )
-                links = {
-                    key: f"/outputs/{run_id}/{value}"
-                    for key, value in result["links"].items()
-                }
-                with self.run_lock:
-                    status.update(
-                        status="ready",
-                        outputs=links,
-                        title=result["title"],
-                        lessons=result["lessons"],
-                    )
-            except Exception as exc:
-                # Exceptions can contain local paths, command arguments, or
-                # adapter stderr. Keep them on the local console, not in JSON.
-                print(f"Lamina run {run_id} failed: {exc}", flush=True)
-                with self.run_lock:
-                    status.update(
-                        status="failed",
-                        error=f"{type(exc).__name__}: build failed; see the local Studio console",
-                    )
-
-        self.start_job(work, f"lamina-run-{run_id[:8]}")
-        return dict(status)
-
     def start_method_run(self, method: dict, task: dict) -> dict:
         if self.provider is None:
             raise RuntimeError(
-                "No adapter configured. Start Studio with --adapter to run a method."
+                "No adapter configured. Start the app with --adapter to run a method."
             )
         selected = validate_method(method)
         selected_task = validate_method_task(task)
@@ -317,14 +215,14 @@ class StudioServer(ThreadingHTTPServer):
                             status="failed",
                             receipt=visible_receipt,
                             outputs={"receipt": f"/outputs/{run_id}/receipt.json"},
-                            error="Method run failed; see the local Studio console",
+                            error="Method run failed; see the local app console",
                         )
             except Exception as exc:
                 print(f"Lamina method run {run_id} failed: {exc}", flush=True)
                 with self.run_lock:
                     status.update(
                         status="failed",
-                        error="Method run failed; see the local Studio console",
+                        error="Method run failed; see the local app console",
                     )
 
         self.start_job(work, f"lamina-method-{run_id[:8]}")
@@ -413,7 +311,7 @@ class StudioHandler(BaseHTTPRequestHandler):
     def _reject_origin(self) -> bool:
         if self._origin_ok():
             return False
-        self._json(403, {"error": "Studio accepts only same-origin loopback requests"})
+        self._json(403, {"error": "The local app accepts only same-origin loopback requests"})
         return True
 
     def _body(self) -> dict:
@@ -540,9 +438,6 @@ class StudioHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        if path == "/api/procedures":
-            self._json(200, {"procedures": BUILTINS})
-            return
         if path.startswith("/api/progress/") and RUN_ID.fullmatch(
             path.removeprefix("/api/progress/")
         ):
@@ -585,7 +480,6 @@ class StudioHandler(BaseHTTPRequestHandler):
             "/api/projects",
             "/api/sources",
             "/api/source-upload",
-            "/api/runs",
             "/api/methods/validate",
             "/api/method-runs",
             "/api/method-observations",
@@ -664,18 +558,6 @@ class StudioHandler(BaseHTTPRequestHandler):
                 )
             elif path == "/api/method-observations":
                 self._json(201, self.server.record_method_observation(body))
-            else:
-                if set(body) != {"procedure"}:
-                    raise ValueError("run request must contain only procedure")
-                run = self.server.start_run(body["procedure"])
-                self._json(
-                    202,
-                    {
-                        "id": run["id"],
-                        "status": run["status"],
-                        "url": f"/api/runs/{run['id']}",
-                    },
-                )
         except OverflowError as exc:
             self._json(413, {"error": str(exc)})
         except RuntimeError as exc:

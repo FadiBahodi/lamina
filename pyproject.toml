@@ -31,4 +31,4 @@ Documentation = "https://github.com/FadiBahodi/lamina/tree/main/docs"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lamina = ["web/*", "web/assets/*", "demo/*", "demo/**/*", "studio/*", "studio/assets/*", "site/*", "site/assets/*"]
+lamina = ["studio/*", "studio/assets/*", "site/*", "site/assets/*"]

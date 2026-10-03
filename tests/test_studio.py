@@ -10,13 +10,12 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from lamina.procedures import BUILTINS
-from lamina.studio_server import StudioServer, run_procedure
+from lamina.studio_server import StudioServer
 
 
 @pytest.fixture
 def studio(tmp_path, monkeypatch):
-    def simple_static(path, with_pdf=False):
+    def simple_static(path):
         path.mkdir(parents=True, exist_ok=True)
         (path / "index.html").write_text("studio example", encoding="utf-8")
         (path / "workbench").mkdir()
@@ -86,7 +85,6 @@ def test_studio_status_upload_and_no_adapter(studio):
     code, _, raw = call(studio, "/api/status")
     assert code == 200
     assert json.loads(raw)["adapter_configured"] is False
-    assert json.loads(call(studio, "/api/procedures")[2])["procedures"] == BUILTINS
     code, _, raw = call(studio, "/api/sources", body={"files": [
         {"name": "a.md", "text": "# A\n\n## One\n\nEvidence lives here.", "role": "teaching"},
         {"name": "holdout.txt", "text": "Question material", "role": "assessment"},
@@ -96,7 +94,7 @@ def test_studio_status_upload_and_no_adapter(studio):
     status = json.loads(call(studio, "/api/status")[2])
     assert {s["role"] for s in status["sources"]} == {"teaching", "assessment"}
     assert all("text" not in s for s in status["sources"])
-    code, _, raw = call(studio, "/api/runs", body={"procedure": BUILTINS[0]})
+    code, _, raw = call(studio, "/api/projects", body={"brief": "x", "source_ids": [], "options": {}})
     assert code == 409 and "adapter" in json.loads(raw)["error"].lower()
     code, _, raw = call(studio, "/api/method-runs", body={"method": method_definition(), "task": {}})
     assert code == 409 and "adapter" in json.loads(raw)["error"].lower()
@@ -194,7 +192,6 @@ def test_method_and_guide_share_one_active_run_limit(studio):
     try:
         assert entered.wait(timeout=1)
         assert call(studio, "/api/method-runs", body={"method": method, "task": task})[0] == 409
-        assert call(studio, "/api/runs", body={"procedure": BUILTINS[0]})[0] == 409
     finally:
         release.set()
     assert finished_run(studio, run_id)["status"] == "ready"
@@ -216,7 +213,7 @@ def test_failed_method_receipt_is_inspectable_without_adapter_error_leak(studio,
     assert failed["receipt"]["nodes"]["guide"]["status"] == "skipped"
     visible = json.dumps(failed)
     assert "secret-token" not in visible and "/Users/private" not in visible
-    assert all(node["error"] == "Node failed; see the local Studio console"
+    assert all(node["error"] == "Node failed; see the local app console"
                for node in failed["receipt"]["nodes"].values() if node["status"] == "failed")
     code, _, raw = call(studio, failed["outputs"]["receipt"])
     assert code == 200
@@ -270,59 +267,3 @@ def test_pdf_missing_extra_reports_install_command(studio, monkeypatch):
     }]})
     assert code == 400
     assert "lamina-engine[pdf]" in json.loads(raw)["error"]
-
-
-def test_studio_background_run_and_output_gate(studio, monkeypatch):
-    def fake_run(workspace, provider, procedure, output):
-        time.sleep(0.05)
-        output.mkdir(parents=True)
-        (output / "index.html").write_text("finished", encoding="utf-8")
-        (output / "bundle.json").write_text("{}", encoding="utf-8")
-        return {"title": "Finished", "lessons": 1, "links": {"site": "", "bundle": "bundle.json"}}
-    monkeypatch.setattr("lamina.studio_server.run_procedure", fake_run)
-    studio.provider = object()
-    code, _, raw = call(studio, "/api/runs", body={"procedure": BUILTINS[0]})
-    assert code == 202
-    run_id = json.loads(raw)["id"]
-    for _ in range(40):
-        response = json.loads(call(studio, f"/api/runs/{run_id}")[2])
-        if response["status"] == "ready":
-            break
-        time.sleep(0.02)
-    assert response["status"] == "ready"
-    assert response["outputs"]["site"] == f"/outputs/{run_id}/"
-    assert call(studio, response["outputs"]["site"])[2] == b"finished"
-    assert call(studio, f"/outputs/{run_id}/../workspace.sqlite3")[0] == 404
-
-
-def test_real_procedure_threads_brief_through_semantic_stages(tmp_path):
-    from pathlib import Path
-    from lamina.ingest import ingest_paths
-    from lamina.providers import DemoProvider
-    from lamina.store import Workspace
-
-    workspace = Workspace(tmp_path / "workspace")
-    ingest_paths([Path(__file__).parents[1] / "src/lamina/demo/sources"], workspace)
-
-    class ObservedProvider:
-        def __init__(self):
-            self.delegate = DemoProvider()
-            self.identity = self.delegate.identity + ":observed"
-            self.calls = []
-
-        def call(self, stage, payload):
-            self.calls.append((stage, payload))
-            return self.delegate.call(stage, payload)
-
-    provider = ObservedProvider()
-    procedure = dict(BUILTINS[0])
-    procedure["instructions"] += " Pause before showing each answer."
-    output = tmp_path / "output"
-    result = run_procedure(workspace, provider, procedure, output)
-    assert result["lessons"] == 3
-    assert (output / "bundle.json").is_file()
-    assert (output / "procedure.json").is_file()
-    assert {stage for stage, _ in provider.calls} == {"extract", "reconcile", "plan", "author", "review"}
-    assert all(request["input"]["procedure"]["id"] == procedure["id"] for _, request in provider.calls)
-    assert all(procedure["instructions"] in request["instruction"]
-               for stage, request in provider.calls if stage in {"plan", "author"})

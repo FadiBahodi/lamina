@@ -30,9 +30,9 @@ Each section proceeds through writing, review and one possible repair/recheck. O
 
 ## Scheduling and latency
 
-One worker limit bounds simultaneous production calls; stage limits can reduce it. Review begins as individual sections finish. The method runtime builds dependency counts once, starts ready work within lane limits, and prioritizes longer remaining paths using graph depth. This priority uses structure without estimating model duration.
+One worker limit bounds simultaneous production calls; stage limits can reduce it. Review begins as individual sections finish. The planning tree streams: a grouping level starts as soon as a full batch of the level below exists, so only the final outline call waits on a complete level. Podcast sections are synthesized on a separate speech lane as they leave review. The sweep route has no planner and no writer: reading is the whole critical path. The method runtime builds dependency counts once, starts ready work within lane limits, and prioritizes longer remaining paths using graph depth. This priority uses structure without estimating model duration.
 
-With total service work W, worker capacity P and longest dependency chain D, ideal completion takes at least max(W/P, D). Real runs also incur provider waiting, network/process overhead, retries and unequal call lengths. Measure complete-run latency and delivered quality alongside call counts and usage.
+With total service work W, worker capacity P and longest dependency chain D, ideal completion takes at least max(W/P, D). Real runs also incur provider waiting, network/process overhead, retries and unequal call lengths. Measure complete-run latency and delivered quality alongside call counts and usage. [Flow geometry](flow-geometry.md) works this bound through for the planned route, counts its barriers and kill switches, and compares it with the depth-two sweep that preceded it.
 
 Persistent adapters share a process and HTTP connection pool. Stable prompt ordering preserves repeated prefixes where endpoints support caching. Provider receipts establish actual cache usage; no universal discount or speedup is assumed.
 
@@ -50,7 +50,8 @@ Plans hold source units once and use IDs in reading batches. Browser progress re
 | --- | --- |
 | `ingest`, `store` | Parse, locate, index and retain sources. |
 | `context_budget`, `source_reading`, `source_spans` | Enforce capacity/workload limits, read structures and resolve exact source spans. |
-| `planning`, `source_assignments` | Organize bounded plans or validate supplied assignments. |
+| `planning`, `source_assignments` | Organize bounded plans (streaming grouping tree) or validate supplied assignments. |
+| `sweep`, `similarity` | Read straight to cards, suppress duplicates and audit a sample; local similarity for duplicate suppression and relation nomination. |
 | `production`, `production_contract`, `context_binding` | Assemble requests, enforce contracts and bind references. |
 | `call_runtime`, `execution`, `providers` | Cache, retry, schedule and transport calls. |
 | `verification`, `assessment_checks` | Check output links, section relationships and assessment behavior. |

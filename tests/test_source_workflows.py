@@ -209,7 +209,16 @@ def test_large_direct_request_fails_before_provider(tmp_path):
     assert not provider.requests
 
 
-def test_local_source_edit_reuses_other_reader_interpretations(tmp_path):
+@pytest.mark.parametrize(
+    "halo, expected_reads",
+    [
+        (0, 1),  # without a halo only the edited section rereads
+        (6, 2),  # a boundary halo also rereads the neighbour that saw the edit
+    ],
+)
+def test_local_source_edit_reuses_other_reader_interpretations(
+    tmp_path, halo, expected_reads
+):
     path = tmp_path / "wind.md"
     path.write_text(
         "# Wind\n\n## Blades\n"
@@ -240,7 +249,7 @@ def test_local_source_edit_reuses_other_reader_interpretations(tmp_path):
     # not depend on incidental instruction/schema byte lengths.
     provider.budget_for = one_structure_reader
     old_id = ws.sources()[0]["id"]
-    options = {"workflow": "planned"}
+    options = {"workflow": "planned", "reader_context_spans": halo}
     first = plan_production(ws, provider, "Explain", [old_id], options)
     assert len(first["windows"]) == 2
     path.write_text(path.read_text().replace("turns", "can turn"))
@@ -249,8 +258,8 @@ def test_local_source_edit_reuses_other_reader_interpretations(tmp_path):
     before = len(provider.requests)
     second = plan_production(ws, provider, "Explain", [new_id], options)
     reads = [p for s, p in provider.requests[before:] if s == "production_read"]
-    assert len(reads) == 1
-    assert second["metrics"]["cache_hits"] == 1
+    assert len(reads) == expected_reads
+    assert second["metrics"]["cache_hits"] == 2 - expected_reads
     assert {u["id"] for u in first["units"]}.isdisjoint(
         u["id"] for u in second["units"]
     )
@@ -529,9 +538,10 @@ def test_requested_context_is_cached_and_never_becomes_owned_material(tmp_path):
             return super().call(stage, payload)
 
     ws, provider = workspace(tmp_path), ContextReader()
-    receipt = build_production(
-        ws, provider, "Explain expiry", ["s1"], {"workflow": "planned"}
-    )
+    # This fixture exercises the context-request path itself, so it reads
+    # without the default boundary halo.
+    options = {"workflow": "planned", "reader_context_spans": 0}
+    receipt = build_production(ws, provider, "Explain expiry", ["s1"], options)
     assert receipt["status"] == "ready"
     plan = receipt["plan"]
     first = next(window for window in plan["windows"] if window["core"] == ["u1"])
@@ -544,9 +554,7 @@ def test_requested_context_is_cached_and_never_becomes_owned_material(tmp_path):
         == 3
     )
     before = len(provider.requests)
-    repeated = build_production(
-        ws, provider, "Explain expiry", ["s1"], {"workflow": "planned"}
-    )
+    repeated = build_production(ws, provider, "Explain expiry", ["s1"], options)
     assert len(provider.requests) == before
     assert repeated["sections"] == receipt["sections"]
     assert repeated["plan"]["windows"] == plan["windows"]
@@ -697,7 +705,11 @@ def test_reader_failure_keeps_valid_rows_and_other_windows_are_cached(tmp_path):
     ws, provider = workspace(tmp_path), PartlyInvalidReader()
     with pytest.raises(ProductionError, match="reading batch.*unresolved") as raised:
         build_production(
-            ws, provider, "Explain safety", ["s1", "s2"], {"workflow": "planned"}
+            ws,
+            provider,
+            "Explain safety",
+            ["s1", "s2"],
+            {"workflow": "planned", "reading_failures": "abort"},
         )
     partial = raised.value.partial_results
     assert {uid for idea in partial["ideas"] for uid in idea["unit_ids"]} == {

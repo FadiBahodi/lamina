@@ -127,6 +127,10 @@ def compact_cards(ideas, units):
             "id": idea["id"],
             "title": idea["title"],
             "explanation": idea.get("explanation", ""),
+            "evidence_relations": [
+                {k: relation[k] for k in ("kind", "statement", "member_idea_ids")}
+                for relation in idea.get("evidence_relations", [])
+            ],
             "source_ids": list(
                 dict.fromkeys(
                     source_by_unit.get(uid, "") for uid in idea.get("unit_ids", [])
@@ -327,71 +331,189 @@ def _route_data(shared, brief, cards):
     return {**_shared_for_cards(shared, cards), "brief": brief, "ideas": cards}
 
 
+_EXEMPLAR_CHARS = 300
+
+
+def _summary_card(level, batch_index, row, members_by_id):
+    """A summary card for the next level, carrying one original exemplar.
+
+    The outline is designed from summaries. One exemplar (the first member's
+    original title and explanation, carried up through the levels) keeps a
+    concrete card in view so the outline is not designed only from
+    descriptions of descriptions.
+    """
+    gid = "group_" + digest([level, batch_index, row["member_ids"]])[:20]
+    first = members_by_id[row["member_ids"][0]]
+    exemplar = first.get("exemplar") or {
+        "title": first["title"],
+        "explanation": first.get("explanation", "")[:_EXEMPLAR_CHARS],
+    }
+    return gid, {
+        "id": gid,
+        "title": row["title"],
+        "explanation": row["explanation"],
+        "evidence_refs": [],
+        "exemplar": exemplar,
+        "source_ids": list(
+            dict.fromkeys(
+                sid
+                for cid in row["member_ids"]
+                for sid in members_by_id[cid].get("source_ids", [])
+            )
+        ),
+    }
+
+
 def _outline(cards, shared, brief, budget, workers, instruction, report):
-    """Return a model-chosen outline, with a complete tree retained in the report."""
-    current = cards
-    level = 0
+    """Return a model-chosen outline, with a complete tree retained in the report.
+
+    The tree streams: a grouping call at level l+1 starts as soon as a full
+    batch of level-l summaries exists, so no level waits for the slowest call
+    of the level below it. Level l+1 grouping begins only once the level-l
+    summaries that have arrived already exceed the outline budget, which
+    proves the whole level will not fit; no grouping call is ever wasted on a
+    level that could have gone straight to the outline. The outline call
+    itself still needs the complete top level.
+    """
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
     shape = _route_shape()
     shape["shared_context"] = []
     route_data = lambda rows: _route_data(shared, brief, rows)
-    while not budget.allows(
-        "production_route", instruction, shape, route_data(current)
-    ):
-        data_for = lambda rows: {
-            **_shared_for_cards(shared, rows),
-            "brief": brief,
-            "purpose": instruction,
-            "cards": rows,
-        }
-        batches = budget.pack(
-            _interleave(current),
+    data_for = lambda rows: {
+        **_shared_for_cards(shared, rows),
+        "brief": brief,
+        "purpose": instruction,
+        "cards": rows,
+    }
+
+    def route_fits(rows):
+        return budget.allows("production_route", instruction, shape, route_data(rows))
+
+    def pack_prefix(rows):
+        """Largest prefix of ``rows`` that fits one grouping call (≥ 1)."""
+        if not budget.allows("production_group", GROUP_INSTRUCTION, GROUP_SHAPE, data_for(rows[:1])):
+            raise ProductionError(
+                f"production_group: indivisible card {rows[0]['id']} or shared context exceeds the declared budget"
+            )
+        lo, hi = 1, min(2, len(rows))
+        while hi < len(rows) and budget.allows(
+            "production_group", GROUP_INSTRUCTION, GROUP_SHAPE, data_for(rows[:hi])
+        ):
+            lo, hi = hi, min(hi * 2, len(rows))
+        while lo < hi:
+            middle = (lo + hi + 1) // 2
+            if budget.allows(
+                "production_group", GROUP_INSTRUCTION, GROUP_SHAPE, data_for(rows[:middle])
+            ):
+                lo = middle
+            else:
+                hi = middle - 1
+        return lo
+
+    arrived = {0: list(cards)}  # level -> cards materialised so far
+    unpacked = {0: list(cards)}  # level -> cards not yet in a grouping batch
+    members = {card["id"]: card for card in cards}
+    in_flight = {0: 0}  # level -> grouping calls running on that level's cards
+    exceeded = {0: True}  # level -> known not to fit the outline (this call's premise)
+    complete = {0: True}
+    batch_counter = {}
+    pending = {}
+    top = 0
+
+    def submit(pool, level, rows):
+        index = batch_counter.get(level, 0)
+        batch_counter[level] = index + 1
+        in_flight[level] = in_flight.get(level, 0) + 1
+        future = pool.submit(
+            budget.call,
             "production_group",
+            f"level_{level}_batch_{index}",
             GROUP_INSTRUCTION,
             GROUP_SHAPE,
-            data_for,
+            data_for(rows),
+            lambda raw: _group_check(raw, rows),
         )
+        pending[future] = (level, index)
 
-        def group(job):
-            index, batch = job
-            return budget.call(
-                "production_group",
-                f"level_{level}_batch_{index}",
-                GROUP_INSTRUCTION,
-                GROUP_SHAPE,
-                data_for(batch),
-                lambda raw: _group_check(raw, batch),
-            )
+    def release(pool, level):
+        """Submit every full batch at ``level``; the final partial batch only
+        once the level is complete (nothing more can arrive)."""
+        rows = unpacked.setdefault(level, [])
+        while rows:
+            size = pack_prefix(rows)
+            if size == len(rows) and not complete.get(level):
+                return
+            submit(pool, level, rows[:size])
+            del rows[:size]
 
-        grouped = bounded_map(group, list(enumerate(batches)), workers)
-        next_cards = []
-        current_by_id = {card["id"]: card for card in current}
-        for batch_index, result in enumerate(grouped):
-            for row in result["groups"]:
-                gid = "group_" + digest([level, batch_index, row["member_ids"]])[:20]
-                report["groups"].append({**row, "id": gid, "level": level})
-                next_cards.append(
-                    {
-                        "id": gid,
-                        "title": row["title"],
-                        "explanation": row["explanation"],
-                        "evidence_refs": [],
-                        "source_ids": list(
-                            dict.fromkeys(
-                                sid
-                                for cid in row["member_ids"]
-                                for sid in current_by_id[cid].get("source_ids", [])
-                            )
-                        ),
-                    }
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        release(pool, 0)
+        while True:
+            # Does the current top level already settle the outline?
+            if complete.get(top) and not exceeded.get(top):
+                if route_fits(arrived[top]):
+                    break
+                exceeded[top] = True
+                release(pool, top)
+            if not pending:
+                if complete.get(top) and exceeded.get(top) and not unpacked.get(top):
+                    # Every card at the top was grouped; the next level is now
+                    # complete and becomes the top.
+                    top += 1
+                    arrived.setdefault(top, [])
+                    unpacked.setdefault(top, [])
+                    complete[top] = True
+                    if len(canonical(arrived[top]).encode()) >= len(
+                        canonical(arrived[top - 1]).encode()
+                    ):
+                        raise ProductionError(
+                            "The grouping descriptions did not reduce the planning input. Increase the declared "
+                            "model budget or supply a narrower task/explicit assignments; no source was dropped."
+                        )
+                    continue
+                raise RuntimeError("planning tree cannot advance")
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                level, index = pending.pop(future)
+                in_flight[level] -= 1
+                result = future.result()
+                next_level = level + 1
+                arrived.setdefault(next_level, [])
+                unpacked.setdefault(next_level, [])
+                for row in result["groups"]:
+                    gid, card = _summary_card(level, index, row, members)
+                    report["groups"].append({**row, "id": gid, "level": level})
+                    members[gid] = card
+                    arrived[next_level].append(card)
+                    unpacked[next_level].append(card)
+            # A level is complete when the level below it is complete and has
+            # no grouping work left; its cards are then all materialised.
+            for level in sorted(arrived):
+                if level == 0:
+                    continue
+                below = level - 1
+                complete[level] = bool(
+                    complete.get(below) and in_flight.get(below, 0) == 0 and not unpacked.get(below)
                 )
-        if len(canonical(next_cards).encode()) >= len(canonical(current).encode()):
-            raise ProductionError(
-                "The grouping descriptions did not reduce the planning input. Increase the declared "
-                "model budget or supply a narrower task/explicit assignments; no source was dropped."
-            )
-        current = next_cards
-        level += 1
-    report["hierarchy_levels"] = level
+                if complete[level] and level > top:
+                    top = level
+                    if len(canonical(arrived[level]).encode()) >= len(
+                        canonical(arrived[below]).encode()
+                    ):
+                        raise ProductionError(
+                            "The grouping descriptions did not reduce the planning input. Increase the declared "
+                            "model budget or supply a narrower task/explicit assignments; no source was dropped."
+                        )
+                # Start grouping an incomplete level only once its arrived
+                # cards already exceed the outline budget, which proves the
+                # complete level will not fit either.
+                if not exceeded.get(level) and arrived[level] and not route_fits(arrived[level]):
+                    exceeded[level] = True
+                if exceeded.get(level):
+                    release(pool, level)
+    current = arrived[top]
+    report["hierarchy_levels"] = top
     expected = {card["id"] for card in current}
 
     def check(raw):

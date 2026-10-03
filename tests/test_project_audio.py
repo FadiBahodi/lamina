@@ -68,19 +68,25 @@ def test_podcast_project_delivers_wave_link_and_report(tmp_path, monkeypatch):
         result = _finished(server, json.loads(raw)["id"])
         assert result["status"] == "ready", result.get("error")
         assert result["receipt"]["audio_delivery"]["status"] == "ready"
-        assert result["receipt"]["audio_delivery"]["audio"]["duration_seconds"] == 0.1
-        assert len(audio.calls) == 1
+        segments = len(result["receipt"]["sections"])
+        assert (
+            result["receipt"]["audio_delivery"]["audio"]["duration_seconds"]
+            == segments / 10
+        )
+        assert len(audio.calls) == segments
         for name in ("audio", "transcript", "manifest", "report"):
             assert name in result["outputs"]
             assert _call(server, result["outputs"][name])[0] == 200
-        assert _call(server, result["outputs"]["audio"])[1] == _fixture_wav()
-        assert (
-            _call(server, result["outputs"]["transcript"])[1].decode()
-            == "Fixture submitted to synthesis."
-        )
+        with wave.open(
+            io.BytesIO(_call(server, result["outputs"]["audio"])[1]), "rb"
+        ) as assembled:
+            assert assembled.getnframes() == 1600 * segments
+        assert _call(server, result["outputs"]["transcript"])[
+            1
+        ].decode() == "\n\n".join(["Fixture submitted to synthesis."] * segments)
         manifest = json.loads(_call(server, result["outputs"]["manifest"])[1])
         report = json.loads(_call(server, result["outputs"]["report"])[1])
-        assert manifest["audio"]["duration_seconds"] == 0.1
+        assert manifest["audio"]["duration_seconds"] == segments / 10
         assert report["audio_delivery"]["status"] == "ready"
         assert (
             report["audio_delivery"]["audio"]["sha256"] == manifest["audio"]["sha256"]

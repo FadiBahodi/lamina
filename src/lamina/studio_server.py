@@ -36,6 +36,7 @@ MAX_BODY = 8_000_000
 MAX_FILES = 12
 MAX_FILE_CHARS = 500_000
 MAX_PDF_BYTES = 5_000_000
+MAX_STREAM_BYTES = 256 * 1024 * 1024
 MAX_METHOD_TASK_CHARS = 500_000
 SAFE_NAME = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._ -]{0,119}\.(?:md|txt|pdf|pptx)\Z", re.I
@@ -446,6 +447,33 @@ class StudioHandler(BaseHTTPRequestHandler):
         if self._reject_origin():
             return
         path = self._path()
+        updates = re.fullmatch(r"/api/section-updates/([0-9a-f]{32})/(\d+)", path)
+        if updates:
+            rid, cursor = updates.group(1), int(updates.group(2))
+            with self.server.run_lock:
+                run = self.server.runs.get(rid)
+                total = run.get("section_update_count", 0) if run else 0
+                stop = min(total, cursor + 10)
+                rows = (
+                    [
+                        json.loads(
+                            (
+                                self.server.output_root
+                                / rid
+                                / "section-updates"
+                                / f"{n}.json"
+                            ).read_text()
+                        )
+                        for n in range(cursor + 1, stop + 1)
+                    ]
+                    if run
+                    else []
+                )
+            self._json(
+                200 if run else 404,
+                {"updates": rows, "cursor": max(cursor, stop), "total": total},
+            )
+            return
         if path == "/api/status":
             sources = self.server.workspace.sources()
             units = self.server.workspace.units()
@@ -557,6 +585,7 @@ class StudioHandler(BaseHTTPRequestHandler):
             "/api/project-example",
             "/api/projects",
             "/api/sources",
+            "/api/source-upload",
             "/api/runs",
             "/api/methods/validate",
             "/api/method-runs",
@@ -565,6 +594,9 @@ class StudioHandler(BaseHTTPRequestHandler):
             self._json(404, {"error": "unknown API endpoint"})
             return
         try:
+            if path == "/api/source-upload":
+                self._json(201, self._stream_source())
+                return
             body = self._body()
             if path == "/api/project-example":
                 if body:
@@ -667,6 +699,58 @@ class StudioHandler(BaseHTTPRequestHandler):
             self._json(404, {"error": str(exc)})
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
+
+    def _stream_source(self):
+        """One raw file, bounded disk writes, no base64 or client file paths."""
+        if self.headers.get("Content-Type") != "application/octet-stream":
+            raise ValueError("stream upload requires application/octet-stream")
+        name = self.headers.get("X-Lamina-Filename", "")
+        role = self.headers.get("X-Lamina-Role", "teaching")
+        if not SAFE_NAME.fullmatch(name) or role not in {"teaching", "assessment"}:
+            raise ValueError("upload needs a safe document basename and valid role")
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError as exc:
+            raise ValueError("Content-Length is required") from exc
+        if not 1 <= length <= MAX_STREAM_BYTES:
+            self.close_connection = True
+            raise OverflowError("stream upload must contain 1 byte through 256 MiB")
+        old_timeout = self.connection.gettimeout()
+        self.connection.settimeout(60)
+        try:
+            with tempfile.TemporaryDirectory(prefix="lamina-source-") as temporary:
+                path = Path(temporary) / name
+                with path.open("wb") as stream:
+                    remaining = length
+                    while remaining:
+                        chunk = self.rfile.read(min(1024 * 1024, remaining))
+                        if not chunk:
+                            raise ValueError("upload ended before Content-Length")
+                        stream.write(chunk)
+                        remaining -= len(chunk)
+                try:
+                    source, units = read_source(path, role)
+                except Exception as exc:
+                    raise ValueError(
+                        "Document could not be parsed; inspect its text or OCR it before importing"
+                    ) from exc
+                self.server.workspace.import_sources([(source, units)])
+        except TimeoutError as exc:
+            self.close_connection = True
+            raise ValueError("source upload timed out") from exc
+        finally:
+            self.connection.settimeout(old_timeout)
+        return {
+            "count": 1,
+            "sources": [
+                {
+                    "id": source["id"],
+                    "title": source["title"],
+                    "role": role,
+                    "units": len(units),
+                }
+            ],
+        }
 
     def _sources(self, body: dict) -> dict:
         if (

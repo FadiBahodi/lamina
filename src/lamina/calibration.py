@@ -24,6 +24,7 @@ STARTER_ITEMS = {
     "production_review": 6,
     "production_repair": 6,
     "production_consistency": 2,
+    "production_compare": 8,
     "assessment_blind_solve": 1,
     "assessment_judge": 1,
 }
@@ -34,9 +35,10 @@ _REQUIRED_CHECK_STAGES = {"extraction", "assignment", "finished_output"}
 
 def _policy_status(report, criteria):
     """Return why a report cannot support a promoted/pass QC status."""
-    if type(report.get("replicates_required")) is not int or report.get(
-        "replicates_required", 0
-    ) < 2:
+    if (
+        type(report.get("replicates_required")) is not int
+        or report.get("replicates_required", 0) < 2
+    ):
         return "insufficient_replicates"
     if (
         report.get("promotion_policy") != _PROMOTION_POLICY
@@ -259,9 +261,9 @@ def promote_profiles(report_path):
             "corpus_sha256"
         ):
             continue
-        if len({t.get("evaluation_sha256") for t in trials}) != 1 or not trials[
-            0
-        ].get("evaluation_sha256"):
+        if len({t.get("evaluation_sha256") for t in trials}) != 1 or not trials[0].get(
+            "evaluation_sha256"
+        ):
             continue
         if any(t.get("experimental_dimension") != dimension for t in trials):
             continue
@@ -386,16 +388,17 @@ def quality_status(provider, stages, *, now=None, max_age_days=30):
                     and t.get("experimental_dimension") == dimension
                     and t.get("experimental_limit") == limit
                 ]
-                expected_replicates = set(
-                    range(1, report["replicates_required"] + 1)
-                )
-                if len(candidates) != report["replicates_required"] or {
-                    t.get("replicate") for t in candidates
-                } != expected_replicates:
+                expected_replicates = set(range(1, report["replicates_required"] + 1))
+                if (
+                    len(candidates) != report["replicates_required"]
+                    or {t.get("replicate") for t in candidates} != expected_replicates
+                ):
                     row["qc_status"] = "insufficient_replicates"
                     result[stage] = row
                     continue
-                budgets = [t.get("stage_budgets", {}).get(stage, {}) for t in candidates]
+                budgets = [
+                    t.get("stage_budgets", {}).get(stage, {}) for t in candidates
+                ]
                 if any(
                     t.get("protocol_revision") != REVISION
                     or budget.get("configuration_identity") != identity
@@ -430,8 +433,7 @@ def quality_status(provider, stages, *, now=None, max_age_days=30):
                 row["qc_status"] = (
                     "passed"
                     if all(
-                        r["passed_all_observed_checks"]
-                        for r in summary["observations"]
+                        r["passed_all_observed_checks"] for r in summary["observations"]
                     )
                     and all(t.get("engine_status") == "ready" for t in candidates)
                     else "failed"

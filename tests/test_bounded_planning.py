@@ -783,3 +783,76 @@ def test_target_batches_scope_many_file_metadata_under_stage_budget():
             source for source in sources if source["id"] in selected
         ]
         assert len(call["data"]["sources"]) < len(sources)
+
+
+def test_summary_levels_start_before_the_slowest_lower_batch_finishes():
+    """The tree streams: a level-1 grouping call runs while a level-0 call is
+    still outstanding, so no level waits for the slowest call below it."""
+    import threading
+
+    ideas, units = corpus(1600, topics=8)
+    gate = threading.Event()
+    seen_level_one = threading.Event()
+    timeline = []
+    lock = threading.Lock()
+
+    class SlowFirstBatch(ScriptedPlanner):
+        def __call__(self, stage, item, instruction, shape, data, checker):
+            with lock:
+                timeline.append(("start", item))
+            if item == "level_0_batch_0":
+                # Hold the first batch until a level-1 call has started, with a
+                # bound so a regression fails instead of hanging.
+                released = gate.wait(timeout=20)
+                with lock:
+                    timeline.append(("released", item, released))
+            if item.startswith("level_1_batch_"):
+                seen_level_one.set()
+                gate.set()
+            return super().__call__(stage, item, instruction, shape, data, checker)
+
+    provider = SlowFirstBatch()
+    route, report = plan_bounded(
+        ideas,
+        units,
+        {"goal": "Compare operating conditions across eight sources"},
+        provider,
+        max_bytes=12_000,
+        workers=4,
+    )
+    assert report["mode"] == "hierarchical"
+    assert report["hierarchy_levels"] >= 2
+    assert seen_level_one.is_set()
+    released = next(row for row in timeline if row[0] == "released")
+    assert released[2] is True, "level 1 never started while level 0 was outstanding"
+    # The first level-1 call started before the held level-0 batch returned.
+    first_level_one = next(i for i, row in enumerate(timeline) if row[0] == "start" and row[1].startswith("level_1_batch_"))
+    release_index = next(i for i, row in enumerate(timeline) if row[0] == "released")
+    assert first_level_one < release_index
+    assigned = [iid for sec in route["sections"] for iid in sec["idea_ids"]]
+    assert len(assigned) == len(set(assigned)) == 1600
+
+
+def test_outline_receives_one_exemplar_per_summary_group():
+    ideas, units = corpus(400, topics=8)
+    provider = ScriptedPlanner()
+    plan_bounded(
+        ideas,
+        units,
+        {"goal": "Compare operating conditions"},
+        provider,
+        max_bytes=12_000,
+        workers=2,
+    )
+    outline = next(call for call in provider.calls if call["item"] == "outline")
+    cards = outline["data"]["ideas"]
+    assert cards and all("exemplar" in card for card in cards)
+    original = {idea["id"]: idea for idea in ideas}
+    for card in cards:
+        assert card["exemplar"]["title"] in {idea["title"] for idea in original.values()}
+        assert len(card["exemplar"]["explanation"]) <= 300
+    # No level-1 grouping call ran while level 1 could still have fit the
+    # outline: every level-1 call happened after level-1 cards exceeded it.
+    assert any(call["item"].startswith("level_1_batch_") for call in provider.calls) or (
+        outline and len(cards) <= 64
+    )

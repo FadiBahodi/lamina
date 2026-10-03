@@ -144,23 +144,33 @@ def _pptx_chunks(path):
                 continue
             if value.strip():
                 found = True
-                yield heading, value.strip(), f"slide {number}, {kind} {shape.shape_id}", {
-                    "kind": kind,
-                    "slide": number,
-                    "shape": shape.shape_id,
-                    "structural_group": f"slide:{number}",
-                    "heading_path": [heading],
-                }
+                yield (
+                    heading,
+                    value.strip(),
+                    f"slide {number}, {kind} {shape.shape_id}",
+                    {
+                        "kind": kind,
+                        "slide": number,
+                        "shape": shape.shape_id,
+                        "structural_group": f"slide:{number}",
+                        "heading_path": [heading],
+                    },
+                )
         if slide.has_notes_slide:
             frame = slide.notes_slide.notes_text_frame
             if frame is not None and frame.text.strip():
                 found = True
-                yield heading, frame.text.strip(), f"slide {number}, speaker notes", {
-                    "kind": "speaker_notes",
-                    "slide": number,
-                    "structural_group": f"slide:{number}",
-                    "heading_path": [heading],
-                }
+                yield (
+                    heading,
+                    frame.text.strip(),
+                    f"slide {number}, speaker notes",
+                    {
+                        "kind": "speaker_notes",
+                        "slide": number,
+                        "structural_group": f"slide:{number}",
+                        "heading_path": [heading],
+                    },
+                )
         if not found:
             raise ValueError(
                 f"{path.name}, slide {number}: no extractable text; inspect visuals or convert and OCR first"
@@ -176,8 +186,8 @@ def read_source(
         raise ValueError(
             f"Unsupported input: {path.name}; use Markdown, text, PDF, or PPTX (convert legacy .ppt first)"
         )
-    raw = path.read_bytes()
-    checksum = hashlib.sha256(raw).hexdigest()
+    with path.open("rb") as stream:
+        checksum = hashlib.file_digest(stream, "sha256").hexdigest()
     source_id = "src_" + checksum[:20]
     title = path.stem.replace("_", " ").replace("-", " ").strip()
     chunks = []
@@ -244,7 +254,7 @@ def read_source(
     elif path.suffix.lower() == ".pptx":
         chunks.extend(_pptx_chunks(path))
     else:
-        text = raw.decode("utf-8-sig")
+        text = path.read_bytes().decode("utf-8-sig")
         reference_env = {}
         reference_index = {}
         if path.suffix.lower() == ".md":

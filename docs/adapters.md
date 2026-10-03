@@ -136,3 +136,39 @@ Cache identity includes command arguments, readable script hashes, model configu
 ## References
 
 HTTPX documents [connection pooling](https://www.python-httpx.org/advanced/clients/), [resource limits](https://www.python-httpx.org/advanced/resource-limits/) and [HTTP/2](https://www.python-httpx.org/http2/). Output schemas follow [JSON Schema](https://json-schema.org/understanding-json-schema/).
+
+
+## Grouped requests and evidence comparison
+
+`sections_per_request > 1` allows writing/review envelopes with `input.section_tasks`.
+Each task has a `section_id`, its independent `input`, and `expected_shape`. Return
+`{"sections":[{"section_id":"exact ID","result":{...}}]}`. Source aliases are
+local to each task. No section may borrow another task's evidence. Valid rows
+receive individual cache entries; invalid/missing rows retry individually. Hard
+capacity and workload checks apply to the full grouped envelope. Grouping is
+opt-in and needs matched quality evaluation on the intended product.
+
+`compare_relations=true` enables `production_compare`. Its workload is the
+number of ideas jointly compared. The response distinguishes repetition,
+complement, different conditions, contradiction, supersession, unrelated and
+unresolved evidence. Specific `followup_queries` may add missing evidence for
+up to two further comparisons. A Python provider may implement
+`nominate_relations(ideas, units, limit)` to add groups of 2–32 idea IDs from
+entity resolution, dense retrieval or caller knowledge. No dense model is
+installed or trained automatically. Unresolved groups keep the project in review.
+
+The native Gemini adapter accepts concurrency from 1 to 128. Its default remains
+4; the engine's worker count and provider's actual allowance are separate.
+Counting has a separate admission lane from generation. Counts remain exact;
+no byte-to-token approximation is used. Transport metrics distinguish admission
+waits from network time. Request receipts retain preparation time and reported
+thinking/reasoning/total tokens without inferring unreported usage.
+
+## Speech resources
+
+Command/JSON-lines profile rows optionally accept `audio_resource` (a stable
+resource name) and `audio_concurrency` (1–128). Profiles sharing one actual
+resource must use the same name and capacity. For example, use a named remote
+speech quota with concurrency 4; separate local devices can have separate names.
+Without a resource name, speech retains the conservative per-user local-device
+lock. Capacity is enforced across local processes, not across remote hosts.

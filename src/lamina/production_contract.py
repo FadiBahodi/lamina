@@ -20,6 +20,13 @@ _FORM = {
     "podcast-script": "Produce speakable, educational prose with natural segments. No audio is generated or verified.",
     "assessment": "Produce assessment material with candidate-facing prompts separated from answers, rationale and marking guidance. Never leak marking content into candidate text.",
 }
+_OUTPUT_STYLE = (
+    " Use plain, precise language suited to the audience. Prefer concrete headings and direct sentences. "
+    "Explain unfamiliar terms when first used; retain necessary technical vocabulary and source qualifications. "
+    "Avoid promotional claims, invented jargon, decorative labels and commentary about the generation process. "
+    "Follow explicit style requests in the brief."
+)
+_FORM = {name: instruction + _OUTPUT_STYLE for name, instruction in _FORM.items()}
 _SHAPES = {
     "production_read": {
         "ideas": [

@@ -308,11 +308,15 @@ def read_sources(
     workspace, provider, task, options, sources, units, tracker, legacy_windows=None
 ):
     stage = "production_read"
-    instruction = (
-        (COMPILE_INSTRUCTION if options["reading"] == "reusable" else TASK_INSTRUCTION)
-        + REFERENCE_INSTRUCTION
-        + CONTEXT_INSTRUCTION
-    )
+    if options.get("format") == "cards":
+        from .sweep import CARD_INSTRUCTION
+
+        task_instruction = CARD_INSTRUCTION
+    elif options["reading"] == "reusable":
+        task_instruction = COMPILE_INSTRUCTION
+    else:
+        task_instruction = TASK_INSTRUCTION
+    instruction = task_instruction + REFERENCE_INSTRUCTION + CONTEXT_INSTRUCTION
     budget = request_budget(provider, stage, options)
     source_map = {s["id"]: s for s in sources}
     by_source, positions = {}, {}

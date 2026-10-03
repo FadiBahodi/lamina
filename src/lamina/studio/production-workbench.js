@@ -13,7 +13,7 @@
   const goal = make("textarea", "pb-goal"); goal.rows = 5; goal.placeholder = "Example: Make a concise field guide that helps an on-call engineer decide when a retried job may publish its result."; goal.setAttribute("aria-label", "Project goal");
   const formatLabel = make("label", "pb-field"); formatLabel.append(make("span", "", "Output"));
   const format = make("select"); format.setAttribute("aria-label", "Output format");
-  [["document", "Document"], ["guide", "Reference guide"], ["assessment", "Practice exam"], ["podcast-script", "Podcast script"]].forEach(([value, label]) => { const option = make("option", "", label); option.value = value; format.append(option); });
+  [["document", "Document"], ["guide", "Reference guide"], ["assessment", "Practice exam"], ["podcast-script", "Podcast script"], ["cards", "Flashcards (sweep)"]].forEach(([value, label]) => { const option = make("option", "", label); option.value = value; format.append(option); });
   const formatNote=make("p","pb-format-note");
   function updateFormatNote(){formatNote.hidden=format.value!=="podcast-script";formatNote.textContent=state.audioAdapter?"Your speech adapter will turn the script into WAV audio.":"Produces a script. Start the local app with a speech adapter to add WAV audio.";}
   format.addEventListener("change",updateFormatNote);
@@ -41,7 +41,7 @@
   function numericField(label, value, min, max) { const field = make("label", "pb-worker"); field.append(make("span", "", label)); const input = make("input"); input.type="number"; input.value=value===null?"":String(value); input.min=String(min); input.max=String(max); field.append(input); contextFields.append(field); return input; }
   const workflowLabel = make("label", "pb-worker"); workflowLabel.append(make("span", "", "Workflow"));
   const workflow = make("select"); workflow.setAttribute("aria-label", "Workflow");
-  [["auto","Automatic"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
+  [["auto","Automatic"],["direct","Write directly from sources"],["planned","Extract ideas, plan, then write"],["sweep","Read straight to flashcards"]].forEach(([value,label])=>{const item=make("option","",label);item.value=value;workflow.append(item);});
   workflowLabel.append(workflow); contextFields.append(workflowLabel);
   const totalWorkers = numericField("Maximum simultaneous model calls", 8, 1, 128);
   const totalWorkerField = totalWorkers.parentElement; totalWorkerField.remove();

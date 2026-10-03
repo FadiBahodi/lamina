@@ -4,13 +4,19 @@ Retrieval proposes work, never establishes equivalence. Candidate recall and
 comparison accuracy remain separately unmeasured. Caller nomination can add
 entity resolution, dense retrieval, or multi-source groups without changing
 ownership or replacing the comparison contract.
+
+Nomination uses local similarity (provider embeddings when the provider offers
+``embed``, otherwise TF-IDF) with a threshold, plus two structural lanes:
+ideas that cite the same source unit and ideas from the same parser structure.
+Only nominated pairs reach a model call, so the model work is bounded by the
+threshold and ``relation_neighbors`` rather than by every lexical overlap.
 """
 
-from collections import Counter, defaultdict
-import re
+from collections import defaultdict
 
 from .execution import bounded_map
 from .production_contract import ProductionError, _evidence, _str, validated
+from .similarity import DEFAULT_THRESHOLDS, nearest_pairs, query_scores, vectors_for
 from .source_reading import request_budget
 from .store import digest
 
@@ -42,74 +48,79 @@ SHAPE = {
 }
 
 
-def _terms(text):
-    return set(re.findall(r"\w+", text.casefold()))
-
-
 class CandidateIndex:
-    def __init__(self, ideas, units):
+    """Similarity vectors over each idea's title, explanation and quotes, plus
+    structural lanes. Pair scores are nominations for a model comparison."""
+
+    def __init__(self, ideas, units, provider=None):
         self.ideas = {i["id"]: i for i in ideas}
         self.units = {u["id"]: u for u in units}
-        self.postings = defaultdict(set)
-        self.text = {}
-        for iid, idea in self.ideas.items():
-            text = " ".join(
-                [
-                    idea["title"],
-                    idea["explanation"],
-                    *[e["quote"] for e in idea["evidence"]],
-                ]
+        self.order = [idea["id"] for idea in ideas]
+        self.texts = [
+            " ".join(
+                [idea["title"], idea["explanation"], *[e["quote"] for e in idea["evidence"]]]
             )
-            self.text[iid] = text
-            for token in _terms(text):
-                if len(token) > 2 or any(c.isdigit() for c in token):
-                    self.postings[("text", token)].add(iid)
+            for idea in ideas
+        ]
+        self.provider = provider
+        self.method, self.vectors = vectors_for(provider, self.texts)
+        self.lanes = defaultdict(set)
+        for iid, idea in self.ideas.items():
             for uid in idea["unit_ids"]:
                 unit = self.units[uid]
-                for key in ("entities", "dates", "quantities"):
-                    for value in unit.get(key, []):
-                        self.postings[(key, str(value).casefold())].add(iid)
                 if unit.get("structural_group"):
-                    self.postings[
-                        ("structure", unit["source_id"], unit["structural_group"])
-                    ].add(iid)
+                    self.lanes[("structure", unit["source_id"], unit["structural_group"])].add(iid)
             for e in idea["evidence"]:
-                self.postings[("support", e["unit_id"])].add(iid)
-        self.keys = defaultdict(list)
-        self.skipped_common_signals = 0
-        for key, members in self.postings.items():
-            # Avoid all-pairs work on ubiquitous words. This is an explicit
-            # retrieval limit, not evidence that the omitted pairs are unrelated.
-            if len(members) > max(32, len(ideas) // 5):
-                self.skipped_common_signals += 1
-                continue
-            for iid in members:
-                self.keys[iid].append(key)
+                self.lanes[("support", e["unit_id"])].add(iid)
+        # A lane shared by very many ideas is a page everyone cites, not a
+        # relationship signal; its pairs are left to similarity.
+        self.skipped_common_signals = sum(
+            1 for members in self.lanes.values() if len(members) > 32
+        )
 
-    def nominate(self, limit):
+    def nominate(self, limit, threshold=None):
+        threshold = (
+            DEFAULT_THRESHOLDS["nominate"][self.method] if threshold is None else threshold
+        )
+        self.threshold = threshold
         pairs = {}
-        for iid in sorted(self.ideas):
-            scores, lanes = Counter(), defaultdict(set)
-            for key in self.keys[iid]:
-                for other in self.postings[key]:
-                    if other != iid:
-                        scores[other] += 1 / len(self.postings[key])
-                        lanes[other].add(key[0])
-            for other in sorted(scores, key=lambda x: (-scores[x], x))[:limit]:
-                pair = tuple(sorted((iid, other)))
-                pairs.setdefault(pair, set()).update(lanes[other])
+        for row in nearest_pairs(self.vectors, limit, threshold):
+            i, j = row["ids"]
+            key = tuple(sorted((self.order[i], self.order[j])))
+            pairs.setdefault(key, {"signals": set(), "score": None})
+            pairs[key]["signals"].add(f"similarity:{self.method}")
+            pairs[key]["score"] = row["score"]
+        for lane, members in self.lanes.items():
+            if len(members) > 32 or len(members) < 2:
+                continue
+            ordered = sorted(members)
+            for a in range(len(ordered)):
+                for b in range(a + 1, len(ordered)):
+                    key = (ordered[a], ordered[b])
+                    pairs.setdefault(key, {"signals": set(), "score": None})
+                    pairs[key]["signals"].add(lane[0])
         return [
-            {"idea_ids": list(pair), "signals": sorted(signals)}
-            for pair, signals in sorted(pairs.items())
+            {
+                "idea_ids": list(key),
+                "signals": sorted(value["signals"]),
+                **({"score": value["score"]} if value["score"] is not None else {}),
+            }
+            for key, value in sorted(pairs.items())
         ]
 
     def search(self, query, exclude):
-        scores = Counter()
-        for token in _terms(query):
-            for iid in self.postings.get(("text", token), ()):
-                if iid not in exclude:
-                    scores[iid] += 1 / len(self.postings[("text", token)])
-        return sorted(scores, key=lambda x: (-scores[x], x))[:1]
+        scores = query_scores(
+            query, self.vectors, self.method, texts=self.texts, provider=self.provider
+        )
+        ranked = sorted(
+            (
+                (score, self.order[index])
+                for index, score in enumerate(scores)
+                if self.order[index] not in exclude and score > 0
+            ),
+            key=lambda item: (-item[0], item[1]),
+        )
+        return [iid for _, iid in ranked[:1]]
 
 
 def compare_relations(workspace, provider, ideas, units, task, options, tracker):
@@ -117,8 +128,10 @@ def compare_relations(workspace, provider, ideas, units, task, options, tracker)
     budget = request_budget(provider, stage, options)
     if budget.workload is None:
         raise ProductionError("production_compare needs an explicit workload profile")
-    index = CandidateIndex(ideas, units)
-    candidates = index.nominate(options["relation_neighbors"])
+    index = CandidateIndex(ideas, units, provider)
+    candidates = index.nominate(
+        options["relation_neighbors"], options.get("relation_threshold")
+    )
     hook = getattr(provider, "nominate_relations", None)
     supplied = (
         hook(ideas, units, options["relation_neighbors"]) if callable(hook) else []
@@ -239,6 +252,8 @@ def compare_relations(workspace, provider, ideas, units, task, options, tracker)
     return list(unique.values()), {
         "nominated_groups": len(candidates),
         "compared_groups": len(relations),
+        "nomination_method": index.method,
+        "nomination_threshold": index.threshold,
         "skipped_common_signals": index.skipped_common_signals,
         "nomination_recall": "unmeasured",
         "comparison_accuracy": "unmeasured",

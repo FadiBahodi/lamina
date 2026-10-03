@@ -294,29 +294,37 @@ not a reason to withhold 129 others from the speech lane.
   `review` render by default; the manifest lists the provisional sections.
 - `workers` and the Gemini adapter's `max_concurrency` default to 16.
 
+- Reading overlaps planning: `read_sources` reports each finished window
+  through `on_batch`, and `plan_streaming` feeds the grouping tree in
+  source-position order while other reads are still running. The reading
+  barrier is gone from the default planned route; only comparison and
+  retrieval targets still read everything first.
+- The Gemini adapter runs review, consistency, audit and judge calls with no
+  thinking budget (`thinking_by_stage`), removing the largest fixed per-call
+  cost from the chain without touching composition stages. Admission wait is
+  reported separately from transport time.
+- Podcasts are planned in episodes: the outline numbers sections into
+  episodes with spoken-word targets from `episode_minutes`; one script and
+  one WAV per episode are delivered.
+
 Revised critical path for the planned route after these changes, best case:
-read (1) + grouping levels still serial per card (L, but overlapped across
-levels) + outline (1) + assign (1) + write + review (2) ≈ 5 + L calls with
-far fewer barriers; realistic ≈ 8 + L. For the sweep: 1 read + 1 audit on
-the sampled windows, the audit overlapping nothing because it is the last
-step; `D = 2`.
+read (1, overlapped with level-0 grouping) + outline (1) + assign (1) +
+write + review (2) ≈ 5 calls plus whatever part of the grouping levels
+cannot overlap the reads; realistic ≈ 8. Barriers: the outline call and the
+assignment batch. For the sweep: 1 read + 1 audit on the sampled windows;
+`D = 2`.
 
-## 9. What is still open, in order
+## 9. What is still open
 
-1. Overlap reading with level-0 grouping: start grouping batches as reads
-   complete rather than after the reading barrier. The streaming tree makes
-   this a change in `_read_and_plan` only.
-2. Measure. The one comparison that settles the direction: the same 80-page
+1. Measure. The one comparison that settles the direction: the same 80-page
    section through the sweep and the planned route, five cold runs each,
    recording time to first card, time to completion, completion rate, cards
    per page and human-judged coverage of twenty planted distinctions.
-3. Thinking budget off for review and recheck before any request grouping
-   is used; measure cards per page under grouping before it becomes a
-   default anywhere.
-4. Episode planning for podcasts: the orchestrator's legitimate job is to
-   size episodes from the card inventory and route locality-grouped
-   segments to writers; completed-prose callbacks remain a method-graph
-   dependency.
+2. Cards per page under request grouping, measured before
+   `sections_per_request` becomes a default anywhere.
+3. Completed-prose callbacks between podcast sections (a method-graph
+   dependency, not a shared outline), and multi-source episode planning that
+   groups segments by locality across sources rather than by file.
 
 ## Limits
 

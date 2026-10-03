@@ -263,13 +263,14 @@ def test_delivery_policy_controls_review_audio(tmp_path, monkeypatch):
         "plan_digest": "x",
     }
     skipped = dict(base)
-    deliver_production(ws, skipped, {}, tmp_path / "a", audio_provider=provider)
+    deliver_production(
+        ws, skipped, {}, tmp_path / "a", audio_provider=provider, audio_when="ready"
+    )
     assert skipped["audio_delivery"]["status"] == "skipped"
     assert provider.requests == []
+    # The default renders a script that is still in review.
     rendered = dict(base)
-    links = deliver_production(
-        ws, rendered, {}, tmp_path / "b", audio_provider=provider, audio_when="any"
-    )
+    links = deliver_production(ws, rendered, {}, tmp_path / "b", audio_provider=provider)
     assert rendered["status"] == "review"
     assert rendered["audio_delivery"]["status"] == "provisional"
     assert rendered["audio_delivery"]["provisional_sections"] == ["one"]

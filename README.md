@@ -4,7 +4,14 @@
 
 Lamina is a Python library, command-line tool and local web app for turning source files into flashcards, reference guides, podcast scripts and audio, or practice exams. You supply the files, the goal and a model adapter. Lamina divides the work, runs independent model calls in parallel, preserves source references, and saves results for recovery and revision.
 
-Readers work from original passages. Writers receive assigned evidence and shared context. Each section can move into review while others are still being written. Failed reads and unresolved findings stay visible in the saved plan and receipt.
+| What you can make | How it is built |
+| --- | --- |
+| Flashcards (`cards`) | Every reader window is one independent call that writes cards with citations. Duplicates are removed locally, a sample of windows is audited against its source, and the deck exports to Anki. No planner, no writer, no review chain. |
+| Reference guide, document | Readers extract ideas, a streaming planner groups them into sections, writers draft each section from its own evidence, reviewers check it, one repair if needed. |
+| Podcast script and audio | A guide with a spoken-prose contract and an episode plan. Each section is synthesized the moment it leaves review, so the audio is assembled from cached segments. |
+| Practice exam | Candidate prompts and a separate marking guide, then a blind solver attempts each question before a judge marks it. |
+
+Models decide what the sources mean, what belongs together and how to explain it. Code decides everything that must not drift: source identity, who owns which passage, what each call can see, how big a request may be, which work runs together, what gets cached, and what the receipt says.
 
 ## Install
 
@@ -62,7 +69,21 @@ lamina produce --workspace .lamina --adapter @models.json \
 
 Use `--format cards` for an Anki-importable deck, `podcast-script` for episodes, or `assessment` for separate candidate and examiner material. Audio also requires a [speech adapter](docs/adapters.md#speech-resources). Document exports include Markdown, HTML and optional PDF, alongside the plan and receipt. See [Production](docs/production.md) for source selection, options, revisions and Python usage.
 
-The website contains installation instructions and documentation. Model runs use the installed app or CLI; selected source text goes to the configured model service.
+Without a model, `lamina demo --output demo` builds a deterministic guide from bundled fixtures so you can see the outputs and receipt. Model runs use the installed app or CLI; selected source text goes to the configured model service.
+
+## How a run works
+
+**Reading** runs first and wide. Sources are packed into windows that fit the reader's budget. Each window owns its core text and also sees the last few sentences of the previous unit and the first few of the next, so a list or qualification cut by a page break is visible without a second call. Readers cite spans by ID; code materializes the exact quotation. A window that fails after its retry is recorded and the run continues on what was read.
+
+**The sweep** (`--format cards`) stops here: readers write the cards, local similarity suppresses near-duplicates, a quarter of the windows (configurable) get one audit call that looks for omissions and unsupported cards, and the deck is exported. Audit findings are attached to the receipt; they never remove a card.
+
+**Planning**, for guides and podcasts, groups the extracted ideas into an outline, and it starts while reading is still running. When the ideas do not fit one call, a tree of grouping calls summarizes them level by level, each level starting as soon as a full batch of the level below exists. For a podcast the outline also divides the sections into episodes of a chosen length. Every original idea is then assigned to exactly one section or explicitly omitted.
+
+**Writing and review** run per section in one shared pool: write, review, one repair, one recheck, with review of one section overlapping writing of another. Writers see their assigned ideas, the original passages those ideas cited, and the titles of neighbouring sections. Valid sections from a grouped request proceed while their siblings retry.
+
+**Delivery** exports Markdown, HTML, PDF, a plan and a receipt. Podcasts render to one WAV per episode through a speech adapter; cards export to `cards.tsv` and `cards.json`. Workers default to 16 across stages. Restarting a run reuses every completed call; revising one section reruns only the requests that changed.
+
+[Flow geometry](docs/flow-geometry.md) models the routes as dependency graphs: how many serial calls sit on the critical path, which calls wait on the slowest member of a batch, and what a halo or a grouped request costs.
 
 ## How the code fits together
 

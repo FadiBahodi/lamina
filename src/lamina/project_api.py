@@ -207,7 +207,13 @@ def start_project(server, body, *, parent=None, section_notes=None):
                 status["plan"] = plan
                 _save(server, status)
             receipt = run_production(
-                server.workspace, server.provider, plan, options, progress=progress
+                server.workspace,
+                server.provider,
+                plan,
+                options,
+                progress=progress,
+                audio_provider=server.audio_provider,
+                audio_output=server.output_root / rid,
             )
             links = deliver_production(
                 server.workspace,

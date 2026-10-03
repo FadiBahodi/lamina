@@ -271,40 +271,6 @@ def start_project(server, body, *, parent=None, section_notes=None):
     return dict(status)
 
 
-def run_project_example(server):
-    """Execute the original fixture without using the operator's live adapter."""
-    from .production_example import production_demo
-    from .production_export import export_production
-
-    example = production_demo()
-    rid = uuid.uuid4().hex
-    receipt = example["runs"][0]["receipt"]
-    links = export_production(receipt, example["plan"], server.output_root / rid)
-    status = {
-        "id": rid,
-        "kind": "production",
-        "status": receipt["status"],
-        "example": True,
-        "adapter_label": "Deterministic original example",
-        "created_at": time.time(),
-        "error": None,
-        "events": example["events"][
-            : 2
-            * (
-                len(example["plan"]["metrics"]["requests"])
-                + len(receipt["metrics"]["requests"])
-            )
-        ],
-        "plan": example["plan"],
-        "receipt": receipt,
-        "outputs": _output_links(rid, links),
-    }
-    with server.run_lock:
-        server.runs[rid] = status
-        _save(server, status)
-    return status
-
-
 def keep_project_observation(server, run, body):
     from .method_runtime import record_observation
 

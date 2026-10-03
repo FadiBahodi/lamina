@@ -1,4 +1,4 @@
-"""Connected browser endpoints for examples, source policy and retained notes."""
+"""Connected browser endpoints for source policy and retained notes."""
 
 from __future__ import annotations
 
@@ -58,29 +58,6 @@ def _stop(server, thread):
     server.shutdown()
     thread.join(timeout=2)
     server.server_close()
-
-
-def test_no_adapter_original_example_runs_and_downloads(tmp_path, monkeypatch):
-    server, thread = _server(tmp_path / "example", monkeypatch)
-    try:
-        code, raw = _call(server, "/api/project-example", {})
-        assert code == 201, raw
-        result = _finished(server, json.loads(raw)["id"])
-        assert result["example"] is True
-        assert result["status"] == "ready"
-        assert result["adapter_label"] == "Deterministic original example"
-        assert result["plan"]["options"]["source_policy"]
-        assert result["receipt"]["initial_findings"]["section_2"]
-        for key in ("document", "reader", "report", "plan"):
-            code, content = _call(server, result["outputs"][key])
-            assert code == 200 and content
-        assert _call(server, "/api/project-example", {"adapter": "other"})[0] == 400
-        assert (
-            _call(server, "/api/project-example", {}, origin="http://evil.example")[0]
-            == 403
-        )
-    finally:
-        _stop(server, thread)
 
 
 class RecordingFixture(FixtureAdapter):

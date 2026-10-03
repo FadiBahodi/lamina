@@ -19,13 +19,23 @@ Optional comparison runs after reading and before planning. Local similarity
 pairs above a threshold, plus same-unit and same-structure lanes. A provider
 hook can add retrieval lanes and multi-source groups. Frequent postings are skipped to bound retrieval
 work; their count is reported. Models compare the actual source passages and
-can request missing evidence. Relations preserve participant IDs, evidence,
+can request missing evidence. Follow-up queries search both extracted ideas and
+full permitted original units, including passages no reader extracted. Exact unit
+IDs and headings also work. Retrieved passages retain source policy and location;
+they add supporting evidence without creating an owned idea. Relations preserve participant IDs, evidence,
 classification and searches. Planning sees their conditions; affected writers
 receive their support. Ownership never transfers because two claims are related.
 
 Nomination recall and comparison accuracy are separate unmeasured quantities.
 Lexically dissimilar relations need caller/dense nominations or successful query
 expansion. A limited search is not an exhaustive reconciliation algorithm.
+
+Every comparison request includes a fingerprint of the complete permitted search
+scope. Changes to that scope invalidate comparisons, including cached absence
+claims. This conservative choice can rerun comparisons after an unrelated source
+edit. Search records distinguish found passages from passages actually read.
+Follow-ups must fit complete source structures within the request and workload
+limits; otherwise the relation stays unresolved with the pending unit IDs.
 
 ## Grouping and scheduling
 
@@ -34,6 +44,10 @@ work under full request and stage workload checks. Each task retains its own
 source alias scope, output contract, section identity and fenced cache entry.
 Valid rows survive a malformed sibling. Invalid/missing rows retry individually;
 provider outages do not fan out into another wave of calls. Repairs remain local.
+After a grouped response is validated, accepted rows advance independently while
+unresolved rows and budget subdivisions enter the same bounded scheduler as new
+work. No extra executor handles those retries. This releases completed rows after
+the full provider response, without trying to parse an unfinished JSON stream.
 Cached sections are removed before forming a new physical request. A change to
 one section does not force an otherwise unchanged peer to be generated again.
 
@@ -56,9 +70,12 @@ Ready podcast sections are separate synthesis/cache units. PCM segments remain
 playable files even if another segment fails. Matching formats are concatenated
 in order on disk; incompatible formats fail visibly. The joined WAV can exceed
 the per-adapter response limit. Shared speech-resource names and capacities scope
-local-process concurrency. Audio rendering still starts after the script reaches
-ready; synthesis during unfinished script production and audio streaming remain
-future work. Prosody, pronunciation and listening fidelity need direct evaluation.
+local-process concurrency. When production has a speech adapter, sections can
+render as they leave review while other sections are still being written. Delivery
+assembles one WAV per episode and a full programme. Scripts in review render by
+default and name provisional sections; `--audio-when ready` withholds them until
+the checks pass. Streaming an unfinished WAV to a listener is separate work.
+Prosody, pronunciation and listening fidelity need direct evaluation.
 
 ## Validation and limits
 
@@ -76,7 +93,7 @@ tests. Layout-aware visual extraction, original-question inventory and completed
 prose podcast callbacks remain separate product work. The blind assessment
 boundary, direct/assigned routes and existing method runtime remain available.
 
-### Verified build record
+### Earlier build record
 
 On the implementation branch based on `80c9dce`, Python 3.12 completed 388 tests
 and 21 subtests; 11 optional-dependency tests were skipped. The wheel built and
@@ -85,5 +102,6 @@ journey used the local app's production form to upload two original source files
 observe three provisional sections while another writer was still active, and
 open the finished artifact and revision control with no page errors. Browser
 responses and audio bytes in these checks were deterministic fixtures. No live
-provider key was configured. The branch is intended for PR review; no hosted
-release or production deployment is implied.
+provider key was configured. That record predates merged PR #4 and the subsequent
+source-recovery and batch-release changes. It is not the test result for the
+current revision.

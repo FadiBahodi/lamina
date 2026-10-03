@@ -6,7 +6,7 @@
   const make = (tag, cls = "", value) => { const x = document.createElement(tag); if (cls) x.className = cls; if (value !== undefined) x.textContent = String(value); return x; };
   const route = path => new URL(path, document.baseURI);
   const statusLabel = value => ({queued:"Waiting to start",running:"In progress",ready:"Complete",review:"Needs review",failed:"Failed",interrupted:"Interrupted",passed:"Passed",completed:"Complete"}[value] || "Status unavailable");
-  const state = { local: false, adapter: false, audioAdapter: false, sources: [], selected: new Set(), roles: new Map(), observations: [], selectedObservations: new Set(), runId: "", run: null, poll: null, example: null };
+  const state = { local: false, adapter: false, audioAdapter: false, sources: [], selected: new Set(), roles: new Map(), observations: [], selectedObservations: new Set(), runId: "", run: null, poll: null };
   const shell = make("div", "pb-shell");
   const form = make("div", "pb-form");
   const goalBlock = make("section", "pb-block");
@@ -74,25 +74,17 @@
   const savedNotesList=make("div","pb-saved-notes-list");savedNotes.append(savedNotesList);
   const controls = make("div", "pb-controls");
   const start = make("button", "pb-primary", "Start project"); start.type = "button";
-  const installExample = make("button", "pb-secondary", "Open recorded example"); installExample.type = "button"; installExample.hidden=true;
   const mode = make("p", "pb-mode", "Checking local app…"); mode.setAttribute("role", "status");
-  controls.append(start, installExample, mode); form.append(goalBlock, sourceBlock, capacityBlock, savedNotes, controls);
+  controls.append(start, mode); form.append(goalBlock, sourceBlock, capacityBlock, savedNotes, controls);
   const activity = make("section", "pb-activity"); activity.hidden = true;
   const activityTitle = make("h3", "", "Project progress");
   const activityStatus = make("p", "pb-run-status");
   const events = make("div", "pb-events");
   const output = make("div", "pb-output");
   activity.append(activityTitle, activityStatus, events, output);
-  const replay = make("section", "pb-replay");
-  const replayHeading = make("div"); replayHeading.append(make("strong", "", "Recorded project"), make("p", "", "See a sample project and a section revision. This example uses saved test responses."));
-  const replayActions = make("div", "pb-replay-actions");
-  const replayButton = make("button", "pb-secondary", "Initial result"); replayButton.type = "button";
-  const replayRevision = make("button", "pb-secondary", "Revised result"); replayRevision.type = "button";
-  window.addEventListener("lamina:replay", () => replayButton.click());
-  replayActions.append(replayButton,replayRevision); replay.append(replayHeading, replayActions);
   const recent = make("details", "pb-recent"); recent.append(make("summary", "", "Recent local projects"));
   const recentList = make("div", "pb-recent-list"); recent.append(recentList);
-  shell.append(form, activity, recent, replay); host.replaceChildren(shell);
+  shell.append(form, activity, recent); host.replaceChildren(shell);
   const setMessage = (value, bad = false) => { mode.textContent = value; mode.classList.toggle("error", bad); };
   window.addEventListener("lamina:setup", event => {
     const setup=event.detail;
@@ -130,7 +122,7 @@
   }
   function renderSources() {
     sourceList.replaceChildren();
-    if (!state.sources.length) { sourceList.append(make("p", "pb-empty", state.local ? "No sources stored locally yet. Add files below." : "Add your own sources in the local app. You can explore the recorded project here.")); return; }
+    if (!state.sources.length) { sourceList.append(make("p", "pb-empty", state.local ? "No sources stored locally yet. Add files below." : "Open the local app to add source files.")); return; }
     state.sources.forEach(source => {
       const row = make("div", "pb-source");
       const identity = make("label", "pb-source-identity");
@@ -150,7 +142,7 @@
   }
   async function getJSON(path) { const response = await fetch(route(path), {cache:"no-store"}); if (!response.ok) throw Error(`HTTP ${response.status}`); return response.json(); }
   async function post(path, data) { const response = await fetch(route(path), {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data)}); let value; try { value=await response.json(); } catch { throw Error(`HTTP ${response.status}: no JSON response`); } if (!response.ok) throw Error(value.error || `HTTP ${response.status}`); return value; }
-  async function refreshSources() { const status = await getJSON("api/status"); state.local=status.mode === "local"; state.adapter=Boolean(status.adapter_configured);state.audioAdapter=Boolean(status.audio_adapter_configured);updateFormatNote(); state.sources=Array.isArray(status.sources)?status.sources:[]; renderSources(); start.disabled=!state.adapter; fileInput.disabled=!state.local; installExample.hidden=false; setMessage(state.adapter ? "Ready. Selected source text will be sent to your connected model." : "Connect a model to create a project. You can open the example without one."); const badge=document.getElementById("project-mode"); if (badge) badge.textContent=state.adapter?"Ready":"Model connection needed"; try { const projects=await getJSON("api/projects");renderRecent(projects.projects || []); } catch { recent.hidden=true; } await refreshObservations(); if (status.active_run?.kind === "production" && status.active_run.id) {state.runId=status.active_run.id; poll(status.active_run.id);} }
+  async function refreshSources() { const status = await getJSON("api/status"); state.local=status.mode === "local"; state.adapter=Boolean(status.adapter_configured);state.audioAdapter=Boolean(status.audio_adapter_configured);updateFormatNote(); state.sources=Array.isArray(status.sources)?status.sources:[]; renderSources(); start.disabled=!state.adapter; fileInput.disabled=!state.local; setMessage(state.adapter ? "Ready to run. Selected source text may go to your configured model provider." : "Start Lamina with --adapter @models.json to connect a model. See the adapter setup guide in Documentation."); const badge=document.getElementById("project-mode"); if (badge) badge.textContent=state.adapter?"Ready":"Model connection needed"; try { const projects=await getJSON("api/projects");renderRecent(projects.projects || []); } catch { recent.hidden=true; } await refreshObservations(); if (status.active_run?.kind === "production" && status.active_run.id) {state.runId=status.active_run.id; poll(status.active_run.id);} }
   async function refreshObservations(){try{const answer=await getJSON("api/project-observations");state.observations=Array.isArray(answer.observations)?answer.observations:[];renderObservations();}catch{savedNotes.hidden=true;}}
   function renderObservations(){savedNotesList.replaceChildren();savedNotes.hidden=!state.observations.length;state.observations.forEach(item=>{const id=item.observation_id;if(!id)return;const row=make("label","pb-note-choice");const input=make("input");input.type="checkbox";input.checked=state.selectedObservations.has(id);input.addEventListener("change",()=>{if(input.checked)state.selectedObservations.add(id);else state.selectedObservations.delete(id);});const text=make("span");text.append(make("strong","",item.note || "Saved project note"));if(item.applicability)text.append(make("small","",`Use when: ${item.applicability}`));row.append(input,text);savedNotesList.append(row);});}
   function renderRecent(projects) {
@@ -202,7 +194,7 @@
   }
   function sourceLabel(id) { const unit=state.run?.plan?.units?.find?.(u=>u.id===id);const sourceId=unit?.source_id || id;const available=state.run?.receipt?.sources || state.sources;const source=available.find?.(s=>s.id===sourceId);return `${source?.title || source?.filename || sourceId}${unit?.locator ? ` · ${unit.locator}` : ""}`; }
   function sectionsFrom(receipt) { const sections=receipt?.sections; return Array.isArray(sections) ? sections : sections && typeof sections === "object" ? Object.entries(sections).map(([id,value])=>({id,...value})) : []; }
-  function outputLink(path,label) { if (typeof path!=="string" || !(/^\/outputs\/[a-f0-9]{32}\//.test(path) || /^examples\/production(?:-revised)?\/(index\.html|document\.md|document\.pdf|plan\.json|report\.json)$/.test(path)) || path.includes("\\")) return null; const a=make("a","pb-output-link",label); a.href=route(path); a.target="_blank"; a.rel="noopener"; return a; }
+  function outputLink(path,label) { if (typeof path!=="string" || !/^\/outputs\/[a-f0-9]{32}\//.test(path) || path.includes("\\")) return null; const a=make("a","pb-output-link",label); a.href=route(path); a.target="_blank"; a.rel="noopener"; return a; }
   function renderReceipt(run, example=false) {
     output.replaceChildren(); const receipt=run.receipt;
     if (!receipt) return;
@@ -344,21 +336,18 @@
       memory.append(fields,button,feedback);output.append(memory);
     }
   }
-  function exampleSplit(events){const firstWriter=events.find(event=>event.stage==="production_write" && event.status==="started")?.item;const first=events.findIndex(event=>event.stage==="production_write" && event.status==="started" && event.item===firstWriter);return events.findIndex((event,i)=>i>first && event.stage==="production_write" && event.status==="started" && event.item===firstWriter);}
-  function renderRun(run, example=false) {
+  function renderRun(run) {
     state.run=run; const wasHidden=activity.hidden; activity.hidden=false; events.replaceChildren();
-    activityStatus.textContent=example || run.example ? "Recorded example · saved test responses" : statusLabel(run.status);
-    const allRecords=Array.isArray(run.events)?run.events:[];
-    const split=run.example?exampleSplit(allRecords):-1;
-    const records=split>=0?allRecords.slice(0,split):allRecords;
+    activityStatus.textContent=run.example ? "Saved fixture · not model output" : statusLabel(run.status);
+    const records=Array.isArray(run.events)?run.events:[];
     const labels={production_read:"Reading sources",production_route:"Preparing the outline",production_group:"Organizing ideas",production_assign:"Assigning sources",production_targets:"Organizing questions",production_compare:"Comparing sources",production_consistency:"Checking sections together",production_write:"Writing sections",production_review:"Reviewing sections",production_repair:"Revising sections",assessment_blind_solve:"Trying the questions",assessment_judge:"Checking the answers"};
     const grouped=new Map();
     records.forEach(event=>{const stage=event.stage || event.node || "Work";if(!grouped.has(stage))grouped.set(stage,new Map());grouped.get(stage).set(event.item || "global",event.status || "updated");});
     grouped.forEach((items,stage)=>{const values=[...items.values()];const done=values.filter(status=>status==="completed").length;const failed=values.filter(status=>status==="failed").length;const active=values.filter(status=>status==="started").length;const row=make("div","pb-event");row.append(make("span","pb-event-stage",labels[stage] || stage.replaceAll("production_","").replaceAll("_"," ")),make("strong","",`${done}/${items.size} complete`));if(active || failed)row.append(make("p","",`${active ? `${active} active` : ""}${active && failed ? " · " : ""}${failed ? `${failed} failed` : ""}`));events.append(row);});
     if(!events.childNodes.length) events.append(make("p","pb-empty",run.status==="queued"?"Queued. Waiting for the first stage update…":"No stage events were reported for this run."));
     if(records.length){const detail=make("details","pb-event-details");detail.append(make("summary","",`Show ${records.length} processing updates`));const log=make("div","pb-event-log");records.forEach(event=>log.append(make("p","",`${labels[event.stage] || event.stage || "Work"} · ${event.item || "whole project"} · ${event.status || "updated"}`)));detail.append(log);events.append(detail);}
-    if(run.error) output.replaceChildren(make("p","pb-error",run.error)); else renderReceipt(run,example || Boolean(run.example));
-    if(wasHidden || example) activity.scrollIntoView({behavior:"smooth",block:"start"});
+    if(run.error) output.replaceChildren(make("p","pb-error",run.error)); else renderReceipt(run,Boolean(run.example));
+    if(wasHidden) activity.scrollIntoView({behavior:"smooth",block:"start"});
   }
   let previewRun="", previewCursor=0;
   const previews=new Map();
@@ -388,25 +377,11 @@
     start.disabled=true;setMessage("Starting project…");
     try{const answer=await post("api/projects",{brief,source_ids:selected,options:chosen});if(!answer.id)throw Error("Server returned no project ID.");state.runId=answer.id;poll(answer.id);}catch(err){start.disabled=false;setMessage(`Could not start project: ${err.message}`,true);}
   });
-  function openReplay(index) {
-    if(!state.example){setMessage("The recorded project is unavailable in this build.",true);return;}
-    const fixture=state.example, record=fixture.runs?.[index];
-    if(!record?.receipt){setMessage("That recorded result is unavailable.",true);return;}
-    const all=Array.isArray(fixture.events)?fixture.events:[];
-    const split=exampleSplit(all);
-    const chosen=split<0?all:(index===0?all.slice(0,split):all.slice(split));
-    const base=index===0?"examples/production":"examples/production-revised";
-    const sampleOutputs={reader:`${base}/index.html`,document:`${base}/document.md`,pdf:`${base}/document.pdf`,plan:`${base}/plan.json`,report:`${base}/report.json`};
-    renderRun({id:record.title,status:record.receipt.status,receipt:record.receipt,plan:fixture.plan,events:chosen,outputs:sampleOutputs},true);
-    const info=make("p","pb-replay-note",`${record.title}${index===1?` · ${record.receipt.metrics?.cache_hits ?? "?"} stage results reused; ${record.receipt.metrics?.cache_misses ?? "?"} recomputed.`:""}`);
-    output.prepend(info);
-  }
-  replayButton.addEventListener("click",()=>openReplay(0));
-  replayRevision.addEventListener("click",()=>openReplay(1));
-  installExample.addEventListener("click",async()=>{if(!state.local)return;installExample.disabled=true;setMessage("Opening recorded example…");try{const answer=await post("api/project-example",{});if(!answer.id)throw Error("Server returned no example run ID.");state.runId=answer.id;await refreshSources();poll(answer.id);}catch(err){setMessage(`Could not open the recorded example: ${err.message}`,true);}finally{installExample.disabled=false;}});
   async function initialize(){
-    try{state.example=await getJSON("production-example.json");}catch{replayButton.disabled=true;replayRevision.disabled=true;replayHeading.lastChild.textContent="The recorded example is unavailable in this build.";}
-    try{await refreshSources();}catch{state.local=false;state.adapter=false;start.disabled=true;fileInput.disabled=true;recent.hidden=true;renderSources();setMessage("Hosted preview. Download and run Lamina locally to make a project with your sources.");const badge=document.getElementById("project-mode");if(badge)badge.textContent="Example only";}
+    try{await refreshSources();}catch{state.local=false;state.adapter=false;start.disabled=true;fileInput.disabled=true;recent.hidden=true;renderSources();setMessage("Cannot reach the local app. Start Lamina and open the address it prints.");const badge=document.getElementById("project-mode");if(badge)badge.textContent="Local server unavailable";}
   }
+  window.addEventListener("lamina:view", event => {
+    if (event.detail === "workflows") refreshSources().catch(() => setMessage("Cannot refresh local sources. Reload the app to reconnect.", true));
+  });
   initialize();
 })();

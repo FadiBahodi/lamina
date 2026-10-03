@@ -1,4 +1,4 @@
-/* Local custom-method workbench. Hosted pages show an editable, non-running example. */
+/* Local custom-method editor and execution results. */
 (() => {
   "use strict";
   const host = document.getElementById("method-workbench");
@@ -17,13 +17,12 @@
   title.append(make("span", "mw-kicker", "ADVANCED / WORKER DEFINITIONS"), make("h3", "", "Worker workflow"));
   const mode = make("span", "mw-mode", "Checking local availability…");
   head.append(title, mode);
-  const lead = make("p", "mw-lead", "Load an example or import a method. Define each worker, what it receives, and when it runs. The configured local adapter receives these instructions.");
+  const lead = make("p", "mw-lead", "Edit a starter method or import your own. Define each worker, what it receives, and when it runs. Replace the starter task with your inputs before running.");
   const top = make("div", "mw-top");
   const summary = make("div", "mw-summary");
   const starters = make("div", "mw-starters");
-  const fixtureButton = make("button", "mw-button mw-button-secondary", "Load small example"); fixtureButton.type = "button";
-  const briefButton = make("button", "mw-button mw-button-secondary", "Load technical brief"); briefButton.type = "button";
-  starters.append(fixtureButton, briefButton);
+  const briefButton = make("button", "mw-button mw-button-secondary", "Reset to starter method"); briefButton.type = "button";
+  starters.append(briefButton);
   const importLabel = make("label", "mw-import");
   importLabel.append(make("span", "", "Import method JSON"));
   const file = make("input"); file.type = "file"; file.accept = ".json,application/json";
@@ -47,7 +46,7 @@
   const graphBody = make("div", "mw-graph-body"); graph.append(graphTitle, graphBody);
   const actions = make("div", "mw-actions");
   const validate = make("button", "mw-button mw-button-secondary", "Validate method"); validate.type = "button";
-  const run = make("button", "mw-button mw-button-primary", "Run locally"); run.type = "button";
+  const run = make("button", "mw-button mw-button-primary", "Run locally"); run.type = "button"; run.disabled = true;
   const status = make("p", "mw-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   actions.append(validate, run, status);
   const result = make("div", "mw-result"); result.hidden = true;
@@ -113,24 +112,22 @@
     } catch (err) { message(`Import failed: ${err.message}`, true); }
     file.value = "";
   });
-  let fixture = null;
-  fixtureButton.addEventListener("click", () => {
-    if (!fixture) return;
-    const starter = structuredClone(fixture.method);
-    for (const node of starter.nodes || []) node.observation_ids = [];
-    starter.version = "1.0";
-    methodText.value = JSON.stringify(starter, null, 2);
-    taskText.value = JSON.stringify(fixture.task.initial, null, 2);
-    state.selected = ""; renderGraph(); message("Small example loaded. Review the workers and task before running.");
-  });
+  async function loadStarter() {
+    const [methodResponse, taskResponse] = await Promise.all([
+      fetch(url("assets/technical-brief.json")),
+      fetch(url("assets/technical-brief-task.json")),
+    ]);
+    if (!methodResponse.ok || !taskResponse.ok) throw Error("Starter method is unavailable. Import a method JSON to continue.");
+    methodText.value = JSON.stringify(await methodResponse.json(), null, 2);
+    taskText.value = JSON.stringify(await taskResponse.json(), null, 2);
+    state.selected = "";
+    renderGraph();
+  }
   briefButton.addEventListener("click", async () => {
-    briefButton.disabled = true; message("Loading technical brief method…");
+    briefButton.disabled = true;
     try {
-      const [methodResponse, taskResponse] = await Promise.all([fetch(url("assets/technical-brief.json")), fetch(url("assets/technical-brief-task.json"))]);
-      if (!methodResponse.ok || !taskResponse.ok) throw Error("Technical brief example is unavailable in this site build.");
-      methodText.value = JSON.stringify(await methodResponse.json(), null, 2);
-      taskText.value = JSON.stringify(await taskResponse.json(), null, 2);
-      state.selected = ""; renderGraph(); message("Technical brief loaded. Validate it and review the inputs before running.");
+      await loadStarter();
+      message("Starter definition loaded. Replace its task inputs and review the instructions before running.");
     } catch (err) { message(err.message, true); }
     finally { briefButton.disabled = false; }
   });
@@ -240,29 +237,23 @@
     });
   }
   async function initialize() {
-    try {
-      const [exampleResponse, statusResponse] = await Promise.allSettled([
-        fetch(url("method-example.json"), {cache:"no-store"}),
-        fetch(url("api/status"), {cache:"no-store"}),
-      ]);
-      if (exampleResponse.status !== "fulfilled" || !exampleResponse.value.ok) throw Error("Published method example unavailable.");
-      const example = await exampleResponse.value.json(); fixture = example;
-      const starter = structuredClone(example.method);
-      // The published trace refers to an observation in its temporary fixture store.
-      // A new local run starts without that external observation reference.
-      for (const node of starter.nodes || []) node.observation_ids = [];
-      starter.version = "1.0";
-      methodText.value = JSON.stringify(starter, null, 2);
-      taskText.value = JSON.stringify(example.task.initial, null, 2);
-      renderGraph();
-      if (statusResponse.status === "fulfilled" && statusResponse.value.ok) {
-        const statusData = await statusResponse.value.json();
-        state.local = statusData.mode === "local"; state.adapter = Boolean(statusData.adapter_configured);
-      }
-      mode.textContent = state.local ? (state.adapter ? "LOCAL / ADAPTER READY" : "LOCAL / ADAPTER REQUIRED") : "HOSTED / EDIT & DOWNLOAD";
-      run.disabled = !state.local || !state.adapter;
-      message(state.local ? (state.adapter ? "Ready to validate and run with your configured adapter." : "Configure a local adapter to run. You can still edit, validate, and download.") : "This hosted page does not execute models. Edit or download a method; run it with the local app.");
-    } catch (err) { mode.textContent = "EXAMPLE UNAVAILABLE"; run.disabled = true; message(err.message, true); }
+    const [starterResult, statusResult] = await Promise.allSettled([
+      loadStarter(),
+      fetch(url("api/status"), {cache:"no-store"}).then(async response => {
+        if (!response.ok) throw Error(`HTTP ${response.status}`);
+        return response.json();
+      }),
+    ]);
+    if (statusResult.status === "fulfilled") {
+      state.local = statusResult.value.mode === "local";
+      state.adapter = Boolean(statusResult.value.adapter_configured);
+    }
+    mode.textContent = state.local ? (state.adapter ? "LOCAL / ADAPTER READY" : "LOCAL / ADAPTER REQUIRED") : "LOCAL SERVER UNAVAILABLE";
+    run.disabled = !state.local || !state.adapter;
+    if (starterResult.status === "rejected") message(starterResult.reason.message, true);
+    else message(state.local
+      ? (state.adapter ? "Starter definition loaded. Replace its task inputs, validate, and run with your adapter." : "Start lamina app --adapter @models.json to connect a model. You can still edit, validate, and download.")
+      : "The local server could not be reached. Start lamina app and reload this page.");
   }
   initialize();
 })();

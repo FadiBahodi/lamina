@@ -89,7 +89,7 @@ class GeminiProvider:
         output_tokens=DEFAULT_OUTPUT_TOKENS,
         thinking_tokens=DEFAULT_THINKING_TOKENS,
         temperature=0.2,
-        max_concurrency=4,
+        max_concurrency=16,
         workload=None,
     ):
         configured_model = model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)

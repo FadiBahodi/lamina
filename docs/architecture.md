@@ -32,7 +32,7 @@ Each section proceeds through writing, review and one possible repair/recheck. O
 
 One worker limit bounds simultaneous production calls; stage limits can reduce it. Review begins as individual sections finish. The method runtime builds dependency counts once, starts ready work within lane limits, and prioritizes longer remaining paths using graph depth. This priority uses structure without estimating model duration.
 
-With total service work W, worker capacity P and longest dependency chain D, ideal completion takes at least max(W/P, D). Real runs also incur provider waiting, network/process overhead, retries and unequal call lengths. Measure complete-run latency and delivered quality alongside call counts and usage.
+With total service work W, worker capacity P and longest dependency chain D, ideal completion takes at least max(W/P, D). Real runs also incur provider waiting, network/process overhead, retries and unequal call lengths. Measure complete-run latency and delivered quality alongside call counts and usage. [Flow geometry](flow-geometry.md) works this bound through for the planned route, counts its barriers and kill switches, and compares it with the depth-two sweep that preceded it.
 
 Persistent adapters share a process and HTTP connection pool. Stable prompt ordering preserves repeated prefixes where endpoints support caching. Provider receipts establish actual cache usage; no universal discount or speedup is assumed.
 

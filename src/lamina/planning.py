@@ -347,8 +347,15 @@ def _outline(cards, shared, brief, budget, workers, instruction, report):
             "purpose": instruction,
             "cards": rows,
         }
+        # Level 0 keeps source order: a grouping call can only relate cards it
+        # sees together, and adjacent cards from one source are the ones that
+        # share a structure. Cross-source mixing happens at the summary levels,
+        # whose inputs are already group descriptions, and in the assignment
+        # pass, which sees the whole outline. Interleaving original cards by
+        # file position only aligns sources that happen to cover topics in the
+        # same order.
         batches = budget.pack(
-            _interleave(current),
+            _interleave(current) if level else list(current),
             "production_group",
             GROUP_INSTRUCTION,
             GROUP_SHAPE,

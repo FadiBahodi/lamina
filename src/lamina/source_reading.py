@@ -65,6 +65,7 @@ def request_budget(provider, stage, options):
 
 def reader_input(window, source, task, options):
     core, before, after = window["core"], window["before"], window["after"]
+    partial = window.get("partial", {})
     visible = before + core + after
     aliases = (
         {u["id"]: f"u{n}" for n, u in enumerate(visible)}
@@ -77,6 +78,21 @@ def reader_input(window, source, task, options):
         for u in rows:
             local_id = aliases[u["id"]] if aliases else u["id"]
             spans = source_spans(local_id, u["text"], u.get("kind"))
+            shown = spans
+            note = {}
+            cut = partial.get(u["id"])
+            if cut and cut["spans"] < len(spans):
+                # A boundary halo shows only the spans nearest the owned core.
+                # Span IDs stay those of the complete unit, so a citation of a
+                # shown span resolves against the full stored text.
+                m = cut["spans"]
+                shown = spans[:m] if cut["side"] == "head" else spans[-m:]
+                note = {
+                    "partial": (
+                        f"{'first' if cut['side'] == 'head' else 'last'} {m} of "
+                        f"{len(spans)} spans; request this direction for the rest"
+                    )
+                }
             result.append(
                 {
                     "id": local_id,
@@ -87,8 +103,9 @@ def reader_input(window, source, task, options):
                             "id": span["id"],
                             "text": u["text"][span["start"] : span["end"]],
                         }
-                        for span in spans
+                        for span in shown
                     ],
+                    **note,
                     **{
                         k: u[k]
                         for k in ("heading_path", "kind", "reference_context")
@@ -298,22 +315,64 @@ def read_sources(
     )
     budget = request_budget(provider, stage, options)
     source_map = {s["id"]: s for s in sources}
+    by_source, positions = {}, {}
+    for unit in units:
+        local = by_source.setdefault(unit["source_id"], [])
+        positions[unit["id"]] = len(local)
+        local.append(unit)
+    context_spans = options.get("reader_context_spans", 0)
 
-    def window(core, before=(), after=()):
+    def window(core, before=(), after=(), partial=None):
         return {
             "id": "window_" + digest([u["id"] for u in core])[:12],
             "source_id": core[0]["source_id"],
             "core": core,
             "before": list(before),
             "after": list(after),
+            "partial": dict(partial or {}),
         }
+
+    def halo(core, side):
+        """One boundary unit on ``side`` showing only its nearest spans.
+
+        A fixed halo keeps reading at dependency depth one: the common
+        boundary cut (a sentence, list or qualification that continues on the
+        next page) is visible without a second serial call. The span cut keeps
+        the cost near a few hundred tokens per side. The context-request path
+        remains for what a boundary halo cannot cover.
+        """
+        if not context_spans or not core:
+            return [], {}
+        local = by_source[core[0]["source_id"]]
+        index = (
+            positions[core[0]["id"]] - 1
+            if side == "before"
+            else positions[core[-1]["id"]] + 1
+        )
+        if not 0 <= index < len(local):
+            return [], {}
+        unit = local[index]
+        spans = source_spans(unit["id"], unit["text"], unit.get("kind"))
+        if len(spans) <= context_spans:
+            return [unit], {}
+        return [unit], {
+            unit["id"]: {
+                "side": "tail" if side == "before" else "head",
+                "spans": context_spans,
+            }
+        }
+
+    def haloed(core):
+        before, partial_before = halo(core, "before")
+        after, partial_after = halo(core, "after")
+        return window(core, before, after, {**partial_before, **partial_after})
 
     def request(core):
         if not core:
             data = {"core": [], "before": [], "after": []}
         else:
             data, _ = reader_input(
-                window(core), source_map[core[0]["source_id"]], task, options
+                haloed(core), source_map[core[0]["source_id"]], task, options
             )
         return envelope(
             stage,
@@ -329,7 +388,7 @@ def read_sources(
         windows = legacy_windows
     elif getattr(budget, "workload", None) is not None:
         windows = (
-            window(batch.units) for batch in iter_packed_units(units, request, budget)
+            haloed(batch.units) for batch in iter_packed_units(units, request, budget)
         )
     else:
         # With no evaluated workload profile, keep native page/slide structures
@@ -337,15 +396,10 @@ def read_sources(
         # section. The complete request budget can still split prose batches.
         groups = _reader_groups(units)
         windows = (
-            window(batch.units)
+            haloed(batch.units)
             for group in groups
             for batch in iter_packed_units(group, request, budget)
         )
-    by_source, positions = {}, {}
-    for unit in units:
-        local = by_source.setdefault(unit["source_id"], [])
-        positions[unit["id"]] = len(local)
-        local.append(unit)
     context_groups, context_group_for = {}, {}
     for group in _reader_groups(units):
         source_groups = context_groups.setdefault(group[0]["source_id"], [])
@@ -359,6 +413,7 @@ def read_sources(
             **original,
             "before": list(original["before"]),
             "after": list(original["after"]),
+            "partial": dict(original.get("partial", {})),
         }
         extensions = []
         while True:
@@ -414,6 +469,24 @@ def read_sources(
                 request_more = reply["context_request"]
                 local = by_source[current["source_id"]]
                 visible = current["before"] + current["core"] + current["after"]
+                edge = visible[0] if request_more["direction"] == "before" else visible[-1]
+                if edge["id"] in current["partial"]:
+                    # Complete the boundary halo before stepping to a new group.
+                    if len(extensions) >= _MAX_CONTEXT_EXTENSIONS:
+                        raise ProductionError(
+                            "Reader requested more than two adjacent context groups; "
+                            "revise the source boundary or supply explicit reading context"
+                        )
+                    current["partial"].pop(edge["id"])
+                    extensions.append(
+                        {
+                            "direction": request_more["direction"],
+                            "reason": request_more["reason"],
+                            "unit_ids": [edge["id"]],
+                            "completed_partial": True,
+                        }
+                    )
+                    continue
                 index = (
                     positions[visible[0]["id"]] - 1
                     if request_more["direction"] == "before"
@@ -491,15 +564,39 @@ def read_sources(
                 middle = len(bundles) // 2
                 # Outer context stays on its adjacent child. Copying the outer
                 # "after" onto the left child would skip its right sibling when
-                # that child asks for the next contiguous source structure.
+                # that child asks for the next contiguous source structure. Each
+                # child receives a fresh boundary halo on its inner edge.
+                left_core = [u for group in bundles[:middle] for u in group]
+                right_core = [u for group in bundles[middle:] for u in group]
+                left_after, left_partial = halo(left_core, "after")
+                right_before, right_partial = halo(right_core, "before")
+                outer = current["partial"]
                 children = [
                     window(
-                        [u for group in bundles[:middle] for u in group],
+                        left_core,
                         before=current["before"],
+                        after=left_after,
+                        partial={
+                            **{
+                                u["id"]: outer[u["id"]]
+                                for u in current["before"]
+                                if u["id"] in outer
+                            },
+                            **left_partial,
+                        },
                     ),
                     window(
-                        [u for group in bundles[middle:] for u in group],
+                        right_core,
+                        before=right_before,
                         after=current["after"],
+                        partial={
+                            **right_partial,
+                            **{
+                                u["id"]: outer[u["id"]]
+                                for u in current["after"]
+                                if u["id"] in outer
+                            },
+                        },
                     ),
                 ]
                 # Return children to the shared pool. A worker never waits for
@@ -550,7 +647,17 @@ def read_sources(
     )
     successful = [row.value for row in results if row.ok]
     failures = [row for row in results if not row.ok]
-    if failures:
+    unresolved = [
+        {
+            "id": dispatched[row.index[0]]["id"],
+            "source_id": dispatched[row.index[0]]["source_id"],
+            "core": [u["id"] for u in dispatched[row.index[0]]["core"]],
+            "split_path": list(row.index[1:]),
+            "error": str(row.error),
+        }
+        for row in failures
+    ]
+    if failures and (options.get("reading_failures", "abort") != "continue" or not successful):
         error = ProductionError(
             f"{len(failures)} reading batch(es) unresolved; {len(successful)} completed batches are cached: {failures[0].error}"
         )
@@ -569,6 +676,8 @@ def read_sources(
             ],
         }
         raise error from failures[0].error
-    return [w for part in successful for w in part[0]], [
-        idea for part in successful for idea in part[1]
-    ]
+    return (
+        [w for part in successful for w in part[0]],
+        [idea for part in successful for idea in part[1]],
+        unresolved,
+    )

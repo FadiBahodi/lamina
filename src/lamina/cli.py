@@ -209,6 +209,22 @@ def parser() -> argparse.ArgumentParser:
         help="Maximum attempts per model request, including validation repair (1–5)",
     )
     produce.add_argument("--halo-units", type=int)
+    produce.add_argument(
+        "--reader-context-spans",
+        type=int,
+        help="Boundary halo: show this many sentence spans of each adjacent unit to every reader (0–64; 0 means ask only when needed)",
+    )
+    produce.add_argument(
+        "--reading-failures",
+        choices=["abort", "continue"],
+        help="continue plans from the successful reads and leaves the receipt in review; abort (default) stops the plan",
+    )
+    produce.add_argument(
+        "--audio-when",
+        choices=["ready", "any"],
+        default="ready",
+        help="any renders a podcast script that is still in review and names its provisional sections in the audio manifest",
+    )
     produce.add_argument("--output", type=Path, default=Path("output/project"))
     run = commands.add_parser(
         "run", help="Run a validated teaching procedure with a configured adapter"
@@ -440,6 +456,8 @@ def main(argv: list[str] | None = None) -> int:
                     "reading": args.reading,
                     "max_attempts": args.max_attempts,
                     "halo_units": args.halo_units,
+                    "reader_context_spans": args.reader_context_spans,
+                    "reading_failures": args.reading_failures,
                     "source_policy": (
                         json.loads(args.source_policy.read_text(encoding="utf-8"))
                         if args.source_policy
@@ -484,7 +502,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             links = deliver_production(
-                workspace, receipt, plan, args.output, audio_provider=audio_provider
+                workspace,
+                receipt,
+                plan,
+                args.output,
+                audio_provider=audio_provider,
+                audio_when=args.audio_when,
             )
             result = {
                 "status": receipt["status"],

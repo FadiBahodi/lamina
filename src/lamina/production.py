@@ -265,7 +265,7 @@ def _read_and_plan(
         if opts["core_words"] is not None
         else None
     )
-    windows, ideas = read_sources(
+    windows, ideas, unresolved_reads = read_sources(
         workspace, provider, task, opts, sources, units, tracker, legacy
     )
     if not ideas:
@@ -393,6 +393,10 @@ def _read_and_plan(
             "targets": target_report,
             "writing_capacity": refinement,
             "evidence_relations": relation_report,
+            # Windows that stayed unresolved under reading_failures="continue".
+            # Their source units were considered but produced no ideas; the
+            # receipt stays in review until they are read or explicitly waived.
+            "unresolved_reads": unresolved_reads,
         },
     )
 
@@ -519,6 +523,9 @@ def plan_production(
             "selected_observations": len(selection["observations"]),
             "source_units": len(units),
             "reader_windows": len(windows),
+            "unresolved_reader_windows": len(
+                planning_report.get("unresolved_reads") or []
+            ),
             "workflow": opts["workflow"],
             "extracted_ideas": len(ideas) if opts["workflow"] == "planned" else 0,
             "source_references": len(ideas) if opts["workflow"] != "planned" else 0,
@@ -1315,11 +1322,13 @@ def run_production(
             include_adjacency=True,
         )
     metrics = tracker.metrics()
+    unresolved_reads = (plan.get("planning") or {}).get("unresolved_reads") or []
     metrics.update(
         {
             "wall_ms": round((time.monotonic() - started) * 1000, 3),
             "sections": len(authored),
             "first_useful_output_ms": first_useful_ms,
+            "unresolved_reader_windows": len(unresolved_reads),
             "execution_capacity": {
                 "engine_workers": opts["workers"],
                 "sections_per_request": opts["sections_per_request"],
@@ -1341,12 +1350,14 @@ def run_production(
         "status": (
             "review"
             if remaining
+            or unresolved_reads
             or (document_checks and document_checks["status"] == "review")
             or (plan.get("planning", {}).get("evidence_relations") or {}).get(
                 "unresolved_groups", 0
             )
             else "ready"
         ),
+        "unresolved_reads": unresolved_reads,
         "document_checks": document_checks,
         "quality": plan["quality"],
         "format": opts["format"],

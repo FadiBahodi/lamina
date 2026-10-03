@@ -144,6 +144,8 @@ def _options(options: dict | None) -> dict:
         "sections_per_request",
         "compare_relations",
         "relation_neighbors",
+        "reader_context_spans",
+        "reading_failures",
     }
     if set(options) - allowed:
         raise ProductionError(
@@ -166,6 +168,8 @@ def _options(options: dict | None) -> dict:
         "sections_per_request": 1,
         "compare_relations": False,
         "relation_neighbors": 20,
+        "reader_context_spans": 0,
+        "reading_failures": "abort",
         "max_request_bytes": 1_500_000,
         "retrieval_targets": False,
     }
@@ -179,6 +183,8 @@ def _options(options: dict | None) -> dict:
         raise ProductionError("workflow must be auto, direct, assigned, or planned")
     if result["reading"] not in ("task", "reusable"):
         raise ProductionError("reading must be task or reusable")
+    if result["reading_failures"] not in ("abort", "continue"):
+        raise ProductionError("reading_failures must be abort or continue")
     if result["halo_units"] and result["core_words"] is None:
         raise ProductionError(
             "legacy halo_units requires explicit core_words; budgeted reading requests missing context when needed"
@@ -207,6 +213,7 @@ def _options(options: dict | None) -> dict:
         ("workers", 1, 128),
         ("sections_per_request", 1, 32),
         ("relation_neighbors", 1, 100),
+        ("reader_context_spans", 0, 64),
         ("max_attempts", 1, 5),
         ("max_input_bytes", 4096, 2_000_000),
         ("reader_workers", 1, 128),

@@ -31,6 +31,15 @@ DEFAULT_MODEL = "models/gemini-2.5-flash"
 DEFAULT_CONTEXT_TOKENS = 1_048_576
 DEFAULT_OUTPUT_TOKENS = 8_192
 DEFAULT_THINKING_TOKENS = 1_024
+# Stages whose job is mechanical checking rather than composition. A thinking
+# budget there adds time to first token on every call and rarely changes the
+# verdict; composition stages keep the default budget.
+DEFAULT_THINKING_BY_STAGE = {
+    "production_review": 0,
+    "production_consistency": 0,
+    "sweep_audit": 0,
+    "assessment_judge": 0,
+}
 
 
 def _positive_int(name, value, *, allow_zero=False):
@@ -91,6 +100,7 @@ class GeminiProvider:
         temperature=0.2,
         max_concurrency=16,
         workload=None,
+        thinking_by_stage=None,
     ):
         configured_model = model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
         if not isinstance(configured_model, str) or not configured_model:
@@ -113,6 +123,17 @@ class GeminiProvider:
             raise ValueError("temperature must be between 0 and 2")
         if type(max_concurrency) is not int or not 1 <= max_concurrency <= 128:
             raise ValueError("max_concurrency must be between 1 and 128")
+        by_stage = dict(
+            DEFAULT_THINKING_BY_STAGE if thinking_by_stage is None else thinking_by_stage
+        )
+        for stage, value in by_stage.items():
+            if not isinstance(stage, str) or not stage:
+                raise ValueError("thinking_by_stage keys must be stage names")
+            _positive_int(f"thinking_by_stage[{stage}]", value, allow_zero=True)
+            if value > min(24_576, output_tokens - 1):
+                raise ValueError(
+                    f"thinking_by_stage[{stage}] exceeds the configured output allowance"
+                )
 
         self.model = configured_model
         self.timeout = float(timeout)
@@ -120,6 +141,7 @@ class GeminiProvider:
         self.context_tokens = context_tokens
         self.output_tokens = output_tokens
         self.thinking_tokens = thinking_tokens
+        self.thinking_by_stage = by_stage
         self.temperature = float(temperature)
         self.max_concurrency = max_concurrency
         self._slots = threading.BoundedSemaphore(max_concurrency)
@@ -152,6 +174,7 @@ class GeminiProvider:
             "context_tokens": self.context_tokens,
             "output_tokens": self.output_tokens,
             "thinking_tokens": self.thinking_tokens,
+            "thinking_by_stage": dict(sorted(self.thinking_by_stage.items())),
             "temperature": self.temperature,
             "max_concurrency": self.max_concurrency,
             "max_request_bytes": self.max_request_bytes,
@@ -187,13 +210,17 @@ class GeminiProvider:
             )
         return key
 
+    def thinking_for(self, stage):
+        """The thinking budget for a stage: a per-stage override or the default."""
+        return self.thinking_by_stage.get(stage, self.thinking_tokens)
+
     def _generation_request(self, request):
         messages = chat_messages(request)
         generation = {
             "responseMimeType": "application/json",
             "maxOutputTokens": self.output_tokens,
             "temperature": self.temperature,
-            "thinkingConfig": {"thinkingBudget": self.thinking_tokens},
+            "thinkingConfig": {"thinkingBudget": self.thinking_for(request.get("stage"))},
         }
         if request.get("response_schema") is not None:
             generation["responseJsonSchema"] = request["response_schema"]

@@ -8,7 +8,8 @@ Models make the editorial decisions: what matters, which ideas belong together a
 
 | Workflow | Work performed | Use |
 | --- | --- | --- |
-| `auto` | Checks the writing and review workload limits and request capacity, then selects direct or planned work | You want Lamina to choose from the declared limits |
+| `auto` | Checks the writing and review workload limits and request capacity, then selects direct or planned work; `format=cards` selects the sweep | You want Lamina to choose from the declared limits |
+| `sweep` | Reads every window straight to flashcards, suppresses near-duplicates locally, audits a sample of windows, exports the deck | You want cards from a textbook or notes, as fast as the reads allow |
 | `direct` | Writes from all selected source units, reviews the result and can repair and recheck it | The collection fits in one writing task |
 | `planned` | Reads the sources, organizes sections, assigns material, then writes and reviews each section | The collection needs to be divided around a shared outline |
 | `assigned` | Writes and reviews supplied sections with explicit source assignments | A person or another agent has already chosen the structure |
@@ -21,6 +22,16 @@ Planned mode checks the policies for planning, writing and review before it star
 
 Python entry points are `plan_production(workspace, provider, brief, source_ids, options=None)`, `run_production(workspace, provider, plan, options=None)` and `build_production`, which combines both. A brief is text or `{goal, audience?, constraints?}`. Selected sources must have the teaching role.
 
+## Sweep: straight to cards
+
+`format="cards"` runs the sweep, the two-call-deep route Lamina grew out of. Every reader window is one independent call whose output is flashcards: each idea's title is the prompt (a question or a cloze sentence with `{{c1::hidden text}}`) and its explanation is the answer, with exact span citations. Nothing waits on a planner.
+
+After reading, near-duplicate cards are suppressed with local similarity (provider embeddings when the adapter offers `embed(texts)`, otherwise TF-IDF; no model calls). A later card is dropped only when its similarity to a card already kept reaches `dedup_threshold`, so a chain of progressively different claims cannot collapse into one. Suppressed cards remain in the plan as explicit omissions with the card they duplicate and the score.
+
+A deterministic sample of windows (`audit_rate`, default 0.25) then receives one `sweep_audit` call that sees the window's source text and its cards and reports omissions (a testable fact in the core that no card covers) and unsupported cards, each with exact evidence. Findings are attached to the receipt under `audit_findings`; they never remove a card. A window that fails to read is listed in `unresolved_reads`; the deck stays `ready` because every enabled check completed.
+
+Exports add `cards.tsv` (prompt, answer, tags; Anki-importable) and `cards.json` (every card with its source, locator, unit IDs and quotations) beside the usual document. Receipt metrics report cards, suppressed duplicates, audited windows and audit findings.
+
 ## Read and organize the sources
 
 The planned route begins with complete source structures such as a Markdown block, PDF page or PowerPoint slide group. Without a reading workload profile, each call owns one of those structures. A configured profile can put several structures from the same source in one call while respecting both the workload and request limits. Slide text, tables and speaker notes stay together. The plan stores each unit once and refers to it by ID. See [Parsing](parsing.md) for the retained structures.
@@ -31,9 +42,9 @@ A natural structure can still be dense, poorly parsed or difficult for the selec
 
 Readers cite bounded source references instead of copying whole quotations. Code resolves those references to exact spans in the original units. Unknown references and invalid ranges remain validation errors. Each idea must cite a core anchor; supporting references may also cite adjacent material actually supplied to that reader. These support dependencies accompany writing and review and participate in cache identity. A valid reference establishes location; semantic support still requires review.
 
-A reader owns the structures assigned to it and can ask for adjacent context with a reason. That context can clarify a boundary without becoming a second source of extracted ideas. It must also fit the request budget. If a response is truncated, Lamina divides the owned material along complete structure boundaries and releases the children into the same worker pool. Prepared reading batches start while later batches are still being measured. One oversized structure needs more capacity or explicit decomposition. Failed readings remain unresolved; independent successful readings stay in the cache.
+A reader owns the structures assigned to it. By default it also sees a boundary halo: the last `reader_context_spans` sentence spans of the preceding unit and the first of the following unit, shown with their real span IDs so a citation of a halo span resolves against the complete unit. The halo shrinks to fit the reader budget rather than rejecting owned material. A reader can still ask for adjacent context with a reason; the first request in a direction completes the partial unit, the next steps to the following structure. Context clarifies a boundary without becoming a second source of extracted ideas. If a response is truncated, Lamina divides the owned material along complete structure boundaries and releases the children into the same worker pool with a fresh halo on their inner edge. Prepared reading batches start while later batches are still being measured. One oversized structure needs more capacity or explicit decomposition. A reading batch that fails after its retry is recorded in `plan.planning.unresolved_reads`; by default the run continues on the successful reads and the receipt says what was not read (`reading_failures="abort"` stops instead).
 
-The planner receives an idea card with a title, explanation and evidence references for each extracted idea. Lamina removes repeated quotation text from the planning request and restores the references afterward. If the cards do not fit, bounded calls group them into a smaller outline. Final assignment returns to every original card, gives it one section owner or records why it was omitted. The model decides the relationships across documents.
+The planner receives an idea card with a title, explanation and evidence references for each extracted idea. Lamina removes repeated quotation text from the planning request and restores the references afterward. If the cards do not fit one outline call, grouping calls summarize them level by level. Level-0 batches keep source order, so a grouping call relates the adjacent cards that share a structure; cross-source mixing happens at the summary levels and in assignment. The tree streams: a grouping call at the next level starts as soon as a full batch of summaries exists, and only once the summaries that have arrived already exceed the outline budget. Each summary carries one original card as an exemplar into the outline call. Final assignment returns to every original card, gives it one section owner or records why it was omitted. The model decides the relationships across documents.
 
 The engine then measures each planned section's writing and source-review requests. Assignments exceeding declared limits are subdivided into smaller coherent sections without discarding their material. The outline, each indivisible idea or target, and any required context must ultimately fit the configured limits.
 
@@ -51,19 +62,22 @@ Writers place compact source markers after supported statements. Lamina resolves
 
 | Option | Default | Meaning and reason |
 | --- | --- | --- |
-| `format` | `document` | Also `guide`, `assessment`, `podcast-script`; selects the output contract. |
+| `format` | `document` | Also `guide`, `assessment`, `podcast-script`, `cards`; selects the output contract. `cards` selects the sweep workflow. |
 | `workflow` | `auto` | Selects the route above. |
 | `reading` | `task` | Reads for the current brief. `reusable` explicitly shares an unassessed inventory across goals. |
-| `reader_context_spans` | `0` | Boundary halo: every reader also sees the last *n* sentence spans of the preceding unit and the first *n* of the following unit, with their real span IDs, so a boundary cut is visible without a second serial call (0–64). `0` relies on context requests alone. See [flow geometry](flow-geometry.md#4-what-the-halo-was-for). |
-| `reading_failures` | `abort` | `continue` plans from the successful reads, records unresolved windows in `plan.planning.unresolved_reads` and the receipt, and leaves the receipt in `review`. `abort` stops the plan on any unresolved read. |
-| `workers` | `8` | Local maximum simultaneous calls. A configurable resource ceiling, with no claim of optimal throughput. |
+| `reader_context_spans` | `6` | Boundary halo: every reader also sees the last *n* sentence spans of the preceding unit and the first *n* of the following unit, with their real span IDs, so a boundary cut is visible without a second serial call (0–64; shrinks to fit the budget). `0` relies on context requests alone. See [flow geometry](flow-geometry.md#4-what-the-halo-was-for). |
+| `reading_failures` | `continue` | `continue` plans from the successful reads, records unresolved windows in `plan.planning.unresolved_reads` and the receipt, and leaves a planned receipt in `review`. `abort` stops the plan on any unresolved read. |
+| `audit_rate` | `0.25` | Sweep: fraction of reader windows that receive one source-centred audit call (0–1; sampling is deterministic per window). |
+| `dedup_threshold` | by method | Sweep: similarity at or above which a later card is suppressed as a duplicate (0.92 for embeddings, 0.80 for TF-IDF). |
+| `relation_threshold` | by method | `compare_relations`: similarity at or above which a pair is nominated for a model comparison (0.72 for embeddings, 0.20 for TF-IDF). |
+| `workers` | `16` | Local maximum simultaneous calls. A configurable resource ceiling, with no claim of optimal throughput. The bundled Gemini adapter admits 16 by default; raise both together. |
 | `reader_workers`, `writer_workers`, `review_workers` | Inherit `workers` | Optional stage ceilings within the same total. |
 | `max_attempts` | `2` | Original attempt plus one eligible correction/retry. A bounded resource policy; accepts 1–5. |
 | `max_request_bytes` | `1500000` | Outer transport ceiling. The adapter may impose a smaller byte or token allowance. |
 | `max_input_bytes` | Unset | Optional stricter byte allowance for a project. |
 | `sections_per_request` | `1` | Opt-in maximum short sections in one writing or review request (1–32). Complete grouped requests must fit the stage workload and hard budget. Section identities, validation, repair and cache entries remain separate. |
-| `compare_relations` | `false` | Compare nominated evidence groups before planning. Requires a `production_compare` workload profile; automatic workflow selection chooses planned reading. |
-| `relation_neighbors` | `20` | Initial nominations per idea (1–100). Comparison may request additional evidence; this is a workload limit, not a completeness claim. |
+| `compare_relations` | `false` | Compare nominated evidence groups before planning. Pairs are nominated by local similarity above `relation_threshold` plus same-unit and same-structure lanes; only nominated pairs reach a model call. Requires a `production_compare` workload profile; automatic workflow selection chooses planned reading. |
+| `relation_neighbors` | `20` | Maximum similarity nominations per idea (1–100). Comparison may request additional evidence; this is a workload limit, not a completeness claim. |
 | `document_review` | `false` | Adds the explicitly scoped cross-section checks above. |
 | `retrieval_targets` | `false` | For guides/assessments, groups equivalent prompts and supported answers before section assignment. Requires planned mode. |
 
@@ -118,7 +132,7 @@ Receipts record request sizes, attempts, failures, cache hits, elapsed times and
 
 Assessments export separate candidate and examiner files. A blind solver receives the current candidate prompt and only the earlier prompts declared as context. A judge receives the answer, marking guide and source quotations. Solver and judge pairs run independently within the shared worker limit. Their findings stay in examiner and operator records. Use stateless adapters to preserve these information boundaries.
 
-A ready podcast script can use a separate speech adapter. Lamina synthesizes each finished section as a cached segment, then assembles matching PCM formats in order on disk. Only affected segments rerender after revision. Receipts without section objects retain whole-script compatibility. Individual adapter responses retain the 20 MB limit; the assembled WAV does not travel as base64 and may be larger. A failed segment leaves successful segment files and cache results available for recovery. `--audio-when any` (Python: `deliver_production(..., audio_when="any")`, `render_audio(..., require_ready=False)`) also renders a script that is still in `review`; the audio manifest names the sections with remaining findings as `provisional_sections` and the receipt stays in `review`. Someone still needs to listen for pronunciation, pacing, fidelity and educational quality.
+A podcast script uses a separate speech adapter. When the adapter is given to `run_production` (the CLI and the local app do this), each section is synthesized on a speech lane the moment it leaves review, bounded by the adapter's declared `audio_concurrency`, as the same cached segment delivery later assembles; speech overlaps writing instead of following it, and the receipt's `speech_prefetch` metric lists the sections rendered that way. Delivery assembles matching PCM formats in order on disk. Only affected segments rerender after revision. Receipts without section objects retain whole-script compatibility. Individual adapter responses retain the 20 MB limit; the assembled WAV does not travel as base64 and may be larger. A failed segment leaves successful segment files and cache results available for recovery. By default (`--audio-when any`) a script still in `review` renders too; the audio manifest names the sections with remaining findings as `provisional_sections` and the receipt stays in `review`. `--audio-when ready` withholds audio until every check passes. Someone still needs to listen for pronunciation, pacing, fidelity and educational quality.
 
 `export_production(receipt, plan, output_path)` writes Markdown, HTML, a JSON receipt, the plan and an optional PDF. Plans and receipts contain source text and can include assessment keys. `ready` means that the enabled checks completed. The plan and receipt also record `semantic_recall: "unmeasured"`, and plan validation protects that declaration from silent removal. Evaluate factual accuracy and delivery quality on the exported artifact.
 

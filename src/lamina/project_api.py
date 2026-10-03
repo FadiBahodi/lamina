@@ -10,6 +10,18 @@ import uuid
 _RUN = re.compile(r"[0-9a-f]{32}\Z")
 
 
+
+def _output_links(rid, links):
+    """Map delivery links to served paths; a list value (episodes) stays a list."""
+    return {
+        key: (
+            [f"/outputs/{rid}/{item}" for item in value]
+            if isinstance(value, list)
+            else f"/outputs/{rid}/{value}"
+        )
+        for key, value in links.items()
+    }
+
 def _save(server, status):
     output = server.output_root / status["id"]
     output.mkdir(parents=True, exist_ok=True)
@@ -230,7 +242,7 @@ def start_project(server, body, *, parent=None, section_notes=None):
                 status.update(
                     status=completed,
                     receipt=receipt,
-                    outputs={k: f"/outputs/{rid}/{v}" for k, v in links.items()},
+                    outputs=_output_links(rid, links),
                 )
                 _save(server, status)
         except Exception as exc:
@@ -285,7 +297,7 @@ def run_project_example(server):
         ],
         "plan": example["plan"],
         "receipt": receipt,
-        "outputs": {k: f"/outputs/{rid}/{v}" for k, v in links.items()},
+        "outputs": _output_links(rid, links),
     }
     with server.run_lock:
         server.runs[rid] = status

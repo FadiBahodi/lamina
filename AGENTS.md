@@ -17,3 +17,5 @@ Public examples use original material. Do not publish private source documents, 
 ## Writing
 
 Explain features with concrete subjects and verbs. Keep commands, measurements, mathematical definitions and citations precise. Put substantive limitations together in a short Limits section, with operational guidance beside the action it affects. The README should explain the problem, workflow, installation and technical references. Preserve the production history across source families. Cut repeated qualifications, rhetorical contrasts, decorative labels and claims of importance; each sentence should add information.
+
+Use ordinary product language in the app: sources, outline, draft, review and model connection. Explain an issue and the action to take. Keep protocol names, internal identifiers and raw JSON in technical details. Generated documents should use direct sentences and concrete headings, retaining the technical terms their audience needs.

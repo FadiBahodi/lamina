@@ -42,7 +42,7 @@ def test_cards_journey_renders_deck_and_serves_the_anki_file(tmp_path, browser):
         page.on("pageerror", lambda exc: errors.append(str(exc)))
         page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
         page.goto(base + "/", wait_until="networkidle")
-        page.get_by_role("button", name="Build locally").click()
+        page.locator(".nav-link[data-view=workflows]").first.click()
         page.get_by_label("Output format").select_option("cards")
         boxes = page.locator(".pb-source input[type=checkbox]")
         boxes.first.wait_for(timeout=10_000)

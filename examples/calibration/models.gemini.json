@@ -1,7 +1,10 @@
 {
   "default": {
     "transport": "jsonl",
-    "command": ["python", "examples/adapter/http_service.py"],
+    "command": [
+      "python",
+      "examples/adapter/http_service.py"
+    ],
     "request_format": "lamina-chat-1",
     "version": "gemini-2.5-flash-json-1",
     "max_pending": 4,

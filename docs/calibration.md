@@ -12,13 +12,14 @@ An example for Gemini is in [`examples/calibration/models.gemini.json`](../examp
 
 ```sh
 export LAMINA_API_KEY="$GEMINI_API_KEY"
+export LAMINA_API_BASE="<the chat-completions base URL your provider documents>"
 lamina ingest your-source.md --workspace .lamina
 lamina produce --adapter @examples/calibration/models.gemini.json \
   --workspace .lamina --brief 'Create a reference guide for a new team member.' \
   --output output
 ```
 
-Keep credentials in the environment. The model configuration contains endpoint and workload settings. Set its concurrency and model to suit your account.
+Keep credentials and the endpoint in the environment: `LAMINA_API_BASE` is the base URL under which your provider serves `/chat/completions` (Gemini documents a compatibility endpoint under its `v1beta` API). The model configuration contains the model name, concurrency and workload settings; set them to suit your account.
 
 ## Run the controls
 

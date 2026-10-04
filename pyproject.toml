@@ -18,7 +18,7 @@ pdf = ["pypdf>=5,<7", "reportlab>=4,<5"]
 slides = ["python-pptx>=1,<2"]
 http = ["httpx[http2,socks]>=0.27,<1", "jsonschema>=4,<5"]
 tokens = ["tiktoken>=0.9,<1"]
-test = ["pytest>=8,<10"]
+test = ["pytest>=8,<10", "hypothesis>=6"]
 
 [project.scripts]
 lamina = "lamina.cli:main"

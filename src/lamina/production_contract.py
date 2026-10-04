@@ -135,8 +135,6 @@ def _options(options: dict | None) -> dict:
         "reader_workers",
         "writer_workers",
         "review_workers",
-        "core_words",
-        "halo_units",
         "max_request_bytes",
         "source_policy",
         "observation_ids",
@@ -169,8 +167,6 @@ def _options(options: dict | None) -> dict:
         "reader_workers": options.get("workers", 16),
         "writer_workers": options.get("workers", 16),
         "review_workers": options.get("workers", 16),
-        "core_words": None,
-        "halo_units": 0,
         "workers": 16,
         "workflow": "auto",
         "assignments": None,
@@ -227,10 +223,6 @@ def _options(options: dict | None) -> dict:
         raise ProductionError("reading must be task or reusable")
     if result["reading_failures"] not in ("abort", "continue"):
         raise ProductionError("reading_failures must be abort or continue")
-    if result["halo_units"] and result["core_words"] is None:
-        raise ProductionError(
-            "legacy halo_units requires explicit core_words; budgeted reading requests missing context when needed"
-        )
     if result["assignments"] is not None and result["workflow"] != "assigned":
         raise ProductionError("assignments require workflow=assigned")
     if result["retrieval_targets"] and result["workflow"] in {"direct", "assigned"}:
@@ -257,11 +249,9 @@ def _options(options: dict | None) -> dict:
         ("reader_workers", 1, 128),
         ("writer_workers", 1, 128),
         ("review_workers", 1, 128),
-        ("core_words", 100, 2000),
-        ("halo_units", 0, 8),
         ("max_request_bytes", 4096, 2_000_000),
     ):
-        if key in {"core_words", "max_input_bytes"} and result[key] is None:
+        if key == "max_input_bytes" and result[key] is None:
             continue
         if type(result[key]) is not int or not lo <= result[key] <= hi:
             raise ProductionError(f"{key} must be an integer from {lo} to {hi}")

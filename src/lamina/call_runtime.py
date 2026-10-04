@@ -85,6 +85,10 @@ class CallTracker:
         self.records = []
         self.active = {}
         self.peak = {}
+        # Every record carries its start and end as milliseconds after this
+        # origin, so a receipt can reconstruct the run's timeline and the
+        # dependency chain that bounded it (see geometry.py).
+        self.origin = time.monotonic()
 
     def event(self, stage, item, status):
         if self.progress:
@@ -104,7 +108,12 @@ class CallTracker:
         *,
         repair_request=None,
         workload_items=None,
+        after=(),
     ):
+        """``after`` names the logical calls this one waited for, as
+        ``(stage, item)`` keys. Dependencies the engine knows (which reads fed
+        a grouping batch, which batches fed the outline) are declared here;
+        section chains and audits follow stage rules in ``geometry.py``."""
         envelope = make_envelope(
             stage, instruction, expected_shape, data, workload_items=workload_items
         )
@@ -137,6 +146,7 @@ class CallTracker:
                 }
                 attempts.append(attempt)
                 before = time.monotonic()
+                attempt["started_ms"] = round((before - self.origin) * 1000, 3)
                 with self.lock:
                     self.active[stage] = self.active.get(stage, 0) + 1
                     self.peak[stage] = max(self.active[stage], self.peak.get(stage, 0))
@@ -254,9 +264,12 @@ class CallTracker:
                 attempt["request_bytes"] for attempt in attempts
             ),
             "wall_ms": round((time.monotonic() - started) * 1000, 3),
+            "started_ms": round((started - self.origin) * 1000, 3),
+            "ended_ms": round((time.monotonic() - self.origin) * 1000, 3),
             "preparation_ms": preparation_ms,
             "usage": _usage_total(attempts),
             "attempts": attempts,
+            "after": [list(key) for key in sorted({(str(s), str(i)) for s, i in after})],
         }
         if failure:
             record["error_type"] = type(failure).__name__

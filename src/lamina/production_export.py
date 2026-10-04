@@ -20,7 +20,52 @@ def _parser():
     return parser
 
 
-def document_html(markdown: str, title: str) -> str:
+def provenance_html(receipt: dict) -> str:
+    """The run's schedule geometry as a figure beside its numbers, for the
+    bottom of an exported document. Says how the document was scheduled; says
+    nothing about whether it is correct."""
+    geometry = receipt.get("geometry") or {}
+    if not geometry.get("timeline"):
+        return ""
+    from .geometry import timeline_svg
+
+    g = geometry
+    chain = " → ".join(
+        f"{row['stage'].replace('production_', '').replace('sweep_', '')} {row['duration_ms'] / 1000:.1f}s"
+        for row in g.get("critical_path", [])
+    )
+    facts = [
+        ("calls", f"{g['calls']} ({g['model_attempts']} model attempts)"),
+        ("workers", f"{g['workers']} configured, {g['peak_in_flight']} peak in flight"),
+        ("model time", f"{g['model_ms'] / 1000:.1f}s"),
+        ("critical path", f"{g['critical_path_depth']} calls, {g['critical_path_ms'] / 1000:.1f}s"),
+        ("bound max(W/P, D)", f"{g['bound_ms'] / 1000:.1f}s, {g.get('bound_binding', '').replace('_', ' ')}"),
+        ("wall", f"{g['wall_ms'] / 1000:.1f}s, {g.get('wall_over_bound')}× the bound"),
+        ("serial time", f"{int(100 * (g.get('serial_fraction') or 0))}% of the span with at most one call in flight"),
+    ]
+    if g.get("amplification_bytes") is not None:
+        facts.append((
+            "context amplification",
+            f"{g['amplification_bytes']}× the {g.get('source_bytes', 0):,} source bytes, instructions and shapes included",
+        ))
+    if g.get("timing") and g["timing"] != "measured":
+        facts.append(("timing", g["timing"]))
+    rows = "".join(
+        f"<tr><th>{html.escape(k)}</th><td>{html.escape(v)}</td></tr>" for k, v in facts
+    )
+    return (
+        '<section class="provenance" id="provenance"><h2>How this document was made</h2>'
+        "<p>Every model call this run made, in time, with the chain that bounded its duration in dark green. "
+        "The bound is the longer of total model time divided by the worker limit and the critical path; "
+        "a perfect schedule has wall equal to the bound.</p>"
+        f"{timeline_svg(g)}<table>{rows}</table>"
+        f"<p class=\"chain\">Critical path: {html.escape(chain)}</p>"
+        "<p>Numbers come from <code>report.json</code>. Scheduling says nothing about correctness; "
+        "the citations in each section do.</p></section>"
+    )
+
+
+def document_html(markdown: str, title: str, receipt: dict | None = None) -> str:
     parser = _parser()
     tokens = parser.parse(markdown)
     toc = []
@@ -37,8 +82,8 @@ def document_html(markdown: str, title: str) -> str:
     )
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(title)}</title>
-<style>:root{{color-scheme:light}}*{{box-sizing:border-box}}body{{margin:0;background:#f4f7f8;color:#1b2931;font:17px/1.7 system-ui,sans-serif}}header{{background:#10171c;color:#f4f7f8;padding:20px 5vw;font:12px monospace;letter-spacing:.12em}}.layout{{display:grid;grid-template-columns:230px minmax(0,850px);gap:40px;max-width:1180px;margin:40px auto;padding:0 24px}}nav{{position:sticky;top:25px;align-self:start;max-height:90vh;overflow:auto;font-size:13px}}nav a{{display:block;padding:6px 10px;color:#415866;text-decoration:none;border-left:2px solid #d2dee4}}nav a:hover{{border-color:#237795;background:#e7eff2}}.toc-h1{{font-weight:700}}main{{background:white;padding:40px 44px;border:1px solid #dce3e7;min-width:0}}h1,h2,h3,h4{{line-height:1.2;scroll-margin-top:25px}}h1{{font-size:34px;letter-spacing:-.03em}}h2{{margin-top:1.8em;font-size:25px}}p,li{{overflow-wrap:anywhere}}a{{color:#176784}}pre{{background:#eef3f5;padding:18px;overflow:auto;font:13px/1.6 monospace}}code{{font-size:.88em}}table{{border-collapse:collapse;width:100%;font-size:14px;margin:24px 0}}th,td{{border-bottom:1px solid #d9e2e7;padding:10px;text-align:left;overflow-wrap:anywhere}}th{{background:#edf4f7}}blockquote{{border-left:3px solid #72a3b8;margin:20px 0;padding:4px 20px;color:#48606d}}.media-reference{{color:#725528}}@media(max-width:760px){{.layout{{display:block;margin:20px auto;padding:0 14px}}nav{{position:static;max-height:180px;margin-bottom:20px}}main{{padding:24px}}h1{{font-size:28px}}}}@media print{{header,nav{{display:none}}.layout{{display:block;margin:0;padding:0}}main{{border:0;padding:0}}body{{background:white}}pre{{white-space:pre-wrap}}table{{break-inside:auto}}tr{{break-inside:avoid}}}}</style></head>
-<body><header>LAMINA / DOCUMENT</header><div class="layout"><nav aria-label="Document sections">{links}</nav><main>{body}</main></div></body></html>"""
+<style>:root{{color-scheme:light}}*{{box-sizing:border-box}}body{{margin:0;background:#f4f7f8;color:#1b2931;font:17px/1.7 system-ui,sans-serif}}header{{background:#10171c;color:#f4f7f8;padding:20px 5vw;font:12px monospace;letter-spacing:.12em}}.layout{{display:grid;grid-template-columns:230px minmax(0,850px);gap:40px;max-width:1180px;margin:40px auto;padding:0 24px}}nav{{position:sticky;top:25px;align-self:start;max-height:90vh;overflow:auto;font-size:13px}}nav a{{display:block;padding:6px 10px;color:#415866;text-decoration:none;border-left:2px solid #d2dee4}}nav a:hover{{border-color:#237795;background:#e7eff2}}.toc-h1{{font-weight:700}}main{{background:white;padding:40px 44px;border:1px solid #dce3e7;min-width:0}}h1,h2,h3,h4{{line-height:1.2;scroll-margin-top:25px}}h1{{font-size:34px;letter-spacing:-.03em}}h2{{margin-top:1.8em;font-size:25px}}p,li{{overflow-wrap:anywhere}}a{{color:#176784}}pre{{background:#eef3f5;padding:18px;overflow:auto;font:13px/1.6 monospace}}code{{font-size:.88em}}table{{border-collapse:collapse;width:100%;font-size:14px;margin:24px 0}}th,td{{border-bottom:1px solid #d9e2e7;padding:10px;text-align:left;overflow-wrap:anywhere}}th{{background:#edf4f7}}blockquote{{border-left:3px solid #72a3b8;margin:20px 0;padding:4px 20px;color:#48606d}}.media-reference{{color:#725528}}.provenance{{margin-top:3em;padding-top:1.5em;border-top:1px solid #dce3e7}}.provenance svg{{max-width:100%;height:auto;display:block;margin:12px 0}}.provenance table{{font-size:13px}}.provenance .chain{{font:13px/1.6 monospace;color:#415866}}@media(max-width:760px){{.layout{{display:block;margin:20px auto;padding:0 14px}}nav{{position:static;max-height:180px;margin-bottom:20px}}main{{padding:24px}}h1{{font-size:28px}}}}@media print{{header,nav{{display:none}}.layout{{display:block;margin:0;padding:0}}main{{border:0;padding:0}}body{{background:white}}pre{{white-space:pre-wrap}}table{{break-inside:auto}}tr{{break-inside:avoid}}}}</style></head>
+<body><header>LAMINA / DOCUMENT</header><div class="layout"><nav aria-label="Document sections">{links}</nav><main>{body}{provenance_html(receipt or {})}</main></div></body></html>"""
 
 
 def _inline_pdf(children):
@@ -244,13 +289,22 @@ def export_production(receipt: dict, plan: dict, output: Path) -> dict:
         "Practice assessment" if assessment else receipt.get("title", "Lamina document")
     )
     (output / "document.md").write_text(markdown, encoding="utf-8")
-    (output / "index.html").write_text(document_html(markdown, title), encoding="utf-8")
+    (output / "index.html").write_text(
+        document_html(markdown, title, receipt), encoding="utf-8"
+    )
     links = {
         "document": "document.md",
         "reader": "index.html",
         "report": "report.json",
         "plan": "plan.json",
     }
+    if (receipt.get("geometry") or {}).get("timeline"):
+        from .geometry import timeline_svg
+
+        (output / "timeline.svg").write_text(
+            timeline_svg(receipt["geometry"]), encoding="utf-8"
+        )
+        links["timeline"] = "timeline.svg"
     for name, value in [("report", receipt), ("plan", plan)]:
         (output / f"{name}.json").write_text(
             json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

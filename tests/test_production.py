@@ -217,6 +217,13 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
                 "production_write": threading.Barrier(4),
             }
 
+        def budget_for(self, stage):
+            # Reader items are sentence spans; each fixture unit has 14, so a
+            # 14-span limit gives one unit per window and four overlapping reads.
+            if stage == "production_read":
+                return fixture_request_budget(stage, max_items=14)
+            return super().budget_for(stage)
+
         def call(self, stage, payload):
             # Require real overlap rather than hoping a short sleep outlasts
             # SQLite setup and scheduling delays on a shared CI runner.
@@ -234,8 +241,6 @@ def test_boundary_ownership_full_halo_and_parallelism(tmp_path):
             "workflow": "planned",
             **(
                 {
-                    "core_words": 100,
-                    "halo_units": 1,
                     "reader_workers": 8,
                     "writer_workers": 8,
                     "review_workers": 8,
@@ -340,7 +345,7 @@ def test_bad_quote_fails_and_assessment_source_never_reaches_provider(tmp_path):
             provider,
             "Explain",
             ["s1"],
-            {"workflow": "planned", **({"core_words": 100})},
+            {"workflow": "planned"},
         )
     with pytest.raises(ProductionError, match="not a teaching source"):
         plan_production(
@@ -357,7 +362,7 @@ def test_review_repairs_only_flagged_section_and_cache_reuse(tmp_path):
         provider,
         "Explain",
         ["s1", "s2"],
-        {"workflow": "planned", **({"core_words": 100})},
+        {"workflow": "planned"},
     )
     first = run_production(ws, provider, plan)
     assert first["status"] == "ready"
@@ -379,7 +384,7 @@ def test_targeted_revision_changes_one_writer_and_review(tmp_path):
         provider,
         "Explain",
         ["s1", "s2"],
-        {"workflow": "planned", **({"core_words": 100})},
+        {"workflow": "planned"},
     )
     first = run_production(ws, provider, plan)
     before = len(provider.requests)
@@ -406,7 +411,7 @@ def test_assessment_candidate_artifact_excludes_marking(tmp_path):
         provider,
         "Create an assessment",
         ["s1"],
-        {"workflow": "planned", **({"format": "assessment", "core_words": 100})},
+        {"workflow": "planned", "format": "assessment"},
     )
     assert receipt["candidate_markdown"] == receipt["markdown"]
     assert "What makes" in receipt["candidate_markdown"]
@@ -424,7 +429,7 @@ def test_assessment_blind_finding_keeps_output_for_review(tmp_path):
         provider,
         "Create an assessment",
         ["s1"],
-        {"workflow": "planned", **({"format": "assessment", "core_words": 100})},
+        {"workflow": "planned", "format": "assessment"},
     )
     assert receipt["status"] == "review"
     assert receipt["assessment_checks"]["status"] == "review"
@@ -447,13 +452,20 @@ def test_assessment_blind_finding_keeps_output_for_review(tmp_path):
 
 def test_new_source_revision_reuses_unaffected_reader_windows(tmp_path):
     ws = workspace(tmp_path)
-    provider = FixtureProvider()
+
+    class OneUnitWindows(FixtureProvider):
+        def budget_for(self, stage):
+            if stage == "production_read":
+                return fixture_request_budget(stage, max_items=14)  # 14 spans per unit
+            return super().budget_for(stage)
+
+    provider = OneUnitWindows()
     first = plan_production(
         ws,
         provider,
         "Explain",
         ["s1", "s2"],
-        {"workflow": "planned", **({"core_words": 100})},
+        {"workflow": "planned"},
     )
     assert first["metrics"]["cache_misses"] == 5  # four windows plus global route
     ws.put_source(
@@ -490,7 +502,7 @@ def test_new_source_revision_reuses_unaffected_reader_windows(tmp_path):
         provider,
         "Explain",
         ["s1", "s2_new"],
-        {"workflow": "planned", **({"core_words": 100})},
+        {"workflow": "planned"},
     )
     new_reads = [
         p["input"]["source"]["id"]

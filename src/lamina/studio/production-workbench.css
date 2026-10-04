@@ -168,3 +168,6 @@
   .pb-revision-feedback { display: block; margin: 8px 0 0; }
   .pb-saved-notes { padding: 17px 20px; }
 }
+.pb-geometry{margin:18px 0 0;padding:14px;border:1px solid #d9ddd5;border-radius:6px;background:#fff}
+.pb-geometry img{display:block;width:100%;height:auto}
+.pb-geometry figcaption{margin-top:8px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#5a6b66}

@@ -312,7 +312,6 @@ def read_sources(
     sources,
     units,
     tracker,
-    legacy_windows=None,
     on_batch=None,
 ):
     """Read every window; return ``(windows, ideas, unresolved)``.
@@ -424,9 +423,7 @@ def read_sources(
             )
         return envelope_for(fitted(core))
 
-    if legacy_windows is not None:
-        windows = legacy_windows
-    elif getattr(budget, "workload", None) is not None:
+    if getattr(budget, "workload", None) is not None:
         windows = (
             fitted(batch.units) for batch in iter_packed_units(units, request, budget)
         )

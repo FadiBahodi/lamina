@@ -56,9 +56,6 @@
   compareLabel.append(compareRelations,make("span","","Compare related passages across sources"));
   contextFields.append(compareLabel);
   const maxAttempts = numericField("Attempts per model request", 2, 1, 5);
-  const coreWords = numericField("Reading size in words (optional)", null, 100, 2000);
-  coreWords.placeholder="Use default";
-  const haloUnits = numericField("Extra neighboring passages", 0, 0, 8);
   const maxRequest = numericField("Request size limit in bytes (optional)", null, 4096, 2000000);
   maxRequest.placeholder="Use default";
   const retrievalChoice=make("label","pb-retrieval-choice");retrievalChoice.hidden=true;
@@ -93,7 +90,6 @@
     for(const [key,input] of Object.entries(workerInputs)){
       const value=setup.options[key];input.value=Number.isInteger(value)&&value>=1&&value<=128?String(value):"";
     }
-    coreWords.value=setup.options.core_words??"";haloUnits.value=setup.options.halo_units??0;
     maxRequest.value=setup.options.max_input_bytes??"";reading.value=setup.options.reading??"task";
     workflow.value=setup.options.workflow??"auto";maxAttempts.value=setup.options.max_attempts??2;
     totalWorkers.value=setup.options.workers??16;
@@ -106,16 +102,13 @@
   function options(selected) {
     if(selected.every(id=>state.roles.get(id)==="form_exemplar"))throw Error("Choose at least one file that provides facts. A style example alone is not enough.");
     if(state.selectedObservations.size>20)throw Error("Choose at most 20 saved notes for one project.");
-    const halo=safeNumber(haloUnits,"Neighboring passages");
-    if(halo && !coreWords.value.trim())throw Error("Set a reading size in words before adding neighboring passages.");
     return {
       format:format.value, workflow:workflow.value, reading:reading.value,
       sections_per_request:safeNumber(sectionsPerRequest,"Sections per request"), compare_relations:compareRelations.checked,
       workers:safeNumber(totalWorkers,"Total calls"), max_attempts:safeNumber(maxAttempts,"Attempts"),
       ...Object.fromEntries(Object.entries(workerInputs).filter(([,input])=>input.value.trim()!=="").map(([key,input])=>[key,safeNumber(input,({reader_workers:"Reading limit",writer_workers:"Writing limit",review_workers:"Review limit"})[key])])),
-      ...(coreWords.value.trim()?{core_words:safeNumber(coreWords,"Fixed reading target")}:{}),
       ...(maxRequest.value.trim()?{max_input_bytes:safeNumber(maxRequest,"Request byte ceiling")}:{}),
-      halo_units:halo, retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden,
+      retrieval_targets:retrievalTargets.checked && !retrievalChoice.hidden,
       source_policy:Object.fromEntries(selected.map(id=>[id,state.roles.get(id) || "authority"])),
       observation_ids:Array.from(state.selectedObservations)
     };
@@ -295,9 +288,17 @@
       audioBlock.append(make("p","",delivery?.status==="review"?"Review this audio and its transcript before using it.":"Listen to check pronunciation and completeness. The transcript shows the text sent to the speech service."));
       output.append(audioBlock);
     }
-    const linkLabels={reader:"Read formatted document",document:"Download text",pdf:"Download PDF",plan:"Inspect plan",report:"Download run details",candidate:"Open candidate sheet",examiner:"Open examiner sheet",examiner_pdf:"Download examiner PDF",audio:"Download audio WAV",transcript:"Download transcript",manifest:"Download audio details",cards_tsv:"Download Anki deck (TSV)",cards_json:"Download cards (JSON)"};
+    const linkLabels={reader:"Read formatted document",document:"Download text",pdf:"Download PDF",plan:"Inspect plan",report:"Download run details",candidate:"Open candidate sheet",examiner:"Open examiner sheet",examiner_pdf:"Download examiner PDF",audio:"Download audio WAV",transcript:"Download transcript",manifest:"Download audio details",cards_tsv:"Download Anki deck (TSV)",cards_json:"Download cards (JSON)",timeline:"Open run timeline (SVG)"};
     Object.entries(run.outputs || {}).forEach(([kind,path])=>{ if(Array.isArray(path))return; const link=outputLink(path,linkLabels[kind] || `Open ${kind.replaceAll("_"," ")}`);if(!link)return;if(receipt.format==="assessment" && ["examiner","examiner_pdf","report","plan"].includes(kind) && examinerDetails)examinerDetails.append(link);else links.append(link); });
     if (links.childNodes.length) output.append(links);
+    const geometry=receipt.geometry;
+    if (geometry && geometry.timeline && typeof run.outputs?.timeline==="string") {
+      const figure=make("figure","pb-geometry");
+      const image=document.createElement("img"); image.src=route(run.outputs.timeline); image.alt="Run timeline with the critical path highlighted"; image.loading="lazy";
+      const s=ms=>`${(ms/1000).toFixed(1)}s`;
+      const caption=make("figcaption","",`${geometry.calls} calls on ${geometry.workers} workers (${geometry.peak_in_flight} peak in flight) · critical path ${geometry.critical_path_depth} deep, ${s(geometry.critical_path_ms)} · bound ${s(geometry.bound_ms)} (${String(geometry.bound_binding||"").replaceAll("_"," ")}) · wall ${s(geometry.wall_ms)}, ${geometry.wall_over_bound}× the bound · serial ${Math.round(100*(geometry.serial_fraction||0))}%`);
+      figure.append(image,caption); output.append(figure);
+    }
     const findings=receipt.findings || receipt.initial_findings;
     if (findings && receipt.format!=="cards") {
       const review=make("details","pb-review");

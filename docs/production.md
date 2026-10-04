@@ -105,7 +105,7 @@ Writers place compact source markers after supported statements. Lamina resolves
 
 Worker settings accept 1 through 128. Byte limits accept 4096 through 2000000. Provider context and output limits, along with per-stage workload policies, belong in the [adapter profile](adapters.md). The other numeric defaults bound resource use and should be evaluated against the actual workload.
 
-`core_words` and `halo_units` remain available for comparisons with older reading policies. There is no default word target. A whole-unit halo requires an explicit `core_words` value and supports zero through eight neighboring units. By default, readers receive the six-span boundary halo and request further context when they need it.
+Readers receive the six-span boundary halo by default and request further context, with a reason, when they need it. Window size follows the stage's workload limit; there is no word target.
 
 A complete `source_policy` map can mark sources `authority`, `supplement`, `historical` or `form_exemplar`; the default is authority. Form exemplars supply bounded structural samples and cannot support factual citations. `observation_ids` selects up to 20 retained observations in `method_family` (default `document-production`). The model interprets these supplied policies and observations.
 

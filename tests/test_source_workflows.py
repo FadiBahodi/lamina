@@ -13,7 +13,6 @@ from lamina.ingest import ingest_paths
 from lamina.production import (
     ProductionError,
     _Tracker,
-    _windows,
     build_production,
     plan_production,
     run_production,
@@ -265,16 +264,6 @@ def test_local_source_edit_reuses_other_reader_interpretations(
     )
     allowed = {u["id"] for u in second["units"]}
     assert all(e["unit_id"] in allowed for i in second["ideas"] for e in i["evidence"])
-
-
-def test_dense_non_whitespace_text_does_not_collapse_to_one_window():
-    units = [
-        {"id": str(i), "source_id": "s", "heading": "H", "text": "风" * 1800}
-        for i in range(100)
-    ]
-    windows = _windows(units, 1600, 0)
-    assert len(windows) == 100
-    assert all(not w["before"] and not w["after"] for w in windows)
 
 
 def test_shared_context_evidence_is_authorized(tmp_path):

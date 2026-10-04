@@ -149,46 +149,6 @@ def _form_exemplar_context(
     return result
 
 
-def _windows(units: list[dict], core_words: int, halo_units: int) -> list[dict]:
-    groups, count = [], 0
-    by_source, positions = {}, {}
-    for unit in units:
-        local = by_source.setdefault(unit["source_id"], [])
-        positions[unit["id"]] = len(local)
-        local.append(unit)
-        # A byte ceiling also bounds dense text without whitespace. Whole
-        # structured units stay intact; request preflight rejects oversized ones.
-        size = max(1, len(unit["text"].split()), (len(unit["text"].encode()) + 5) // 6)
-        if (
-            not groups
-            or groups[-1][-1]["source_id"] != unit["source_id"]
-            or groups[-1][-1]["heading"] != unit["heading"]
-            or count + size > core_words
-        ):
-            groups.append([])
-            count = 0
-        groups[-1].append(unit)
-        count += size
-    windows = []
-    for core in groups:
-        local = by_source[core[0]["source_id"]]
-        a, b = positions[core[0]["id"]], positions[core[-1]["id"]]
-        windows.append(
-            {
-                "id": "window_"
-                + digest([core[0]["source_id"], [u["id"] for u in core]])[:12],
-                "source_id": core[0]["source_id"],
-                "core": core,
-                "before": local[max(0, a - halo_units) : a],
-                "after": local[b + 1 : b + 1 + halo_units],
-            }
-        )
-    return windows
-
-
-from .call_runtime import CallTracker as _Tracker
-
-
 def _require_workload(provider, stage, options, items):
     """Require an explicit policy before combining independent work items."""
     from .source_reading import request_budget
@@ -216,6 +176,9 @@ def _section_scope(section, data, units):
         + len(data.get("form_exemplars", []))
         + len(data.get("experience", [])),
     )
+
+
+from .call_runtime import CallTracker as _Tracker
 
 
 def _plan_identity(plan: dict) -> str:
@@ -262,17 +225,12 @@ def _read_and_plan(
     ):
         _require_workload(provider, stage, opts, None)
 
-    legacy = (
-        _windows(units, opts["core_words"], opts["halo_units"])
-        if opts["core_words"] is not None
-        else None
-    )
     from .planning import plan_bounded, plan_streaming, target_bounded, refine_sections
     from .source_reading import request_budget, envelope
     from .retrieval_targets import RetrievalTargetError
     from .production_contract import ProductionValidationError
 
-    def invoke(stage, item, instruction, shape, data, checker):
+    def invoke(stage, item, instruction, shape, data, checker, after=()):
         items = len(data.get("cards", data.get("ideas", [])))
         _require_workload(provider, stage, opts, items)
 
@@ -293,6 +251,7 @@ def _read_and_plan(
             check,
             request_limit(opts),
             workload_items=items,
+            after=after,
         )
 
     def fits(stage, instruction, shape, data):
@@ -316,7 +275,7 @@ def _read_and_plan(
     if opts["compare_relations"] or opts["retrieval_targets"]:
         # Comparison and retrieval targets need every idea before planning.
         windows, ideas, unresolved_reads = read_sources(
-            workspace, provider, task, opts, sources, units, tracker, legacy
+            workspace, provider, task, opts, sources, units, tracker
         )
         if not ideas:
             raise ProductionError("Readers found no anchored ideas in selected sources")
@@ -358,7 +317,7 @@ def _read_and_plan(
         # The default planned route: grouping starts as reads complete.
         def read(on_batch):
             return read_sources(
-                workspace, provider, task, opts, sources, units, tracker, legacy, on_batch=on_batch
+                workspace, provider, task, opts, sources, units, tracker, on_batch=on_batch
             )
 
         windows, ideas, unresolved_reads, route, planning_report = plan_streaming(
@@ -606,7 +565,20 @@ def plan_production(
         },
     }
     result["plan_digest"] = _plan_identity(result)
+    from .geometry import analyse
+
+    result["geometry"] = analyse(
+        result["metrics"]["requests"],
+        workers=opts["workers"],
+        wall_ms=result["metrics"]["wall_ms"],
+        source_bytes=_source_bytes(units),
+        timing=getattr(provider, "timing_label", "measured"),
+    )
     return result
+
+
+def _source_bytes(units) -> int:
+    return sum(len((unit.get("text") or "").encode("utf-8")) for unit in units)
 
 
 def _context_index(plan):
@@ -1551,6 +1523,16 @@ def run_production(
             "production_repair",
         ),
     )
+    from .geometry import combine
+
+    receipt["geometry"] = combine(
+        plan.get("geometry"),
+        metrics["requests"],
+        workers=opts["workers"],
+        wall_ms=metrics["wall_ms"],
+        source_bytes=_source_bytes(plan["units"]),
+        timing=getattr(provider, "timing_label", "measured"),
+    )
     return receipt
 
 
@@ -1707,6 +1689,16 @@ def _run_sweep(plan, opts, provider, started):
         ),
     }
     receipt["coverage"] = {**coverage_report(plan, authored), "sweep": coverage}
+    from .geometry import combine
+
+    receipt["geometry"] = combine(
+        plan.get("geometry"),
+        [],
+        workers=opts["workers"],
+        wall_ms=metrics["wall_ms"],
+        source_bytes=_source_bytes(plan["units"]),
+        timing=getattr(provider, "timing_label", "measured"),
+    )
     receipt["quality_control"] = quality_status(
         provider, ("production_read", "sweep_audit")
     )

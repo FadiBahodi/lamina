@@ -277,17 +277,39 @@ def _route_shape(fmt="document"):
     return shape
 
 
+def producers_of(cards, producer=None):
+    """The ``(stage, item)`` keys of the calls that produced ``cards``.
+
+    A level-0 card id is ``<window_id>:idea_<n>`` from one reader call; a
+    summary card's producer is recorded by the tree that made it.
+    """
+    keys = set()
+    for card in cards:
+        cid = card["id"] if isinstance(card, dict) else str(card)
+        if producer and cid in producer:
+            keys.add(producer[cid])
+        elif ":idea_" in cid:
+            keys.add(("production_read", cid.rsplit(":idea_", 1)[0]))
+    return sorted(keys)
+
+
 class _Budget:
     def __init__(self, invoke, max_bytes, fits):
+        import inspect
+
         self.invoke, self.max_bytes, self.fits = invoke, max_bytes, fits
         self.records = []
+        try:
+            self.declares_after = "after" in inspect.signature(invoke).parameters
+        except (TypeError, ValueError):  # builtins or callables without a signature
+            self.declares_after = False
 
     def allows(self, stage, instruction, shape, data):
         return request_size(stage, instruction, shape, data) <= self.max_bytes and (
             self.fits is None or self.fits(stage, instruction, shape, data)
         )
 
-    def call(self, stage, item, instruction, shape, data, checker):
+    def call(self, stage, item, instruction, shape, data, checker, after=()):
         if not self.allows(stage, instruction, shape, data):
             raise ProductionError(
                 f"{stage} {item} cannot fit the declared model/request budget; no content was truncated"
@@ -299,6 +321,8 @@ class _Budget:
                 "request_bytes": request_size(stage, instruction, shape, data),
             }
         )
+        if self.declares_after:
+            return self.invoke(stage, item, instruction, shape, data, checker, after=after)
         return self.invoke(stage, item, instruction, shape, data, checker)
 
     def pack(self, cards, stage, instruction, shape, data_for):
@@ -404,6 +428,7 @@ class _Tree:
         self.incoming = []  # level-0 cards fed from another thread
         self.closed = False
         self.read_error = None
+        self.producer = {}  # summary card id -> (stage, item) that produced it
 
     # ---- input side (any thread) -------------------------------------
     def feed(self, cards, key=None):
@@ -480,6 +505,7 @@ class _Tree:
                 GROUP_SHAPE,
                 self.group_data(rows),
                 lambda raw: _group_check(raw, rows),
+                producers_of(rows, self.producer),
             )
             pending[future] = (level, index)
 
@@ -558,6 +584,7 @@ class _Tree:
                         gid, card = _summary_card(level, index, row, members)
                         self.report["groups"].append({**row, "id": gid, "level": level})
                         members[gid] = card
+                        self.producer[gid] = ("production_group", f"level_{level}_batch_{index}")
                         arrived[nxt].append(card)
                         unpacked[nxt].append(card)
                 # A level is complete when the level below is complete and has
@@ -593,7 +620,8 @@ class _Tree:
             )
 
         return "outline", self.budget.call(
-            "production_route", "outline", self.instruction, self.shape, self.route_data(current), check
+            "production_route", "outline", self.instruction, self.shape, self.route_data(current), check,
+            after=producers_of(current, self.producer),
         )
 
 
@@ -752,6 +780,8 @@ class _Planner:
         self.catalog = catalog
         self.allow_omissions, self.route_validator = allow_omissions, route_validator
         self.budget = _Budget(invoke, max_bytes, fits)
+        self.producer = {}  # summary card id -> producing call, shared with the tree
+        self.outline_item = "outline"  # the route call that assignment waits on
         self.report = {
             "mode": "compact",
             "original_cards": 0,
@@ -761,7 +791,9 @@ class _Planner:
         }
 
     def tree(self):
-        return _Tree(self.shared, self.brief, self.budget, self.workers, self.instruction, self.report)
+        tree = _Tree(self.shared, self.brief, self.budget, self.workers, self.instruction, self.report)
+        tree.producer = self.producer
+        return tree
 
     def compact(self, objects, cards):
         expected = {card["id"] for card in cards}
@@ -788,6 +820,7 @@ class _Planner:
             shape,
             _route_data(self.shared, self.brief, cards),
             check,
+            after=producers_of(cards, getattr(self, "producer", None)),
         )
 
     def assign(self, outline, objects, cards):
@@ -825,6 +858,8 @@ class _Planner:
                 )
             return checked
 
+        outline_key = [("production_route", self.outline_item or "outline")]
+
         def assign(job):
             index, batch = job
             return self.budget.call(
@@ -834,6 +869,7 @@ class _Planner:
                 ASSIGN_SHAPE,
                 assignment_for(batch),
                 lambda raw: check_assignment(raw, batch),
+                after=outline_key,
             )
 
         results = bounded_map(assign, list(enumerate(batches)), self.workers)

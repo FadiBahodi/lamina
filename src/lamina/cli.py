@@ -172,11 +172,6 @@ def parser() -> argparse.ArgumentParser:
         "--max-input-bytes", type=int, help="Hard request limit; no source truncation"
     )
     produce.add_argument(
-        "--core-words",
-        type=int,
-        help="Optional legacy reading target; otherwise use declared workload limits or one source structure",
-    )
-    produce.add_argument(
         "--reading",
         choices=["task", "reusable"],
         help="Read for this brief (default); reusable shares an inventory across goals and needs coverage evaluation",
@@ -186,7 +181,6 @@ def parser() -> argparse.ArgumentParser:
         type=int,
         help="Maximum attempts per model request, including validation repair (1–5)",
     )
-    produce.add_argument("--halo-units", type=int)
     produce.add_argument(
         "--reader-context-spans",
         type=int,
@@ -278,6 +272,11 @@ def parser() -> argparse.ArgumentParser:
     )
     demo.add_argument("--output", type=Path, default=Path("demo"))
     demo.add_argument("--workspace", type=Path, default=Path(".lamina-demo"))
+    demo.add_argument(
+        "--synthetic-latency",
+        action="store_true",
+        help="Make each fixture call take a fixed time per stage so the run timeline has shape; the receipt labels the timing as synthetic",
+    )
     return cli
 
 
@@ -348,18 +347,29 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "inspect":
             result = Workspace(args.workspace).stats()
         elif args.command == "demo":
-            from .production_example import production_demo
+            from .production_example import DEMO_LATENCY, production_demo
             from .production_export import export_production
 
-            example = production_demo(args.workspace)
+            example = production_demo(
+                args.workspace, latency=DEMO_LATENCY if args.synthetic_latency else None
+            )
             receipt = example["runs"][0]["receipt"]
             links = export_production(receipt, example["plan"], args.output)
+            geometry = receipt.get("geometry") or {}
             result = {
                 "output": str(args.output),
                 "title": receipt.get("title"),
                 "status": receipt["status"],
                 "sections": len(receipt["sections"]),
                 "outputs": links,
+                "geometry": {
+                    key: geometry.get(key)
+                    for key in (
+                        "timing", "calls", "workers", "peak_in_flight", "critical_path_depth",
+                        "critical_path_ms", "bound_ms", "bound_binding", "wall_ms",
+                        "wall_over_bound", "serial_fraction",
+                    )
+                },
                 "workspace": str(args.workspace),
                 "next": "lamina app --workspace " + shlex.quote(str(args.workspace)),
             }
@@ -389,10 +399,8 @@ def main(argv: list[str] | None = None) -> int:
                     "reader_workers": args.readers,
                     "writer_workers": args.writers,
                     "review_workers": args.reviewers,
-                    "core_words": args.core_words,
                     "reading": args.reading,
                     "max_attempts": args.max_attempts,
-                    "halo_units": args.halo_units,
                     "reader_context_spans": args.reader_context_spans,
                     "reading_failures": args.reading_failures,
                     "audit_rate": args.audit_rate,

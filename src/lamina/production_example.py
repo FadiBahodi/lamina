@@ -39,8 +39,6 @@ OPTIONS = {
     "reader_workers": 8,
     "writer_workers": 8,
     "review_workers": 8,
-    "core_words": 100,
-    "halo_units": 1,
 }
 
 
@@ -58,17 +56,33 @@ def fixture_request_budget(stage, *, max_items, max_request_bytes=1_500_000):
 
 
 class FixtureAdapter:
+    """Scripted responses for the fixture sources. With ``latency`` (seconds per
+    stage) each call sleeps that long first, so a run's timeline has shape; the
+    receipt then labels its timing as synthetic."""
+
     identity = "original-production-fixture-v1"
 
-    def __init__(self):
+    def __init__(self, latency: dict | None = None):
         self.lock = threading.Lock()
         self.calls: list[dict] = []
+        self.latency = dict(latency or {})
+        if self.latency:
+            self.identity = "original-production-fixture-v1+latency"
+            self.timing_label = "synthetic: fixture adapter with configured per-stage latency"
 
     def budget_for(self, stage):
         # Four source paragraphs plus their cross-section fixture context.
         return fixture_request_budget(stage, max_items=16)
 
     def call(self, stage, request):
+        if self.latency.get(stage):
+            import time
+
+            time.sleep(self.latency[stage])
+        return self._respond(stage, request)
+
+    def _respond(self, stage, request):
+
         if request.get("stage") != stage or request.get("protocol") != "lamina-stage-1":
             raise ValueError("Fixture received an incompatible request")
         data = request["input"]
@@ -220,20 +234,31 @@ def fixture_workspace(root: Path) -> Workspace:
     return workspace
 
 
-def production_demo(root: Path | None = None) -> dict:
+DEMO_LATENCY = {
+    "production_read": 0.9,
+    "production_route": 1.2,
+    "production_write": 1.0,
+    "production_review": 0.6,
+    "production_repair": 0.8,
+}
+
+
+def production_demo(root: Path | None = None, *, latency: dict | None = None) -> dict:
     """Run the real engine twice: original build, then one section note revision.
 
     With ``root`` the workspace persists there (so ``lamina search`` can query the
-    fixture sources afterwards); otherwise a temporary directory is used.
+    fixture sources afterwards); otherwise a temporary directory is used. With
+    ``latency`` the fixture adapter sleeps per stage so the timeline has shape;
+    the receipt labels that timing as synthetic.
     """
     if root is not None:
-        return _production_demo(fixture_workspace(root))
+        return _production_demo(fixture_workspace(root), latency)
     with tempfile.TemporaryDirectory(prefix="lamina-production-example-") as tmp:
-        return _production_demo(fixture_workspace(Path(tmp)))
+        return _production_demo(fixture_workspace(Path(tmp)), latency)
 
 
-def _production_demo(workspace: Workspace) -> dict:
-    provider = FixtureAdapter()
+def _production_demo(workspace: Workspace, latency: dict | None = None) -> dict:
+    provider = FixtureAdapter(latency)
     events: list[dict] = []
     plan = plan_production(
         workspace,

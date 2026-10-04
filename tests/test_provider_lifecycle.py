@@ -92,7 +92,6 @@ def test_cli_leaves_automatic_context_selection_to_engine():
     arguments = parser().parse_args(
         ["produce", "--adapter", "fixture", "--brief", "Explain"]
     )
-    assert arguments.core_words is None
     assert arguments.max_input_bytes is None
     assert arguments.reading is None
     assert arguments.max_attempts is None

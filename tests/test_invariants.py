@@ -154,3 +154,70 @@ def test_the_schedule_bound_never_exceeds_the_measured_span(calls, workers):
         assert g["bound_ms"] <= g["span_ms"] + 1e-6
     assert g["edges"]["declared"] + g["edges"]["implied"] + g["edges"]["roots"] == g["calls"]
     assert re.fullmatch(r"critical_path|work_over_workers", g["bound_binding"])
+
+
+def _route(sections, omitted):
+    return {
+        "title": "T",
+        "summary": "S",
+        "sections": [
+            {
+                "id": f"s{i}",
+                "title": f"Section {i}",
+                "purpose": "p",
+                "idea_ids": ids,
+                "representation": {"kind": "reference", "rationale": "r", "requirements": []},
+            }
+            for i, ids in enumerate(sections)
+            if ids
+        ],
+        "omitted": [{"idea_id": i, "reason": "out of scope"} for i in omitted],
+        "shared_context": [],
+    }
+
+
+idea_pool = st.lists(st.from_regex(r"i[0-9]{1,2}", fullmatch=True), min_size=1, max_size=12, unique=True)
+
+
+@settings(max_examples=300)
+@given(idea_pool, st.data())
+def test_every_idea_has_exactly_one_owner_or_an_explicit_omission(ideas, data):
+    """The outline check accepts a route only when the assigned sets and the
+    omitted set partition the extracted ideas: no idea in two sections, none
+    assigned and omitted, none forgotten, none invented."""
+    from lamina.production_contract import _route_check
+
+    cut = data.draw(st.integers(min_value=0, max_value=len(ideas)))
+    assigned, omitted = ideas[:cut], ideas[cut:]
+    pieces = data.draw(st.integers(min_value=1, max_value=max(1, len(assigned))))
+    sections = [assigned[k::pieces] for k in range(pieces)]
+    if not any(sections):
+        sections = [[omitted.pop()]] if omitted else sections
+    route = _route(sections, omitted)
+    if not route["sections"]:
+        return
+    checked = _route_check(route, set(ideas), {})
+    owners = [i for s in checked["sections"] for i in s["idea_ids"]]
+    assert sorted(owners + [o["idea_id"] for o in checked["omitted"]]) == sorted(ideas)
+    assert len(owners) == len(set(owners))
+    # Perturbations that break the partition are rejected.
+    broken = []
+    if owners:
+        twice = _route(sections + [[owners[0]]], omitted)
+        broken.append(twice)
+        forgotten = _route(sections, omitted[1:]) if omitted else _route(
+            [s[1:] if s and s[0] == owners[0] else s for s in sections], omitted
+        )
+        broken.append(forgotten)
+        invented = _route(sections + [["i999"]], omitted)
+        broken.append(invented)
+        both = _route(sections, omitted + [owners[0]])
+        broken.append(both)
+    for candidate in broken:
+        if not candidate["sections"]:
+            continue
+        try:
+            _route_check(candidate, set(ideas), {})
+        except ProductionError:
+            continue
+        raise AssertionError(f"accepted a route that breaks the partition: {candidate}")

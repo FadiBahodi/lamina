@@ -13,6 +13,28 @@ Lamina is a Python library, command-line tool and local web app for turning sour
 
 Models decide what the sources mean, what belongs together and how to explain it. Code decides everything that must not drift: source identity, who owns which passage, what each call can see, how big a request may be, which work runs together, what gets cached, and what the receipt says.
 
+## What the code enforces
+
+Three invariants hold on every route, and each has a property-based test that searches for a counterexample ([`tests/test_invariants.py`](tests/test_invariants.py)).
+
+**A citation names a span the request rendered.** Sources are split into sentence spans that partition the text exactly; a reader cites span IDs; code materializes the quotation from the stored text. The validator indexes only the spans the request showed, so a citation of a neighbouring sentence that the halo cut off is rejected rather than quietly resolved. A real citation still proves provenance, not entailment; the reviewer and the reader of the document judge that.
+
+**Every extracted idea has one owner or an explicit omission.** The outline assigns each idea to exactly one section or lists it under `omitted`; the plan carries both, and coverage is computed from them, never from the prose.
+
+**Similarity may nominate; it may not delete.** A card leaves a deck only when its normalised text matches a kept card, or when its vector similarity passes the threshold *and* it agrees with the kept card on numbers, negations, capitalised abbreviations, units and word order. "0.1 mg" and "1 mg", "MI" and "GI", "pressure" and "no pressure" score 1.0 under TF-IDF and are kept, listed as related.
+
+## What every receipt measures
+
+Every tracked call records when it started and ended and which calls it waited for. The planner declares the reads that fed each grouping batch and the batches that fed the outline; section chains and audits follow stage rules written in [`geometry.py`](src/lamina/geometry.py). From those records each receipt reports the schedule bound that any run must respect,
+
+$$T \;\ge\; \max\left(\frac{W}{P},\; D\right)$$
+
+with `W` the total model time, `P` the worker limit and `D` the critical path, beside the measured wall `T`, the ratio `T / bound`, the peak and mean calls in flight, the fraction of the span with at most one call running, and the context amplification (bytes sent over distinct source bytes). Exported documents end with the timeline:
+
+![Run timeline from lamina demo: eleven calls on two sources, critical path read, outline, write, review, repair, recheck](docs/demo-timeline.svg)
+
+This one is `lamina demo --synthetic-latency`: the bundled two-note fixture with a scripted adapter that sleeps a fixed time per stage, so the shape is real and the seconds are not. The receipt says `timing: synthetic`. Eleven calls, critical path six deep (read 0.9 s → outline 1.2 s → write 1.0 s → review 0.6 s → repair 0.8 s → recheck 0.6 s), bound 5.1 s, wall 5.2 s, `wall_over_bound` 1.012. On a live run the same block says whether the hour went to the model or to waiting.
+
 ## Install
 
 Requires Python 3.11+ and SQLite with FTS5.
@@ -83,13 +105,14 @@ Without a model, `lamina demo --output demo` runs the production engine on two b
 
 **Delivery** exports Markdown, HTML, PDF, a plan and a receipt. Podcasts render to one WAV per episode through a speech adapter; cards export to `cards.tsv` and `cards.json`. Workers default to 16 across stages. Restarting a run reuses every completed call; revising one section reruns only the requests that changed.
 
-[Flow geometry](docs/flow-geometry.md) models the routes as dependency graphs: how many serial calls sit on the critical path, which calls wait on the slowest member of a batch, and what a halo or a grouped request costs.
+[Flow geometry](docs/flow-geometry.md) derives the bound above and the defaults from it: why the sweep is two calls deep, why the halo is six sentences, why a failed window is recorded rather than fatal, and what a grouped request costs.
 
 ## How the code fits together
 
 - [`source_reading.py`](src/lamina/source_reading.py) reads bounded original passages and preserves exact source references.
 - [`planning.py`](src/lamina/planning.py) groups material and assigns it to sections; [`production.py`](src/lamina/production.py) runs writing and review.
 - [`execution.py`](src/lamina/execution.py), [`call_runtime.py`](src/lamina/call_runtime.py) and [`store.py`](src/lamina/store.py) schedule work, enforce limits and cache validated results.
+- [`similarity.py`](src/lamina/similarity.py) nominates related cards and suppresses duplicates under the meaning guard; [`geometry.py`](src/lamina/geometry.py) reconstructs each run's dependency graph, critical path and bound from its records.
 - [`evidence_relations.py`](src/lamina/evidence_relations.py) compares related claims and can reopen original material omitted by extraction.
 - [`method_runtime.py`](src/lamina/method_runtime.py) runs custom dependency graphs with selected observations from earlier work.
 

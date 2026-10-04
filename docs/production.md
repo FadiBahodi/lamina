@@ -144,6 +144,8 @@ Edits can change packing boundaries or required context and invalidate additiona
 
 Plans retain source snapshots and provider configuration. Changed goals, source content, format or source policy require replanning, which can reuse eligible readings.
 
+Every plan and receipt carries a `geometry` block computed from its own call records: the critical path and its depth, total model time, the bound `max(W/P, D)`, the measured wall and their ratio, calls in flight, serial time and context amplification. Exported documents end with the run's timeline. [Flow geometry](flow-geometry.md#measured-in-every-receipt) defines each field.
+
 When extraction returns invalid rows, a correction request identifies those rows and preserves the accepted ones. Lamina validates the combined result afterward. A malformed response envelope or broader contract failure can require the model to replace the whole result. Legacy quote-based replies use conservative normalization for formatting differences while returning the exact original span. Provider-declared transient failures can retry within `max_attempts`.
 
 Invalid material remains visible as unresolved work, and only a fully validated result enters the successful cache. Independent jobs can finish and retain their results after a sibling fails. A restart reuses completed requests. Renewable leases and owner fencing prevent an expired worker from writing over its replacement.

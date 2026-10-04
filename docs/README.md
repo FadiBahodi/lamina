@@ -16,7 +16,7 @@ Install Lamina and configure a model using the [repository README](../README.md)
 | Document | Contents |
 | --- | --- |
 | [Architecture](architecture.md) | Source structure, reading and evidence, organization, ownership, evidence comparison, checks, execution, reuse, alternatives considered and the code map |
-| [Flow geometry](flow-geometry.md) | Dependency chains, completion-time bounds, halo and batching tradeoffs, context amplification, repair cost and failure accumulation |
+| [Flow geometry](flow-geometry.md) | Dependency chains, the completion-time bound and how every receipt measures it, halo and batching tradeoffs, context amplification, repair cost and failure accumulation |
 | [Capability status](architecture-status.md) | Implemented behavior and remaining limits by area |
 
 ## Evaluation and results

@@ -1,5 +1,5 @@
 include AGENTS.md
-recursive-include docs *.md *.tex *.bib
+recursive-include docs *.md *.tex *.bib *.svg
 exclude docs/active-design-contract.md
 exclude docs/implementation-contract.md
 recursive-include examples *.py *.md *.json

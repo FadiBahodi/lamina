@@ -67,6 +67,14 @@ For a planned route with `L` grouping levels, the simplest chain is reading, `L`
 
 Earlier versions of this note estimated call duration from a complete run's elapsed time and call count. Parallel calls make that inference invalid. The [live-model results](live-model-evaluation.md) record actual experiments; stage-level receipts are the appropriate input to a latency model.
 
+## Measured in every receipt
+
+The bound above is computed for every plan and receipt from the run's own call records (`geometry` in `plan.json` and `report.json`; `src/lamina/geometry.py`). Each tracked call records its start and end, its model attempts, and the calls it declared it waited for. The planner declares the reads that fed each grouping batch, the batches that fed the outline and the outline each assignment batch waited for; a section's review follows its write, a repair follows its review, a section's first write follows the last planning call, a sampled audit follows its window's read, and a whole-document check follows every section call. Those stage rules are written in `implied_after` so they can be disputed, and a predecessor counts only if it ended before its dependent started.
+
+From the graph the receipt reports `model_ms` (`W`), `critical_path_ms` and `critical_path_depth` (`D` and its length in calls, with the chain itself), `bound_ms = max(W/P, D)` with `bound_binding` naming which term, `wall_ms` and `wall_over_bound`, `peak_in_flight` and `mean_in_flight`, `serial_fraction` (the share of the span with at most one call running), and `amplification_bytes` (request bytes sent, instructions included, over distinct source bytes). A `timing` field says `measured` for a live adapter and labels a fixture's synthetic latency. Exported documents end with the timeline and these numbers; `lamina demo --synthetic-latency` produces one from the bundled fixture.
+
+The receipt's `wall_over_bound` is the quantity to watch on a live run. Near 1.0 the schedule is as good as its dependency structure allows and only the chain or the worker limit can be changed; well above 1.0 the time went somewhere the bound does not count: provider admission, token counting, cache writes, preparation, or a worker limit that the provider did not honour.
+
 ## Why a small halo can help
 
 A source boundary can split a list or hide the condition that qualifies a rule. Supplying nearby text may let a reader finish in one call. With equally sized core units `c` and neighboring units `h` on each side, the input multiplier is:

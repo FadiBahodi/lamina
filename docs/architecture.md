@@ -153,7 +153,7 @@ The W3C [Web Annotation model](https://www.w3.org/TR/annotation-model/) separate
 | `source_reading`, `source_spans`, `evidence` | Read structures with a halo and context requests; resolve exact source spans and quotations. |
 | `planning`, `retrieval_targets`, `source_assignments` | Streaming grouping tree, outline and assignment; retrieval targets; caller-supplied assignments. |
 | `sweep`, `similarity` | Read straight to cards, suppress duplicates and audit a sample; local similarity for duplicate suppression and relation nomination. |
-| `production`, `production_contract`, `context_binding`, `writer_markers`, `source_policy` | Assemble requests, enforce option and output contracts, bind references and resolve writer markers. |
+| `production`, `production_plan`, `section_context`, `section_calls`, `production_render`, `speech_lane`, `production_contract`, `context_binding`, `writer_markers`, `source_policy` | Assemble requests, enforce option and output contracts, bind references and resolve writer markers. |
 | `call_runtime`, `execution`, `section_batching`, `providers`, `chat_protocol` | Cache, retry, schedule and transport calls; release accepted grouped rows before sibling retries; stable prompt layout. |
 | `evidence_relations`, `retrieval` | Compare nominated claims and search permitted original units. |
 | `verification`, `assessment_checks` | Check output links, coverage, section relationships and assessment behavior. |

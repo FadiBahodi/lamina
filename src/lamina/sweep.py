@@ -18,6 +18,7 @@ import time
 
 from .execution import bounded_collect
 from .production_contract import (
+    REVISION,
     ProductionError,
     ProductionValidationError,
     _evidence,
@@ -441,3 +442,96 @@ def plan_sweep(workspace, provider, task, opts, selection, sources, units, track
             "timing": {"read_ms": read_ms},
         },
     }
+
+
+def publish_sweep(plan, opts, provider, started):
+    """Publish the sweep's cards. All paid work happened while planning."""
+    from .calibration import quality_status
+    from .geometry import combine
+    from .production_plan import _source_bytes
+    from .production_render import _markdown
+    from .verification import coverage_report
+
+    authored = authored_sections(plan)
+    route = plan["route"]
+    markdown = _markdown(route, authored, "cards")
+    planning = plan.get("planning") or {}
+    audit = planning.get("audit") or {}
+    findings = {
+        row["window_id"]: row["findings"]
+        for row in audit.get("audited", [])
+        if row.get("findings")
+    }
+    cards = card_rows(plan)
+    metrics = {
+        **plan.get("metrics", {}),
+        "wall_ms": round((time.monotonic() - started) * 1000, 3),
+        "sections": len(authored),
+        "cards": len(cards),
+        "suppressed_duplicates": len(plan.get("duplicates") or {}),
+        "unresolved_reader_windows": len(planning.get("unresolved_reads") or []),
+        "audited_windows": len(audit.get("audited", [])),
+        "audit_findings": sum(len(rows) for rows in findings.values()),
+        "execution_capacity": {
+            "engine_workers": opts["workers"],
+            "provider_concurrency": getattr(provider, "max_concurrency", None),
+        },
+        "output_bytes": len(markdown.encode("utf-8")),
+    }
+    unresolved = planning.get("unresolved_reads") or []
+    coverage = {
+        "windows": len(plan.get("windows") or []),
+        "windows_read": len(plan.get("windows") or []) - len(unresolved),
+        "unresolved_windows": [row["id"] for row in unresolved],
+        "audited_windows": len(audit.get("audited", [])),
+        "windows_with_findings": sorted(findings),
+    }
+    # "ready" means every window was read and no sampled audit reported an
+    # omission or an unsupported card. Anything less is available but needs
+    # review: the deck downloads either way, labelled accordingly.
+    status = "ready" if not unresolved and not findings else "review"
+    receipt = {
+        "schema_version": "1.0",
+        "revision": REVISION,
+        "status": status,
+        "document_checks": None,
+        "quality": plan["quality"],
+        "format": "cards",
+        "title": route["title"],
+        "markdown": markdown,
+        "candidate_markdown": None,
+        "examiner_markdown": None,
+        "sections": authored,
+        "cards": cards,
+        "duplicates": plan.get("duplicates") or {},
+        "audit": audit,
+        "unresolved_reads": planning.get("unresolved_reads") or [],
+        "retrieval_targets": None,
+        "retrieval_markdown": None,
+        "initial_findings": {},
+        "findings": {},
+        "audit_findings": findings,
+        "sources": plan["sources"],
+        "plan_digest": plan["plan_digest"],
+        "metrics": metrics,
+        "scope": (
+            "Cards written directly by readers with exact citations; exact and "
+            "guarded near-duplicates suppressed locally; a sampled source-centred "
+            "audit attached its findings. Status is ready only when every window "
+            "was read and no audit finding is open; otherwise the deck is "
+            "available for download with status review."
+        ),
+    }
+    receipt["coverage"] = {**coverage_report(plan, authored), "sweep": coverage}
+    receipt["geometry"] = combine(
+        plan.get("geometry"),
+        [],
+        workers=opts["workers"],
+        wall_ms=metrics["wall_ms"],
+        source_bytes=_source_bytes(plan["units"]),
+        timing=getattr(provider, "timing_label", "measured"),
+    )
+    receipt["quality_control"] = quality_status(
+        provider, ("production_read", "sweep_audit")
+    )
+    return receipt

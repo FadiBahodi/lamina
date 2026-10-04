@@ -110,7 +110,8 @@ Without a model, `lamina demo --output demo` runs the production engine on two b
 ## How the code fits together
 
 - [`source_reading.py`](src/lamina/source_reading.py) reads bounded original passages and preserves exact source references.
-- [`planning.py`](src/lamina/planning.py) groups material and assigns it to sections; [`production.py`](src/lamina/production.py) runs writing and review.
+- [`planning.py`](src/lamina/planning.py) groups material and assigns it to sections; [`production_plan.py`](src/lamina/production_plan.py) runs reading and planning for one brief.
+- [`section_context.py`](src/lamina/section_context.py) decides what each writer and reviewer may see; [`section_calls.py`](src/lamina/section_calls.py) makes the write, review and repair calls; [`production.py`](src/lamina/production.py) schedules them and assembles the receipt.
 - [`execution.py`](src/lamina/execution.py), [`call_runtime.py`](src/lamina/call_runtime.py) and [`store.py`](src/lamina/store.py) schedule work, enforce limits and cache validated results.
 - [`similarity.py`](src/lamina/similarity.py) nominates related cards and suppresses duplicates under the meaning guard; [`geometry.py`](src/lamina/geometry.py) reconstructs each run's dependency graph, critical path and bound from its records.
 - [`evidence_relations.py`](src/lamina/evidence_relations.py) compares related claims and can reopen original material omitted by extraction.
